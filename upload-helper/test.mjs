@@ -1117,6 +1117,13 @@ await test('One upload action waits for delayed file readiness; timeout and paus
   }
 });
 
+async function seedCurrentCompilerRequirements(root) {
+  for (const name of ['package.json', 'package-lock.json', 'app/pdf-parts-viewer.ts', 'publication/katex-LICENSE.txt', 'publication/pdf-processing-LICENSES.txt']) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), await readFile(new URL('../' + name, import.meta.url)));
+  }
+}
+
 await test('Older exports receive the current compiler without publishing review attestations or Markdown', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'rgel-old-export-'));
   await mkdir(path.join(root, 'scripts'));
@@ -1130,16 +1137,25 @@ await test('Older exports receive the current compiler without publishing review
     '{"sourceReviewed":false}',
   );
   await writeFile(path.join(root, 'README.md'), 'guide');
+  await assert.rejects(publicationSources(root), /prepare fresh three ZIPs/);
+  await seedCurrentCompilerRequirements(root);
   const files = await publicationSources(root);
   assert.deepEqual(
     files.map((f) => f.path),
     [
       '.gitlab-ci.yml',
+      'app/pdf-parts-viewer.ts',
       'LICENSE',
       'ops/igem.gitlab-ci.yml',
+      'package-lock.json',
+      'package.json',
+      'publication/katex-LICENSE.txt',
+      'publication/pdf-processing-LICENSES.txt',
       'scripts/build-igem.mjs',
       'scripts/export-media.mjs',
       'scripts/export-static.mjs',
+      'scripts/image-export.mjs',
+      'scripts/pdf-parts.mjs',
     ],
   );
   assert.equal(
@@ -1191,6 +1207,7 @@ pages:
     'utf8',
   );
   // Missing configuration is supplied too, including the source copy used by the compiler.
+  await seedCurrentCompilerRequirements(root);
   let files = await publicationSources(root);
   for (const name of ['.gitlab-ci.yml', 'ops/igem.gitlab-ci.yml'])
     assert.equal(files.find((f) => f.path === name).content, expected);

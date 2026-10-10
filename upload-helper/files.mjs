@@ -165,15 +165,15 @@ export function repositoryFile(name) {
     ].includes(name) ||
     (/^(app|components|hooks|lib)\/.*\.(ts|tsx|js|css|json)$/.test(name) &&
       !name.startsWith('app/api/')) ||
-    /^scripts\/(build-igem|export-static|export-media|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
+    /^scripts\/(build-igem|export-static|export-media|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
       name,
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||
-    /^publication\/(content|config|media-map)\.json$/.test(name) ||
+    /^publication\/(content|config|media-map|pdf-parts)\.json$/.test(name) ||
     /^publication\/font-licenses\/(dmsans|caveat|librecaslondisplay)-OFL\.txt$/.test(
       name,
     ) ||
-    name === 'publication/fonts.css'
+    ['publication/fonts.css', 'publication/katex-LICENSE.txt', 'publication/pdf-processing-LICENSES.txt'].includes(name)
   );
 }
 export async function sourceFiles(root) {
@@ -199,6 +199,14 @@ export async function sourceFiles(root) {
 // Upgrade the compiler and publishing pipeline together in earlier exports.
 export async function publicationSources(sourceRoot) {
   const files = await sourceFiles(sourceRoot);
+  const pkg = JSON.parse(files.find(file => file.path === 'package.json')?.content || '{}');
+  const lock = JSON.parse(files.find(file => file.path === 'package-lock.json')?.content || '{}');
+  const requiredDependencies = ['pdf-lib', 'jpeg-js', 'pngjs'];
+  if (requiredDependencies.some(name => !pkg.dependencies?.[name] || !lock.packages?.['node_modules/' + name]) ||
+      !files.some(file => file.path === 'app/pdf-parts-viewer.ts') ||
+      !files.some(file => file.path === 'publication/katex-LICENSE.txt') ||
+      !files.some(file => file.path === 'publication/pdf-processing-LICENSES.txt'))
+    throw Error('This export predates the current PDF/image compiler. Update the editor server, prepare fresh three ZIPs, and open them in this helper before sending to GitLab. Existing uploads remain available.');
   let pipeline;
   try {
     pipeline = await readFile(
@@ -237,6 +245,8 @@ export async function publicationSources(sourceRoot) {
     'build-igem.mjs',
     'export-static.mjs',
     'export-media.mjs',
+    'pdf-parts.mjs',
+    'image-export.mjs',
   ]) {
     let content;
     try {

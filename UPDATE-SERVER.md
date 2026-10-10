@@ -438,3 +438,7 @@ Install this release, refresh the editor, and prepare fresh three-ZIP exports. L
 ## Image upload size checks
 
 This release automatically compresses oversized local JPEG/PNG images during export and reports named errors for files it cannot process. Install the archive, refresh the editor and prepare fresh three-ZIP exports. Download the updated helper to receive the consistent 10 MB pre-upload check. Original images remain unchanged; no Nginx change is required.
+
+## Upload helper 1.0.15: complete compiler publishing
+
+The previous helper omitted new PDF/image modules, the PDF parts manifest and processing licences from GitLab uploads. Use helper 1.0.15 and send the source again; retrying the old pipeline alone cannot restore missing files. Existing uploaded media URLs can be reused. Older source exports without the matching dependency lockfile are rejected before publishing with instructions to prepare fresh three ZIPs.

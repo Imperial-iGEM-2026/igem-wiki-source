@@ -24,6 +24,8 @@ export async function packageUploadHelper(root, destination) {
     'compiler/build-igem.mjs',
     'compiler/export-static.mjs',
     'compiler/export-media.mjs',
+    'compiler/pdf-parts.mjs',
+    'compiler/image-export.mjs',
   ];
   names.push(
     ...(await readdir(path.join(root, 'public/templates/fonts')))
