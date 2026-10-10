@@ -1,3 +1,4 @@
+import { compressExportImage, IMAGE_UPLOAD_BYTES } from './image-export.mjs';
 import { splitPdf, PDF_PART_BYTES } from './pdf-parts.mjs';
 import { exportMedia, mediaFolder, templateFontCss } from './export-media.mjs';
 import { build } from 'vite';
@@ -281,7 +282,12 @@ for (const [url, kind] of refs) {
       url.includes('..')
     )
       throw Error('Invalid template asset');
-    const bytes = await readFile(path.join(root, 'public', url));
+    let bytes = await readFile(path.join(root, 'public', url));
+    if (
+      /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(url) &&
+      bytes.length > IMAGE_UPLOAD_BYTES
+    )
+      bytes = compressExportImage(bytes, url).data;
     const file = 'public' + url;
     await mkdir(path.dirname(path.join(output, file)), { recursive: true });
     await writeFile(path.join(output, file), bytes);
@@ -406,7 +412,19 @@ for (const [url, kind] of refs) {
         issues.push('Could not validate GLB: ' + filename);
       }
     }
-    if (external)
+    let compressed = false;
+    if (
+      /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(filename) &&
+      (externalSize || bytes.length) > IMAGE_UPLOAD_BYTES
+    ) {
+      bytes = compressExportImage(
+        external ? await readFile(external) : bytes,
+        filename,
+      ).data;
+      externalSize = bytes.length;
+      compressed = true;
+    }
+    if (external && !compressed)
       await copyFile(
         external,
         path.join(output, 'public/assets/media', filename),

@@ -1,3 +1,4 @@
+import jpeg from 'jpeg-js';
 import assert from 'node:assert/strict';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { randomBytes } from 'node:crypto';
@@ -27,9 +28,13 @@ await writeFile(path.join(dir, 'media/aabb.pdf'), bytes);
 const layer = newNode('pdf-test', 'pdf');
 layer.src = '/api/media/aabb.pdf';
 const layout = structuredClone(emptyLayout);
-layout.nodes = [layer];
+const image = newNode('large-image', 'image');
+image.src = '/api/media/aacc.jpg';
+const smallJpeg = jpeg.encode({ width: 2, height: 2, data: Buffer.alloc(16, 255) }, 90).data;
+await writeFile(path.join(dir, 'media/aacc.jpg'), Buffer.concat([smallJpeg, Buffer.alloc(10_000_000)]));
+layout.nodes = [layer, image];
 // Layout order uses stable node IDs.
-layout.order = [layer.id];
+layout.order = [layer.id, image.id];
 const exporter = createBundleExports({
   dataDir: dir,
   clientDir: path.resolve('selfhost-dist/client'),
@@ -70,7 +75,12 @@ const manifest = await readFile(
 );
 assert.match(manifest, /pages-1-2.pdf/);
 assert.match(manifest, /pages-3-4.pdf/);
-const map = {};
+const imageFolder = path.join(dir, 'assets/assets/images');
+const imageFiles = await (await import('node:fs/promises')).readdir(imageFolder);
+const compressedImage = await readFile(path.join(imageFolder, imageFiles.find(n => n.endsWith('aacc.jpg'))));
+assert.ok(compressedImage.length < 9_900_000);
+assert.equal(jpeg.decode(compressedImage).width, 2);
+const map = { '/api/media/aacc.jpg': 'https://static.igem.wiki/teams/1/images/photo.jpg' };
 for (const part of parts['/api/media/aabb.pdf'])
   map[part.source] =
     `https://static.igem.wiki/teams/1/documents/part-${part.start}.pdf`;
@@ -86,6 +96,8 @@ const result = spawnSync(
     path.join(dir, 'source/publication/content.json'),
     '--media-map',
     path.join(dir, 'source/publication/media-map.json'),
+    '--media-dir',
+    path.join(dir, 'media'),
     '--base',
     '/example/',
     '--out',

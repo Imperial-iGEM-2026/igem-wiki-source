@@ -344,7 +344,7 @@ export class OfficialSites {
       prefix + path.extname(row.localFile).toLowerCase(),
     );
     await copyFile(row.localFile, file);
-    if ((await stat(file)).size > 10 * 1024 * 1024)
+    if ((await stat(file)).size >= 10_000_000)
       throw Error(
         'iGEM’s static uploader has a 10 MB per-file limit. Compress or replace ' +
           path.basename(row.file) +

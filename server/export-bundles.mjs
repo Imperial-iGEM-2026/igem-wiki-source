@@ -1,4 +1,6 @@
 import {
+  compressExportImage,
+  IMAGE_UPLOAD_BYTES,
   splitPdf,
   PDF_PART_BYTES,
   sponsorLayers,
@@ -257,7 +259,43 @@ export function createBundleExports({
               }
               continue;
             }
-            entries[key].push({ name, ...local });
+            if (
+              !recording &&
+              /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(local.file) &&
+              local.size > IMAGE_UPLOAD_BYTES
+            ) {
+              let result;
+              try {
+                result = compressExportImage(
+                  await readFile(local.file),
+                  path.basename(local.file),
+                );
+              } catch (error) {
+                throw fail(422, error.message);
+              }
+              name = name.replace(/\.[^.]+$/, result.extension);
+              tempDir ||= await mkdtemp(
+                path.join(tmpdir(), 'prion-image-export-'),
+              );
+              const file = path.join(tempDir, path.basename(name));
+              await writeFile(file, result.data);
+              const info = await stat(file);
+              entries[key].push({
+                name,
+                file,
+                size: info.size,
+                mtimeMs: info.mtimeMs,
+              });
+            } else {
+              if (!recording && local.size >= 10_000_000)
+                throw fail(
+                  422,
+                  'Cannot export ' +
+                    path.basename(local.file) +
+                    ': this file exceeds the 10 MB static upload limit. Compress or replace it before exporting.',
+                );
+              entries[key].push({ name, ...local });
+            }
           }
           rows.push({ source, kind, bundle: names[key], file: name });
           map[source] = recording

@@ -29,6 +29,7 @@ export async function exportSource(root) {
     'scripts/export-static.mjs',
     'scripts/export-media.mjs',
     'scripts/pdf-parts.mjs',
+    'scripts/image-export.mjs',
     'scripts/igem-resources.mjs',
     'scripts/build-options.mjs',
     'scripts/static-renderer.tsx',

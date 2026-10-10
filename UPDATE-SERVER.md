@@ -434,3 +434,7 @@ Template navigation now labels the former Attributions page Judging. Existing pa
 ## Progressive PDF publication
 
 Install this release, refresh the editor, and prepare fresh three-ZIP exports. Large local PDFs are split below 9 MB and uploaded as ordinary document files; the published page loads parts progressively and offers Download complete PDF. Existing exports must be prepared again. No new Nginx change is required. Original saved PDFs and page positioning remain unchanged. See STATIC-EXPORT.md for reading-copy limitations.
+
+## Image upload size checks
+
+This release automatically compresses oversized local JPEG/PNG images during export and reports named errors for files it cannot process. Install the archive, refresh the editor and prepare fresh three-ZIP exports. Download the updated helper to receive the consistent 10 MB pre-upload check. Original images remain unchanged; no Nginx change is required.
