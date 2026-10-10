@@ -426,3 +426,7 @@ The unsaved-page dialog now displays the destination with Save changes, Discard 
 ### Nested objects, buttons, and site header
 
 Install the full release for the new section/button node types and parent/position fields. Existing layouts need no database migration. Refresh every open editor tab after updating so all teammates use the new schema. Header & logo edits are shared across the selected project; their uploads are included in static snapshots. Newly added child objects can use free placement inside sections or responsive flow. Desktop free-placement content stacks on mobile. Update the source kit used for static compilation as well as the running server.
+
+## Judging and team-page attributions
+
+Template navigation now labels the former Attributions page Judging. Existing page IDs, saved content and custom names are preserved. Attributions is no longer a required wiki export route and the official embed URL is optional. The upload helper no longer creates an embed URL automatically. Submit the official attribution form through your iGEM team page. Install the updated application package and refresh editor tabs; no new Nginx change is needed for this update.

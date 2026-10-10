@@ -134,7 +134,6 @@ const wikiPages = [
 ];
 const requiredPages = [
   ...new Set([
-    'attributions',
     'contribution',
     'engineering',
     'human-practices',
@@ -388,10 +387,7 @@ if (attribution && (!igemURL(attribution) || /["<>\s]/.test(attribution)))
   throw Error(
     '--attribution-url must be the exact official HTTPS iframe URL supplied by iGEM, hosted on iGEM infrastructure.',
   );
-if (!attribution)
-  issues.push(
-    'Add --attribution-url with the official team attribution iframe URL.',
-  );
+// Attributions are submitted on the team page; a wiki embed is optional.
 if (!args.includes('--license-confirmed'))
   issues.push(
     'Review media/content rights and pass --license-confirmed for CC BY 4.0 publication.',

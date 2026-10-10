@@ -239,7 +239,7 @@ export function createBundleExports({
 1. Extract all three ZIPs. Upload images/files to iGEM Uploads and video/audio to Video Universe.
 2. Fill publication/media-map.json with the returned URLs. For recordings use iframe embed URLs, not watch-page URLs.
 3. Review publication/content.json: saved source can include hidden or unpublished text. AI briefs and account metadata are omitted; this is not a full privacy scrub.
-4. Configure hosted fonts, your official attribution iframe and selected award page slugs in publication/config.json. Review your content before publishing; review.json is legacy optional metadata and no longer blocks the build.
+4. Configure hosted fonts and selected award page slugs in publication/config.json. Review your content before publishing; review.json is legacy optional metadata and no longer blocks the build.
 5. Merge this source into https://gitlab.igem.org/2026/${team}, including its CC BY 4.0 root LICENSE. Third-party assets and fonts retain their own licences and attribution notices.
 6. Review the diff and commit through your team's workflow. The included .gitlab-ci.yml builds the wiki from source on each main push.
 

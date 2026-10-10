@@ -266,8 +266,7 @@ async function action(name, data) {
       throw Error('Unsupported website source export');
     job.team = config.teamSlug;
     job.attributionUrl =
-      config.attributionUrl ||
-      `https://teams.igem.org/wiki/${job.teamId}/attributions`;
+      config.attributionUrl || '';
     job.rows = await manifest(
       source,
       {
@@ -381,6 +380,7 @@ async function action(name, data) {
     proposal = null;
     job.systemFonts = data.systemFonts === true;
     if (
+      data.attributionUrl &&
       !/^https:\/\/teams\.igem\.org\/wiki\/\d+\/attributions$/.test(
         data.attributionUrl || '',
       )

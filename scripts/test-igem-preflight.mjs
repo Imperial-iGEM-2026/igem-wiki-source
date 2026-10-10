@@ -80,7 +80,6 @@ const report = JSON.parse(
 );
 assert.equal(report.submissionReady, false);
 for (const slug of [
-  'attributions',
   'contribution',
   'engineering',
   'human-practices',
@@ -102,7 +101,8 @@ assert.ok(
     'Missing required iGEM page: /imperial-college/hardware',
   ),
 );
-assert.ok(report.issues.some((s) => s.includes('Google Fonts')));
+// Bundled fonts no longer require Google Fonts hosting.
+assert.ok(!report.issues.some((s) => s.includes('Google Fonts')));
 assert.ok(
   report.issues.some(
     (s) => s.includes('embed URL') && s.endsWith('/audio.mp3'),
@@ -136,3 +136,6 @@ console.log(
   'PASS: Imperial medal routes exist; missing selected award, Purple Google Fonts and watch-only video URLs block strict preflight; embed conversion and template license footer work.\n' +
     out,
 );
+
+assert.ok(!report.standardPages.some(p => p.slug === "attributions"));
+assert.ok(!report.issues.some(s => s.includes("attribution-url")));

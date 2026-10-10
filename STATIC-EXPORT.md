@@ -121,7 +121,7 @@ Copy `publication/config.example.json` to `publication/config.json`. Set:
 - `source`: `publication/content.json`.
 - `mediaMap`: `publication/media-map.json`.
 - `review`: legacy optional metadata; the build no longer reads or requires it.
-- `attributionUrl`: the **actual** official iframe URL supplied by the team's attribution form. The compiler accepts HTTPS iGEM infrastructure hosts, including current `teams.igem.org` URLs; it does not invent the team's iframe URL.
+- `attributionUrl` (optional legacy embed; not required for 2026): the **actual** official iframe URL supplied by the team's attribution form. The compiler accepts HTTPS iGEM infrastructure hosts, including current `teams.igem.org` URLs; it does not invent the team's iframe URL.
 - `requiredPages`: the standard path slugs for the awards the team selected. For example `["education", "model", "sustainability"]` is merely an example, not a statement of your award selection. The pasted text omitted the expanded award tables.
 - `fontCss`: `publication/fonts.css` if supplying hosted fonts, otherwise an empty string. Leaving it empty does not bypass external-font checks.
 
@@ -175,9 +175,9 @@ After a passing deployment, directly open and refresh:
 - `https://2026.igem.wiki/imperial-college/contribution`
 - `https://2026.igem.wiki/imperial-college/engineering`
 - `https://2026.igem.wiki/imperial-college/human-practices`
-- The attribution page and the standard URLs for the selected awards.
+- The standard URLs for the selected awards. Attributions are submitted through the official team page; a wiki attribution page or embed is not required.
 
-Check actual page content, fonts, pictures, audio/video playback, attribution iframe, inline credits, AI disclosure and visible footer source/CC BY links. A homepage shown as a 404 fallback does not count as the requested page. Run the team's [External Content Check](https://teams.igem.org/6377/deliverables/wiki/har-check) before the Wiki Freeze. The static checker examines literal markup/CSS; it does not execute every interaction, fetch, XHR or third-party JavaScript path.
+Check actual page content, fonts, pictures, audio/video playback, any optional attribution iframe, inline credits, AI disclosure and visible footer source/CC BY links. A homepage shown as a 404 fallback does not count as the requested page. Run the team's [External Content Check](https://teams.igem.org/6377/deliverables/wiki/har-check) before the Wiki Freeze. The static checker examines literal markup/CSS; it does not execute every interaction, fetch, XHR or third-party JavaScript path.
 
 Future editor changes require a new reviewed content source and any new uploaded asset mappings, then another source commit/build. The public wiki is independent of the Cloudflare-protected editor.
 # Standard URL checks

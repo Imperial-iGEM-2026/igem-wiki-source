@@ -266,26 +266,6 @@ export function WikiArticle({
                 </section>
               );
             })}
-            {page.slug === 'attributions' && (
-              <div className="form-pending">
-                <FileText size={28} />
-                <div>
-                  <h3>Official attribution form</h3>
-                  <p>
-                    Not connected yet. Supply your registered iGEM team ID to
-                    display your team’s form here.
-                  </p>
-                  <a
-                    href={official.attributions}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open iGEM’s attribution instructions{' '}
-                    <ArrowUpRight size={14} />
-                  </a>
-                </div>
-              </div>
-            )}
             {page.slug === 'judging' && <AwardPages />}
             <section className="article-section" id="page-sources">
               <div className="eyebrow">KEEP THE EVIDENCE CONNECTED</div>
@@ -397,7 +377,7 @@ function JudgingMap() {
             <TableCell>Bronze</TableCell>
             <TableCell>Project attributions</TableCell>
             <TableCell>
-              <a href="/attributions">Official form on /attributions ↗</a>
+              <a href={official.attributions}>Official team-page attribution form ↗</a>
             </TableCell>
           </TableRow>
           <TableRow>

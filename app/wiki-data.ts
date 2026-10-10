@@ -578,7 +578,7 @@ export const wikiPages: WikiPage[] = [
     [
       [
         'Official form',
-        'Complete the standardized Project Attributions Form through iGEM and embed the team-specific form here. The registered team ID is needed before the embed can be connected. Narrative text on this page does not replace the official form.',
+        'Complete the standardized Project Attributions Form through iGEM. Judges read it on the official team page; embedding it in the wiki is not required.',
       ],
     ],
     official.attributions,
@@ -681,7 +681,7 @@ export const wikiPages: WikiPage[] = [
       ],
       [
         'Official publication',
-        'This private site is the collaborative authoring workspace. Before wiki freeze, publish the final snapshot through the team’s official iGEM wiki workflow, with assets on approved iGEM hosting and the official attributions embed. The final judged wiki must not depend on this live editing service.',
+        'This private site is the collaborative authoring workspace. Before wiki freeze, publish the final snapshot through the team’s official iGEM wiki workflow, with assets on approved iGEM hosting and the official attributions submitted through the team page. The final judged wiki must not depend on this live editing service.',
       ],
       [
         'Final review',

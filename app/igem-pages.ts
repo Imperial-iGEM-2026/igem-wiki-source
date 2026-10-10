@@ -1,6 +1,5 @@
 // iGEM 2026 standard award routes. Core pages are checked for every export.
 export const coreIgemPages = [
-  'attributions',
   'contribution',
   'engineering',
   'human-practices',
