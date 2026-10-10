@@ -442,3 +442,7 @@ This release automatically compresses oversized local JPEG/PNG images during exp
 ## Upload helper 1.0.15: complete compiler publishing
 
 The previous helper omitted new PDF/image modules, the PDF parts manifest and processing licences from GitLab uploads. Use helper 1.0.15 and send the source again; retrying the old pipeline alone cannot restore missing files. Existing uploaded media URLs can be reused. Older source exports without the matching dependency lockfile are rejected before publishing with instructions to prepare fresh three ZIPs.
+
+## PDF reader layout
+
+Partitioned PDFs now have a contained toolbar, fit-page opening mode, Fit page and Full screen controls. The viewer stays inside its saved layer and prevents internal PDF content from stretching the webpage. Install this package and prepare fresh exports; use helper 1.0.16 to publish the matching compiler. Native PDF toolbar support varies by browser.

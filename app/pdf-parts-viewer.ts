@@ -24,7 +24,7 @@ export function startPdfParts(root: ParentNode = document) {
       select.value = String(index);
       previous.disabled = index === 0;
       next.disabled = index === parts.length - 1;
-      frame.src = parts[index].url;
+      frame.src = parts[index].url + "#view=Fit&toolbar=1&navpanes=0";
       frame.title = `PDF pages ${parts[index].start}–${parts[index].end}`;
       if (!controller)
         status.textContent = `Pages ${parts[index].start}–${parts[index].end} of ${parts.at(-1)!.end}. Search and print apply to this part.`;
@@ -35,6 +35,19 @@ export function startPdfParts(root: ParentNode = document) {
     select.onchange = () => update(Number(select.value));
     previous.onclick = () => update(index - 1);
     next.onclick = () => update(index + 1);
+    viewer.querySelector<HTMLButtonElement>('[data-pdf-fit]')!.onclick = () => {
+      frame.src = parts[index].url + '#view=Fit&toolbar=1&navpanes=0';
+    };
+    const fullscreen = viewer.querySelector<HTMLButtonElement>('[data-pdf-fullscreen]')!;
+    fullscreen.onclick = async () => {
+      try {
+        if (document.fullscreenElement === viewer) await document.exitFullscreen();
+        else await viewer.requestFullscreen();
+      } catch { status.textContent = 'Full screen is unavailable in this browser.'; }
+    };
+    document.addEventListener('fullscreenchange', () => {
+      fullscreen.textContent = document.fullscreenElement === viewer ? 'Exit full screen' : 'Full screen';
+    });
     cancel.onclick = () => controller?.abort();
     download.onclick = async () => {
       if (controller) return;

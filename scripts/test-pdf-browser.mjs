@@ -60,12 +60,12 @@ try {
   await viewer.locator('[data-pdf-next]').click();
   await assert.equal(
     await viewer.locator('iframe').getAttribute('src'),
-    'https://static.igem.wiki/teams/1/documents/part-3.pdf',
+    'https://static.igem.wiki/teams/1/documents/part-3.pdf#view=Fit&toolbar=1&navpanes=0',
   );
   await viewer.locator('[data-pdf-prev]').click();
   assert.equal(
     await viewer.locator('iframe').getAttribute('src'),
-    'https://static.igem.wiki/teams/1/documents/part-1.pdf',
+    'https://static.igem.wiki/teams/1/documents/part-1.pdf#view=Fit&toolbar=1&navpanes=0',
   );
   const downloadPromise = page.waitForEvent('download');
   await viewer.locator('[data-pdf-download]').click();
