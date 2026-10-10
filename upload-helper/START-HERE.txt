@@ -1,0 +1,95 @@
+reGELerate Upload Helper 1.0.14
+
+Where your files go
+- iGEM Uploads: images, logos, documents, fonts and 3D files.
+- Video Universe: video and audio; skip it if the helper says Not needed.
+- iGEM GitLab: website source, after the media URLs are saved.
+The three export ZIPs are imported here, not uploaded as ZIPs to those sites.
+Use How it works for a short guide. Current status shows the current operation,
+errors and your next step. The progress bar counts saved media URLs, not bytes
+transferred or a guarantee that a video has finished moderation.
+
+Remove all uploaded files
+Team storage > Remove all uploaded files scans the entire team's iGEM Uploads
+storage, including nested folders and files uploaded outside this helper.
+Review the list, type the displayed team name and confirm permanent deletion.
+This breaks existing links to those files. Empty folders remain; Video Universe,
+GitLab and your local files are unchanged. You can pause; verified removals are
+recorded in the job's cleanup-log.json. Scan again before deleting the remainder.
+Deletion is tested against local fixtures; no production files were deleted.
+
+Updating an earlier version: close the helper terminal, extract the new files into
+the SAME helper folder and replace files when asked. Keep its jobs folder.
+Start again, choose Continue an earlier upload, sign in, and check remaining
+files. Completed uploads are recovered without uploading them twice.
+
+1. Install Node.js 24 LTS from https://nodejs.org if needed.
+2. Extract this ZIP. On Windows, double-click Start-helper.cmd.
+   On macOS/Linux, open a terminal here and run: sh start-helper.sh
+   The first start installs the helper's two dependencies from npm.
+3. Keep the terminal open. In the local helper page, select all three
+   editor export ZIPs together. Check your numeric iGEM team ID.
+4. Click the official-site buttons. Sign in in the separate browser
+   opened by the helper. It uses installed Edge or Chrome.
+5. Click Upload / check remaining files. New exports use category folders:
+   assets/banners, logos, icons, images, documents, models and fonts;
+   media/videos and media/audio. Only nonempty folders are included.
+   The helper creates/reuses matching folders in iGEM Uploads. Video
+   folders organize local files; recordings go to Video Universe.
+   Existing flat imports retain their original locations. Static files are processed in
+   batches of five, then the folder is refreshed once to collect their
+   URLs, including images converted to AVIF. SVG upload copies use the
+   image/svg+xml MIME type with their XML preamble removed.
+   If an older helper left an XML-rejected file pending, click Retry
+   rejected file for that item, then check remaining files again.
+6. Review video metadata and captions in Video Universe. The helper
+   transfers one recording per pass so you can finish its form first.
+   iGEM moderation is still required. Never re-upload a pending video.
+7. Choose licensed font files, or opt for system fonts. Complete the
+   source review, check the file list, then Upload source for review.
+8. Open the resulting GitLab merge request. Review its diff and merge
+   when ready. GitLab CI builds the site after it is merged into main.
+
+What is automated
+- Importing the ZIPs, uploading assets, remembering returned URLs.
+- Writing media mappings, font CSS and publication configuration.
+- Updating .gitlab-ci.yml and its ops/ copy to build with npm and publish
+  igem-build/public. This replaces older Yarn/dist publishing configurations.
+  The new branch is for review; merge into main to update the public wiki.
+- Comparing source with the team repository, committing changed files
+  to a new branch and opening a merge request.
+- Markdown, upload guides, media ZIPs, and login data are excluded.
+  The new branch includes a CC BY 4.0 LICENSE, even if main has none.
+  Third-party licence notices and unrelated files are retained.
+
+What still needs you
+- Official-site login, video metadata/captions, and final source review.
+- Locally supplying originals for externally linked media when needed.
+- iGEM Uploads currently limits each static file to 10 MB. Larger images
+  must be compressed/replaced; video and audio use Video Universe.
+- Fonts must be licensed for upload. The system-font option changes
+  typography. Check the finished website before merging.
+
+Continuing later
+Completed uploads and your working export stay in the local jobs folder.
+Reopen the helper and select Continue an earlier upload. Sign in again;
+browser credentials are not saved to the job. A pending upload is never
+blindly repeated. Open its official folder and check again, or use its
+existing official URL. Keep this folder private and do not commit it.
+
+Verification status
+The official upload controls were inspected while signed in. ZIP import,
+source filtering, URL handling, and GitLab planning are tested locally.
+The full production upload and moderation cycle has not been exercised.
+If an official site's UI changes, the helper stops with an explanation.
+
+GitLab SSO: sign in in the helper browser. This helper uses the browser session
+and API, so the Git-over-HTTPS personal-token notice does not require a token here.
+The publication checklist and reviewer-name fields have been removed. Older
+exports receive the updated compiler when checking source changes. The helper
+does not mark reviews as completed or upload review.json or Markdown guides.
+
+Fonts: DM Sans (normal and italic), Caveat and Libre Caslon Display are bundled
+under SIL OFL 1.1, including original copyright and licence notices. Matching
+template fonts are added automatically to new and resumed uploads, then uploaded
+to iGEM with CSS generated from the returned URLs. System fonts are not copied.

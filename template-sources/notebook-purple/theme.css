@@ -1,0 +1,472 @@
+:root {
+  --paper: #faf8f5;
+  --ink: #362545;
+  --teal: #7944cf;
+  --gold: #a274dd;
+  --line: #dfd3e7;
+  background: var(--paper);
+  color: var(--ink);
+}
+:root::after {
+  display: none;
+}
+.wiki-header {
+  border-color: #dfd3e7;
+}
+.brand-word small {
+  color: #796980;
+}
+.brand-mark img,
+footer .brand-mark img {
+  filter: none;
+}
+.hero {
+  padding-top: 70px;
+  gap: 8px;
+  overflow: visible;
+}
+.hero h1 {
+  font-size: clamp(58px, 6.2vw, 88px);
+  letter-spacing: -3px;
+}
+.hero h1 em {
+  position: relative;
+}
+.hero h1 em::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  border-top: 2px solid #b58ade;
+  border-radius: 50%;
+  transform: rotate(-2deg);
+}
+.hero .eyebrow,
+.purple-kicker {
+  color: #795898;
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+.hero .intro {
+  max-width: 470px;
+  font-size: 19px;
+}
+.hero .button {
+  background: #7440be;
+  color: #fff;
+  box-shadow: 3px 4px 0 #ddc9ed;
+  border-radius: 8px 4px 10px 5px;
+}
+.hero .button:hover {
+  background: #5e309f;
+  transform: translateY(-2px);
+}
+.hero-art {
+  position: relative;
+  padding-top: 28px;
+}
+.purple-logo-stamp {
+  position: absolute;
+  right: 14px;
+  top: -40px;
+  width: 94px;
+  transform: rotate(8deg);
+  z-index: 1;
+}
+.purple-logo-stamp img {
+  width: 100%;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+.notebook {
+  background: #f6f0fa;
+  border: 1px solid #d9c7e7;
+  border-radius: 12px 6px 18px 7px;
+  box-shadow: 6px 8px 0 #e9deef;
+  transform: rotate(1deg);
+}
+.notebook::before {
+  background: #d8c2ed;
+}
+.hero-art .hero-note {
+  color: #7944cf;
+}
+.purple-hero-links {
+  margin-top: 22px;
+  font-size: 13px;
+}
+.handwritten {
+  color: #7944cf;
+}
+.hero-footer {
+  margin-top: 44px;
+  color: #796980;
+  border-color: #dfd3e7;
+}
+#assembly-diagram [fill='#ddba69'] {
+  fill: #bd92f2;
+  stroke: #8150bb;
+}
+.ink-line {
+  stroke: #7944cf;
+}
+.wash-line {
+  stroke: #d1b1f4;
+}
+.protein-wash {
+  fill: #dcc5f6;
+}
+.protein-ink {
+  stroke: #7944cf;
+}
+.assembly-phase {
+  fill: #7944cf;
+}
+.notebook-bottom i {
+  background: #b993e6;
+}
+.notebook-bottom i.ochre {
+  background: #7944cf;
+}
+.purple-page-section {
+  padding: 0 0 36px;
+}
+.purple-page-section.section {
+  padding: 70px 5%;
+}
+.purple-page-section h2 {
+  font-size: clamp(32px, 3.7vw, 52px);
+  max-width: 720px;
+}
+.purple-lead {
+  max-width: 690px;
+  margin: 22px 0 30px;
+  font-size: 17px;
+  color: #756580;
+}
+.purple-discovery {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 32px 0;
+}
+.purple-discovery article {
+  padding: 28px;
+  background: #f1e9fa;
+  border: 1px solid #dbc9eb;
+  border-radius: 5px 16px 8px 12px;
+}
+.purple-discovery article:nth-child(2) {
+  background: #eee4f8;
+  border-radius: 16px 5px 14px 6px;
+}
+.purple-discovery article:nth-child(3) {
+  background: #f5eff9;
+}
+.purple-discovery h3 {
+  font-family: 'Libre Caslon Display', Georgia, serif;
+  font-size: 29px;
+  font-weight: 400;
+  margin: 14px 0 8px;
+}
+.purple-discovery p {
+  font-size: 14px;
+  color: #756580;
+}
+.purple-discovery a {
+  font-size: 13px;
+}
+.purple-icon {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  color: #8250c1;
+  flex-shrink: 0;
+}
+.purple-note {
+  border: 1px solid #dfd3e7;
+  background: #fdfbfe;
+  border-radius: 7px 12px 6px 10px;
+  margin: 12px 0;
+  padding: 0;
+}
+.purple-note summary,
+.purple-timeline-entry summary {
+  list-style: none;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  cursor: pointer;
+  padding: 21px 24px;
+  font:
+    500 16px/1.5 'DM Sans',
+    Arial,
+    sans-serif;
+  color: #4b345d;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+.purple-plus {
+  font-size: 24px;
+  margin-left: auto;
+  line-height: 1;
+  transition: transform 0.18s ease;
+  color: #9462d1;
+}
+details[open] > summary .purple-plus {
+  transform: rotate(45deg);
+}
+.purple-note[open],
+.purple-timeline-entry[open] {
+  background: #f4edf9;
+}
+.purple-note summary:hover,
+.purple-timeline-entry summary:hover {
+  background: #f0e7f8;
+  border-radius: inherit;
+}
+.purple-note-body {
+  padding: 0 24px 22px 68px;
+  color: #695675;
+  font-size: 15px;
+}
+.purple-note-body p {
+  margin: 0;
+}
+.purple-note summary:focus-visible,
+.purple-timeline-entry summary:focus-visible {
+  outline: 2px solid #8b4dff;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.purple-margin-note {
+  display: flex;
+  gap: 18px;
+  padding: 22px 26px;
+  background: #eee3f7;
+  border-radius: 3px 15px 6px 12px;
+  margin-top: 16px;
+  max-width: 620px;
+}
+.purple-margin-note p {
+  margin: 0;
+  font-family: 'Caveat', cursive;
+  font-size: 25px;
+  line-height: 1.3;
+  color: #75528e;
+}
+.purple-draft {
+  border-left: 3px solid #c5a4e9;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: #7c668a;
+  background: #f4edf8;
+  margin: 24px 0 32px;
+}
+.purple-timeline {
+  position: relative;
+  padding: 0 0 0 26px;
+  border-left: 1px dashed #b99ad5;
+  margin: 12px 0 0 17px;
+}
+.purple-timeline-entry {
+  position: relative;
+  border: 1px solid #dfd3e7;
+  border-radius: 6px 14px 8px 12px;
+  background: #fdfbfe;
+  margin: 0 0 20px;
+}
+.purple-timeline-entry::before {
+  content: '';
+  position: absolute;
+  left: -33px;
+  top: 38px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #a273df;
+  box-shadow: 0 0 0 5px #faf8f5;
+}
+.purple-timeline-entry summary {
+  align-items: flex-start;
+}
+.purple-step {
+  font:
+    31px/1.4 'Caveat',
+    cursive;
+  color: #9a6acb;
+}
+.purple-timeline-entry small {
+  display: block;
+  letter-spacing: 1.2px;
+  color: #8b729e;
+  font-size: 9px;
+  margin-bottom: 6px;
+}
+.purple-timeline-entry strong {
+  font:
+    30px/1.1 'Libre Caslon Display',
+    Georgia,
+    serif;
+}
+.purple-question {
+  display: block;
+  font-size: 13px;
+  color: #796882;
+  margin-top: 7px;
+}
+.purple-timeline-body {
+  padding: 0 24px 24px 70px;
+  font-size: 14px;
+  color: #695675;
+}
+.purple-feedback {
+  background: #fff9;
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-top: 18px;
+  border-left: 2px solid #bf9de6;
+}
+.purple-feedback p {
+  margin: 7px 0;
+}
+.wiki-page {
+  padding-top: 60px;
+}
+.page-heading {
+  position: relative;
+}
+.page-heading::after {
+  content: '';
+  width: 62px;
+  height: 4px;
+  background: #b18ce0;
+  display: block;
+  border-radius: 50%;
+  transform: rotate(-4deg);
+  margin-top: 28px;
+}
+.wiki-sidebar a[aria-current='page'] {
+  border-bottom: 2px solid #b992e6;
+}
+@media (max-width: 780px) {
+  .hero {
+    padding-top: 40px;
+    overflow: hidden;
+  }
+  .hero h1 {
+    font-size: 60px;
+  }
+  .purple-logo-stamp {
+    top: 0;
+    right: 10px;
+    width: 65px;
+  }
+  .hero-art {
+    padding-top: 62px;
+  }
+  .purple-discovery {
+    grid-template-columns: 1fr;
+  }
+  .purple-note summary,
+  .purple-timeline-entry summary {
+    padding: 18px 16px;
+    gap: 12px;
+  }
+  .purple-note-body,
+  .purple-timeline-body {
+    padding: 0 18px 22px;
+  }
+  .purple-timeline-entry strong {
+    font-size: 26px;
+  }
+  .purple-page-section.section {
+    padding-top: 44px;
+    padding-bottom: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .purple-plus,
+  .button {
+    transition: none;
+  }
+}
+
+/* Keep the inherited open illustration inside a lavender notebook card. */
+.hero-art .notebook {
+  background: #f6f0fa;
+  border: 1px solid #d9c7e7;
+  border-radius: 12px 6px 18px 7px;
+  box-shadow: 6px 8px 0 #e9deef;
+  padding-top: 16px;
+}
+.hero-art .hero-note {
+  display: block;
+  max-width: calc(100% - 100px);
+  font-size: 26px;
+  margin-bottom: 18px;
+}
+.hero-art .purple-logo-stamp img {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  animation: none;
+}
+.hero-art .purple-logo-stamp {
+  top: -20px;
+}
+.purple-network {
+  background: #f3edf9;
+  border: 1px solid #dac9e9;
+  border-radius: 12px 5px 14px 8px;
+  padding: 24px;
+}
+.purple-network svg {
+  width: 100%;
+  max-height: 250px;
+}
+.purple-network label {
+  display: block;
+  color: #654d78;
+  font-size: 14px;
+}
+.purple-network input {
+  display: block;
+  width: 100%;
+  margin: 18px 0;
+  accent-color: #8b4dff;
+  cursor: pointer;
+}
+.purple-network output {
+  display: block;
+  font-size: 18px;
+  color: #7440be;
+  font-weight: 600;
+}
+.purple-network [data-network-edge] {
+  transition: opacity 0.15s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .purple-network [data-network-edge] {
+    transition: none;
+  }
+}
+
+/* The base Notebook rotates summary spans; only our plus icon should rotate. */
+.purple-note[open] > summary span,
+.purple-timeline-entry[open] > summary span {
+  transform: none;
+}
+.purple-note[open] > summary .purple-plus,
+.purple-timeline-entry[open] > summary .purple-plus {
+  transform: rotate(45deg);
+}
+
+/* The logo has real alpha; preserve its colours without blend-mode workarounds. */
+.brand-mark, .brand-mark img, footer .brand-mark img,
+.purple-logo-stamp, .purple-logo-stamp img { mix-blend-mode: normal; background: transparent; }

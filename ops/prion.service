@@ -1,0 +1,26 @@
+[Unit]
+Description=Prion Collective collaborative wiki
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prion
+Group=prion
+WorkingDirectory=/opt/prion
+EnvironmentFile=/etc/prion.env
+ExecStart=/usr/local/bin/node /opt/prion/server/start.mjs
+Restart=on-failure
+RestartSec=5
+StateDirectory=prion
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prion
+MemoryHigh=320M
+MemoryMax=448M
+
+[Install]
+WantedBy=multi-user.target

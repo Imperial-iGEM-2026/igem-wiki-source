@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="helper-session" content="__SESSION__" />
+    <title>reGELerate · Upload helper</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        re<span>GEL</span>erate <small>UPLOAD HELPER</small>
+      </div>
+      <div class="header-actions">
+        <span id="helperVersion" aria-label="Helper version"></span>
+        <span class="local">● Running on your computer</span
+        ><button id="helpOpen" class="secondary">How it works ?</button>
+      </div>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">PUBLISH YOUR WIKI</p>
+        <h1>Three destinations. One workspace.</h1>
+        <p>Import once. Upload your media. Send your website to GitLab.</p>
+      </div>
+      <nav class="stepper" aria-label="Upload steps">
+        <a href="#importSection">01 <span>Import your export</span></a
+        ><a href="#mediaSection">02 <span>Upload media</span></a
+        ><a href="#sourceSection">03 <span>Review & publish</span></a>
+      </nav>
+      <div class="layout">
+        <div class="steps">
+          <section id="importSection">
+            <div class="step-title">
+              <span class="number">1</span>
+              <div>
+                <h2>Import your export</h2>
+                <p>
+                  Select the three ZIPs together. No extracting or editing JSON.
+                </p>
+              </div>
+            </div>
+            <label
+              >iGEM team ID
+              <input id="teamId" value="6377" inputmode="numeric" /></label
+            ><label class="file-drop"
+              >Choose the three export ZIPs<input
+                id="zips"
+                type="file"
+                accept=".zip"
+                multiple /></label
+            ><button id="import">Import project</button>
+            <details>
+              <summary>Continue an earlier upload</summary>
+              <select id="jobs" aria-label="Earlier upload"></select
+              ><button id="resume" class="secondary">Continue</button>
+            </details>
+            <p id="project" class="note"></p>
+          </section>
+          <section id="mediaSection">
+            <div class="step-title">
+              <span class="number">2</span>
+              <div>
+                <h2>Upload your media</h2>
+                <p>
+                  Log in on the official sites. Your password never goes into
+                  this helper.
+                </p>
+              </div>
+            </div>
+            <div class="destinations">
+              <article class="destination">
+                <div class="site-icon" aria-hidden="true">▧</div>
+                <p class="eyebrow">IMAGES & FILES</p>
+                <h3>iGEM Uploads</h3>
+                <p>Logos, images, documents, fonts and 3D files.</p>
+                <strong id="assetCount">Import a project first</strong
+                ><button data-login="assets" class="secondary">
+                  Open & sign in ↗
+                </button>
+              </article>
+              <article class="destination">
+                <div class="site-icon" aria-hidden="true">▷</div>
+                <p class="eyebrow">VIDEO & AUDIO</p>
+                <h3>Video Universe</h3>
+                <p>Recordings, with details and captions you review.</p>
+                <strong id="mediaCount">Import a project first</strong
+                ><button data-login="media" class="secondary">
+                  Open & sign in ↗
+                </button>
+              </article>
+            </div>
+            <p class="note">
+              The helper opens a separate browser for uploads. Sign in there,
+              even if you already logged in elsewhere.
+            </p>
+            <div class="action-row">
+              <button id="upload">Upload / check remaining files</button
+              ><button id="pause" class="secondary">Pause</button>
+            </div>
+            <p class="note">
+              Static files: batches of 5, then one refresh to collect links.
+              Recordings: one per pass, so you can finish its details in Video
+              Universe.
+            </p>
+            <details id="fileDetails">
+              <summary id="fileSummary">Files & upload status</summary>
+              <label class="filter"
+                >Show<select id="fileFilter">
+                  <option value="all">All files</option>
+                  <option value="pending">Remaining</option>
+                  <option value="error">Needs attention</option>
+                  <option value="done">URL saved</option>
+                </select></label
+              >
+              <div id="files"></div>
+            </details>
+            <details>
+              <summary>Fonts (template fonts included)</summary>
+              <p class="note">
+                To preserve custom fonts, add their licensed files with the font
+                family and weight. The helper uploads them and writes the font
+                stylesheet.
+              </p>
+              <div class="font-form">
+                <label
+                  >Family<input id="fontFamily" placeholder="DM Sans" /></label
+                ><label
+                  >Weight<input
+                    id="fontWeight"
+                    value="400"
+                    placeholder="400 or 100 900"
+                /></label>
+              </div>
+              <input
+                id="fontFile"
+                type="file"
+                accept=".woff2,.woff,.ttf,.otf"
+                aria-label="Font file"
+              /><button id="addFont" class="secondary">Add font</button>
+            </details>
+          </section>
+          <section id="sourceSection">
+            <div class="step-title">
+              <span class="number">3</span>
+              <div>
+                <h2>Review & send to GitLab</h2>
+                <p>
+                  Only website source is committed. No Markdown, guides, media
+                  ZIPs or login data.
+                </p>
+              </div>
+            </div>
+            <div class="gitlab-row">
+              <div>
+                <h3>iGEM GitLab</h3>
+                <p id="gitlabStatus">Not sent yet</p>
+              </div>
+              <button data-login="gitlab" class="secondary">
+                Open & sign in ↗
+              </button>
+            </div>
+            <p class="note">
+              Sign in through the browser opened by this helper. GitLab’s SSO
+              notice about personal access tokens applies to Git over HTTPS;
+              this helper uses your browser session.
+            </p>
+            <details id="reviewDetails">
+              <summary>Website settings</summary>
+              <label
+                >Official attribution embed URL<input
+                  id="attribution"
+                  type="url"
+                  placeholder="https://teams.igem.org/wiki/6377/attributions" /></label
+              ><label class="check"
+                ><input id="systemFonts" type="checkbox" />Use system fonts
+                instead of uploading custom fonts</label
+              >
+            </details>
+            <p id="publishHint" class="note" role="status">
+              Check source changes first, then send them to GitLab.
+            </p>
+            <div class="action-row publish-actions">
+              <button id="review">1. Check source changes</button>
+              <button id="publish" disabled aria-describedby="publishHint">
+                2. Send to GitLab for review
+              </button>
+            </div>
+            <div id="changes"></div>
+            <p class="note">
+              Creates a new branch and a merge request. A CC BY 4.0 LICENSE is
+              included in the new branch. Review and merge in GitLab to publish;
+              the build checks page URLs and media mappings again.
+            </p>
+            <p id="publication"></p>
+          </section>
+          <section class="cleanup-section">
+            <h2>Team storage</h2>
+            <p>
+              Remove all files in this team’s iGEM Uploads storage, including
+              files outside this export and all subfolders.
+            </p>
+            <p class="note">
+              Review the full list before confirming. Empty folders remain.
+              Video Universe, GitLab and local ZIPs are unchanged.
+            </p>
+            <button id="scanStorage" class="danger secondary">
+              Remove all uploaded files…
+            </button>
+            <p id="cleanupStatus" class="note"></p>
+            <div id="cleanupNotice" class="cleanup-notice" hidden>
+              <div role="alert" aria-atomic="true">
+                <strong id="cleanupNoticeTitle">Sign in to continue</strong>
+                <p id="cleanupNoticeText"></p>
+              </div>
+              <div class="action-row">
+                <button
+                  id="cleanupSignIn"
+                  data-login="assets"
+                  class="secondary"
+                >
+                  Open iGEM Uploads ↗
+                </button>
+                <button id="retryScan" class="secondary">
+                  Check sign-in &amp; scan
+                </button>
+              </div>
+            </div>
+            <button id="showCleanup" class="secondary" hidden>
+              Review storage preview
+            </button>
+          </section>
+        </div>
+        <aside>
+          <div class="status-head">
+            <h2>Current status</h2>
+            <span id="busy">Ready</span>
+          </div>
+          <div id="statusPanel" aria-live="polite">
+            <h3 id="statusTitle">Start with your export</h3>
+            <p id="statusMessage">Choose the three ZIPs in step 1.</p>
+          </div>
+          <div class="progress-head">
+            <strong id="progressCount">0 / 0</strong
+            ><span>media URLs saved</span>
+          </div>
+          <progress
+            id="progress"
+            max="1"
+            value="0"
+            aria-label="Media URLs saved"
+          ></progress>
+          <p class="note">
+            A saved URL means the helper can link that file. Videos may still
+            need metadata or moderation.
+          </p>
+          <div class="next-step">
+            <p class="eyebrow">YOUR NEXT STEP</p>
+            <p id="nextStep">Import your project to see what to upload.</p>
+          </div>
+          <p id="error" role="alert"></p>
+          <details>
+            <summary>Activity log</summary>
+            <div id="events" role="log"></div>
+          </details>
+        </aside>
+      </div>
+    </main>
+    <dialog id="helpDialog" aria-labelledby="helpTitle">
+      <button
+        class="close secondary"
+        data-close="helpDialog"
+        aria-label="Close help"
+      >
+        ×
+      </button>
+      <p class="eyebrow">QUICK GUIDE</p>
+      <h2 id="helpTitle">Where does everything go?</h2>
+      <ol class="guide">
+        <li>
+          <strong>Import all 3 ZIPs here.</strong>
+          <p>
+            The helper opens them locally. You do not upload the ZIPs themselves
+            to iGEM.
+          </p>
+        </li>
+        <li>
+          <strong>Images & files → iGEM Uploads</strong>
+          <p>
+            Open it from step 2 and sign in. Return here and click “Upload /
+            check remaining files”. The helper organizes files into folders and
+            saves their official links.
+          </p>
+        </li>
+        <li>
+          <strong>Video & audio → Video Universe</strong>
+          <p>
+            Only needed for recordings. Sign in there, run an upload pass, then
+            finish that recording’s details and captions. Repeat for the next
+            recording. Check moderation before publishing.
+          </p>
+        </li>
+        <li>
+          <strong>Website code → iGEM GitLab</strong>
+          <p>
+            After media links are saved, open GitLab and sign in. Check the
+            source changes in step 3 and send them for review. Open the merge
+            request and merge it when ready. Check the resulting build and wiki.
+          </p>
+        </li>
+      </ol>
+      <details>
+        <summary>Paused, stuck or continuing later?</summary>
+        <p>
+          Read Current status first. Keep the helper terminal open. Pause
+          preserves completed uploads. Use “Upload / check remaining files” to
+          check a pending file without sending it twice. If iGEM explicitly
+          rejected a file, open Files & upload status and use its retry button.
+        </p>
+        <p>
+          To continue another day, keep the helper’s jobs folder and choose
+          “Continue an earlier upload”. Sign in again in the helper’s browser.
+        </p>
+      </details>
+    </dialog>
+    <dialog id="cleanupDialog" aria-labelledby="cleanupTitle">
+      <button
+        class="close secondary"
+        data-close="cleanupDialog"
+        aria-label="Close storage preview"
+      >
+        ×
+      </button>
+      <p class="eyebrow">PERMANENT DELETION</p>
+      <h2 id="cleanupTitle">Review all team files</h2>
+      <p id="cleanupTeam"></p>
+      <p>
+        This removes every listed file from iGEM Uploads. Existing wiki links to
+        these files will break. This cannot be undone; cached copies may remain
+        temporarily.
+      </p>
+      <div id="cleanupFiles"></div>
+      <p class="note">
+        Empty folders remain. Video Universe, GitLab and local files are
+        unchanged.
+      </p>
+      <label
+        >Type your team name to confirm<input
+          id="confirmTeam"
+          autocomplete="off" /></label
+      ><label class="check"
+        ><input id="confirmDelete" type="checkbox" />I understand these are all
+        team files, including other people’s uploads.</label
+      >
+      <p id="cleanupError" role="alert"></p>
+      <button id="deleteStorage" class="danger" disabled>
+        Permanently delete listed files
+      </button>
+    </dialog>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>

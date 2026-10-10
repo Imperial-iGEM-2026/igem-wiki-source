@@ -1,0 +1,10 @@
+{
+  "teamSlug": "imperial-college",
+  "repository": "https://gitlab.igem.org/2026/imperial-college",
+  "source": "publication/content.json",
+  "mediaMap": "publication/media-map.json",
+  "review": "publication/review.json",
+  "attributionUrl": "",
+  "requiredPages": [],
+  "fontCss": ""
+}

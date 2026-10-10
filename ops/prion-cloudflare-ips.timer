@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the editor origin allowlist weekly
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

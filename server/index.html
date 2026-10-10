@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Website Studio</title>
+    <link rel="stylesheet" href="/app/editor-loading.css" />
+  </head>
+  <body>
+    <div id="root">
+      <!-- Initial shell mirrors EditorLoading, visible even before JavaScript downloads. -->
+      <output
+        class="editor-loading-screen"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div class="editor-loading-content">
+          <div class="editor-loading-brand" aria-hidden="true">
+            reGELerate <span>STUDIO</span>
+          </div>
+          <div class="editor-loading-molecule" aria-hidden="true">
+            <div class="editor-loading-frame"></div>
+            <div class="editor-loading-fibre">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i
+              ><i></i><i></i><i></i>
+            </div>
+            <span class="editor-loading-label">assembling possibilities</span>
+          </div>
+          <h1>Opening your workspace</h1>
+          <p>Getting your projects ready.</p>
+          <div class="editor-loading-pulse" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </div>
+          <noscript><p>Enable JavaScript to open the editor.</p></noscript>
+        </div>
+      </output>
+    </div>
+    <script type="module" src="/server/client.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh Cloudflare networks allowed to reach the Prion editor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/prion/ops/update-cloudflare-ips.sh

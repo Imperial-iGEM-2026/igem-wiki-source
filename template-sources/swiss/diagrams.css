@@ -1,0 +1,36 @@
+
+.sketch-wash{fill:#74a29b;opacity:.28;stroke:none}
+
+.sketch-ink{fill:none;stroke:#63877f;stroke-width:.85;stroke-linecap:round;stroke-linejoin:round;opacity:.74}
+
+.sketch-echo{fill:none;stroke:#71978b;stroke-width:.55;opacity:.25}
+
+.fibre-ink{fill:none;stroke:#6e958a;stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round}
+
+.fibre-wash{fill:none;stroke:#91b4a0;stroke-width:6;stroke-linecap:round;opacity:.2}
+
+
+.assembly-phase{font-family:Caveat,"Segoe Print",cursive;font-size:19px;fill:#437b77}
+
+.sketch-label{font-size:11px;font-family:inherit;fill:#637f76}
+
+.ink-line{fill:none;stroke:#5a8c86;stroke-width:1.5}
+.wash-line{fill:none;stroke:#88b2a5;stroke-opacity:.24;stroke-width:12}
+
+.dish,.cell{fill:#b6c6aa;fill-opacity:.12;stroke:#8aa69b;stroke-width:1.5}
+.gel-slab{fill:#b0c6c3;fill-opacity:.17;stroke:#8aa69b;stroke-width:1.2}
+
+.smear{stroke:#4c7c88;stroke-width:4;animation:gel-smear 9s ease-in-out infinite;animation-delay:var(--delay)}
+
+.soluble-band{stroke:#4c7c88;stroke-width:5;animation:band-migrate 9s ease-in-out infinite}
+
+.pressure-arrow{animation:pressure 7s ease-in-out infinite}
+
+.motion-off .story-sketch *,.sketch-outside *{animation-play-state:paused!important}
+
+
+.sketch-seed>.ink-line,.sketch-seed>.wash-line{animation:seed-thread 10s ease-in-out infinite}
+.story-sketch .sketch-label{font-family:'Caveat','Segoe Print',cursive;font-size:15px}
+.sketch-seed>.wash-line{stroke-width:10}
+.sketch-seed .wash-line{stroke-width:10;stroke-opacity:.18}
+.sketch-seed .ink-line{stroke-width:1.35;stroke-opacity:.6}

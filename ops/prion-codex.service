@@ -1,0 +1,33 @@
+[Unit]
+Description=Prion Codex page proposal worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prion-codex
+Group=prion
+WorkingDirectory=/var/lib/prion-codex
+EnvironmentFile=/etc/prion-codex.env
+ExecStart=/usr/local/bin/node /opt/prion/server/codex-worker.mjs
+RuntimeDirectory=prion-codex
+RuntimeDirectoryMode=0750
+StateDirectory=prion-codex
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectProc=invisible
+InaccessiblePaths=/var/lib/prion -/etc/prion.env -/etc/prion-codex.env
+ReadOnlyPaths=/var/lib/prion-codex/.local
+MemoryHigh=256M
+MemoryMax=384M
+TasksMax=32
+CPUQuota=70%
+
+[Install]
+WantedBy=multi-user.target
