@@ -250,7 +250,7 @@ export default function Home({
         role={editing ? 'button' : undefined}
         title={editing ? 'Double-click to edit text' : undefined}
         onClick={(e) => {
-          if ((e.target as Element).closest('[data-citation-link]')) return;
+          if ((e.target as Element).closest('[data-citation-link],.modern-pdf-reader')) return;
           if (!editing) return;
           e.preventDefault();
           e.stopPropagation();
@@ -407,7 +407,7 @@ export default function Home({
       <div
         onClickCapture={(e) => {
           const link = (e.target as HTMLElement).closest?.('a');
-          if (link?.hasAttribute('data-citation-link')) return;
+          if (link?.hasAttribute('data-citation-link') || (e.target as Element).closest('.modern-pdf-reader')) return;
           if (
             !publication &&
             !editing &&

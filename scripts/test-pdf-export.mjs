@@ -108,7 +108,7 @@ const result = spawnSync(
 assert.equal(result.status, 0, result.stdout + result.stderr);
 const html = await readFile(path.join(dir, 'render/public/index.html'), 'utf8');
 assert.match(html, /data-pdf-parts/);
-assert.match(html, /Download complete PDF/);
+assert.match(html, /assets\/pdfjs/);
 assert.match(html, /Pages/);
 assert.ok(!html.includes('src="/api/media/aabb.pdf"'));
 exporter.close();

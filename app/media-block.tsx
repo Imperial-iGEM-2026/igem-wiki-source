@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, createElement } from 'react';
 import { ReferenceList } from './references';
 import { EquationBlock, MathText } from './equation-block';
+import { PdfReader } from './pdf-reader';
 import { Download, Box } from 'lucide-react';
 import { embedURL, type CanvasNode } from './canvas-schema';
 function Model({ src, alt }: { src: string; alt: string }) {
@@ -164,14 +165,10 @@ export function MediaBlock({
               aria-label={node.alt || node.title || 'Audio'}
             />
           )}
-          {/* Chromium's native PDF viewer cannot run inside a sandboxed iframe. */}
           {node.kind === 'pdf' && (
-            <iframe
+            <PdfReader
+              src={node.src || ''}
               title={node.alt || node.title || 'PDF document'}
-              src={node.src}
-              className="pdf-viewer"
-              loading="lazy"
-              referrerPolicy="no-referrer"
             />
           )}
           {node.kind === 'model' &&

@@ -201,7 +201,7 @@ export async function publicationSources(sourceRoot) {
   const files = await sourceFiles(sourceRoot);
   const pkg = JSON.parse(files.find(file => file.path === 'package.json')?.content || '{}');
   const lock = JSON.parse(files.find(file => file.path === 'package-lock.json')?.content || '{}');
-  const requiredDependencies = ['pdf-lib', 'jpeg-js', 'pngjs'];
+  const requiredDependencies = ['pdf-lib', 'jpeg-js', 'pngjs', 'pdfjs-dist'];
   if (requiredDependencies.some(name => !pkg.dependencies?.[name] || !lock.packages?.['node_modules/' + name]) ||
       !files.some(file => file.path === 'app/pdf-parts-viewer.ts') ||
       !files.some(file => file.path === 'publication/katex-LICENSE.txt') ||

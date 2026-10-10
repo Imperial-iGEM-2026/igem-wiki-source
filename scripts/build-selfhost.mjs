@@ -88,3 +88,10 @@ await cp(
   path.join(root, 'publication/pdf-processing-LICENSES.txt'),
   path.join(out, 'client/pdf-processing-LICENSES.txt'),
 );
+
+for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
+  await cp(
+    path.join(root, 'node_modules/pdfjs-dist', dir),
+    path.join(out, 'client/assets/pdfjs', dir),
+    { recursive: true },
+  );

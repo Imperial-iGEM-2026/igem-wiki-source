@@ -34,6 +34,7 @@
     "katex": "^0.19.0",
     "lucide-react": "1.31.0",
     "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
     "pngjs": "7.0.0",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",

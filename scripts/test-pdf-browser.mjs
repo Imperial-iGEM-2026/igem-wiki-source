@@ -20,7 +20,7 @@ const server = createServer(async (req, res) => {
     const bytes = await readFile(target);
     res.setHeader(
       'Content-Type',
-      target.endsWith('.js')
+      /\.(m?js)$/.test(target)
         ? 'text/javascript'
         : target.endsWith('.css')
           ? 'text/css'
@@ -57,18 +57,17 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/example/`);
   const viewer = page.locator('[data-pdf-parts]');
-  await viewer.locator('[data-pdf-next]').click();
-  await assert.equal(
-    await viewer.locator('iframe').getAttribute('src'),
-    'https://static.igem.wiki/teams/1/documents/part-3.pdf#view=Fit&toolbar=1&navpanes=0',
-  );
-  await viewer.locator('[data-pdf-prev]').click();
-  assert.equal(
-    await viewer.locator('iframe').getAttribute('src'),
-    'https://static.igem.wiki/teams/1/documents/part-1.pdf#view=Fit&toolbar=1&navpanes=0',
-  );
+  await viewer.locator('.pdf-reader-sheet canvas').first().waitFor();
+  await viewer.locator('[data-reader-page]').fill('3');
+  await viewer.locator('[data-reader-page]').press('Enter');
+  await viewer.locator('.pdf-reader-sheet[data-page="3"] canvas').waitFor();
+  await viewer.locator('[data-reader="sidebar"]').click();
+  await viewer.locator('[data-thumb] canvas').first().waitFor();
+  await viewer.locator('[data-reader="plus"]').click();
+  await viewer.locator('[data-reader="fit"]').click();
+  await viewer.locator('[data-reader="prev"]').click();
   const downloadPromise = page.waitForEvent('download');
-  await viewer.locator('[data-pdf-download]').click();
+  await viewer.locator('[data-reader="download"]').click();
   const download = await downloadPromise;
   const file = path.join(root, 'complete.pdf');
   await download.saveAs(file);

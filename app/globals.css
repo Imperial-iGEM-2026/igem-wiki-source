@@ -2682,3 +2682,31 @@ footer
 .partitioned-pdf[data-pdf-parts] > [data-pdf-status] { flex:0 0 auto; padding:5px 10px; margin:0!important; background:#f8fafc; color:#64748b; font:12px/1.5 Arial,sans-serif!important; overflow-wrap:anywhere; }
 .partitioned-pdf[data-pdf-parts] .pdf-part-toolbar [hidden] { display:none!important; }
 .partitioned-pdf[data-pdf-parts]:fullscreen { width:100vw!important; height:100vh!important; border:0; border-radius:0; }
+/* Shared Edge-style reader: scoped controls do not inherit the wiki's button theme. */
+.modern-pdf-reader { color:#30343b; font:13px/1.4 'Segoe UI',Arial,sans-serif; }
+.modern-pdf-reader .pdf-reader-toolbar { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; gap:4px; padding:6px 10px; min-height:48px; background:#fafafa; border-bottom:1px solid #d5d7db; z-index:2; }
+.modern-pdf-reader .pdf-reader-toolbar button { display:inline-flex!important; position:static!important; align-items:center; justify-content:center; width:32px!important; height:32px!important; padding:6px!important; margin:0!important; border:0!important; border-radius:4px!important; background:transparent!important; color:#3e434b!important; box-shadow:none!important; transform:none!important; cursor:pointer; }
+.modern-pdf-reader .pdf-reader-toolbar button:hover { background:#e7e9ed!important; }
+.modern-pdf-reader button:focus-visible, .modern-pdf-reader input:focus-visible { outline:2px solid #2563eb; outline-offset:1px; }
+.modern-pdf-reader .pdf-reader-toolbar button:disabled { opacity:.3; cursor:default; }
+.modern-pdf-reader .pdf-reader-toolbar button[hidden] { display:none!important; }
+.modern-pdf-reader .pdf-reader-toolbar [data-reader-cancel] { width:auto!important; }
+.modern-pdf-reader .pdf-reader-title { max-width:180px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; margin:0 12px 0 4px; }
+.modern-pdf-reader .pdf-reader-navigation { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.modern-pdf-reader .pdf-reader-navigation input { width:46px!important; height:28px!important; padding:3px!important; text-align:center; border:1px solid #c6c9cf!important; border-radius:3px; background:white!important; color:#30343b!important; font:13px 'Segoe UI',Arial,sans-serif!important; appearance:textfield; }
+.modern-pdf-reader input::-webkit-inner-spin-button { appearance:none; }
+.modern-pdf-reader .pdf-reader-divider { height:22px; border-left:1px solid #d5d7db; margin:0 7px; }
+.modern-pdf-reader .pdf-reader-spacer { flex:1; }
+.modern-pdf-reader [data-reader-zoom] { min-width:34px; text-align:center; font-size:12px; }
+.modern-pdf-reader .pdf-reader-body { display:flex; flex:1 1 0; min-height:0; min-width:0; overflow:hidden; }
+.modern-pdf-reader .pdf-reader-scroll { position:relative; flex:1; min-width:0; overflow:auto; padding:20px 24px; background:#e6e7e9; overscroll-behavior:contain; scroll-behavior:auto; }
+.modern-pdf-reader .pdf-reader-sheet { position:relative; display:flex; align-items:center; justify-content:center; flex:none; margin:0 auto 20px; background:white; color:#94a3b8; box-shadow:0 1px 5px #0003; }
+.modern-pdf-reader .pdf-reader-sheet canvas { display:block; max-width:none!important; border-radius:0!important; }
+.modern-pdf-reader .pdf-reader-thumbnails { flex:0 0 154px; width:154px; min-height:0; overflow:auto; padding:12px; background:#f3f3f3; border-right:1px solid #cfd2d7; }
+.modern-pdf-reader .pdf-reader-thumbnails[hidden] { display:none; }
+.modern-pdf-reader .pdf-reader-thumb { display:flex!important; flex-direction:column; align-items:center; gap:5px; width:128px!important; padding:8px!important; border:1px solid transparent!important; border-radius:4px!important; background:transparent!important; color:#555!important; margin:0 0 8px!important; cursor:pointer; font:12px 'Segoe UI',Arial,sans-serif; }
+.modern-pdf-reader .pdf-reader-thumb:hover { background:#e2e7ee!important; border-color:#b8c9df!important; }
+.modern-pdf-reader [data-thumb] { display:block; background:white; box-shadow:0 1px 3px #0003; }
+.modern-pdf-reader .pdf-reader-status { flex:0 0 auto; padding:4px 12px; background:#fafafa; border-top:1px solid #d5d7db; color:#6b7280; font:11px/1.5 'Segoe UI',Arial,sans-serif; }
+.modern-pdf-reader .pdf-reader-loading { padding:24px; text-align:center; color:#64748b; }
+@media(max-width:600px){.modern-pdf-reader .pdf-reader-title,.modern-pdf-reader .pdf-reader-divider{display:none}.modern-pdf-reader .pdf-reader-toolbar{gap:1px;padding:4px}.modern-pdf-reader .pdf-reader-scroll{padding:12px}.modern-pdf-reader .pdf-reader-thumbnails{flex-basis:132px;width:132px;padding:2px}}

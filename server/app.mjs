@@ -514,6 +514,13 @@ export async function createAppServer({
       ) {
         const type = {
           js: 'text/javascript',
+            mjs: 'text/javascript',
+            wasm: 'application/wasm',
+            bcmap: 'application/octet-stream',
+            pfb: 'application/octet-stream',
+            icc: 'application/octet-stream',
+            ttf: 'font/ttf',
+            otf: 'font/otf',
           css: 'text/css',
           woff2: 'font/woff2',
           svg: 'image/svg+xml',
@@ -1264,6 +1271,13 @@ export async function createAppServer({
           mediaTypes[ext] ||
           {
             js: 'text/javascript',
+            mjs: 'text/javascript',
+            wasm: 'application/wasm',
+            bcmap: 'application/octet-stream',
+            pfb: 'application/octet-stream',
+            icc: 'application/octet-stream',
+            ttf: 'font/ttf',
+            otf: 'font/otf',
             css: 'text/css',
             ico: 'image/x-icon',
             woff2: 'font/woff2',

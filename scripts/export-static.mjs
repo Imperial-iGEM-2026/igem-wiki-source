@@ -9,6 +9,7 @@ import {
   mkdir,
   readdir,
   copyFile,
+  cp,
 } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -204,6 +205,12 @@ const refs = exportMedia(
   publicationSlug,
 );
 await mkdir(path.join(output, 'public/assets/media'), { recursive: true });
+for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
+  await cp(
+    path.join(root, 'node_modules/pdfjs-dist', dir),
+    path.join(output, 'public/assets/pdfjs', dir),
+    { recursive: true },
+  );
 // Source bundles contain LICENSE; editor checkouts keep the export licence scoped
 // to publication/ so exporting does not relicense the editor itself.
 let wikiLicense;
@@ -537,10 +544,10 @@ for (const page of [undefined, ...wikiPages]) {
     .replace(/<section class="invitation"[\s\S]*?<\/button><\/section>/g, '');
   for (const [original, parts] of Object.entries(pdfViewers)) {
     html = html.replace(
-      /<iframe\b[^>]*src="([^"]*)"[^>]*><\/iframe>/g,
-      (frame, src) => {
-        if (src !== esc(original)) return frame;
-        return `<div class="partitioned-pdf" data-pdf-parts="${esc(JSON.stringify(parts))}"><div class="pdf-part-toolbar" role="toolbar" aria-label="PDF reader"><span class="pdf-reader-label">PDF</span><button type="button" data-pdf-prev>Previous part</button><label>Pages <select data-pdf-select aria-label="PDF page range">${parts.map((p, i) => `<option value="${i}">${p.start}–${p.end}</option>`).join('')}</select></label><button type="button" data-pdf-next>Next part</button><button type="button" data-pdf-fit>Fit page</button><button type="button" data-pdf-fullscreen>Full screen</button><button type="button" data-pdf-download>Download complete PDF</button><button type="button" data-pdf-cancel hidden>Cancel download</button></div>${frame.replace(`src="${esc(original)}"`, `src="${esc(parts[0].url + "#view=Fit&toolbar=1&navpanes=0")}"`)}<p data-pdf-status role="status">${parts.at(-1).end} pages · Loads one part at a time</p><noscript>${parts.map((p) => `<a href="${esc(p.url)}">Pages ${p.start}–${p.end}</a>`).join(' · ')}</noscript></div>`;
+      /<div class="partitioned-pdf"[^>]*>(<iframe\b[^>]*src="([^"]*)"[^>]*><\/iframe>)<\/div>/g,
+      (whole, frame, src) => {
+        if (src !== esc(original)) return whole;
+        return `<div class="partitioned-pdf" data-pdf-assets="${esc(base)}assets/pdfjs/" data-pdf-parts="${esc(JSON.stringify(parts))}">${frame.replace(`src="${esc(original)}"`, `src="${esc(parts[0].url)}"`)}<noscript>${parts.map((p) => `<a href="${esc(p.url)}">Pages ${p.start}–${p.end}</a>`).join(' · ')}</noscript></div>`;
       },
     );
     html = html.replace(
@@ -585,6 +592,10 @@ for (const page of [undefined, ...wikiPages]) {
       /<div class="form-pending">[\s\S]*?<\/div><\/div>/,
       `<div class="form-pending"><iframe title="Official team attributions" src="${esc(attribution)}" loading="lazy"></iframe></div>`,
     );
+  html = html.replaceAll(
+    'data-pdf-assets="/assets/pdfjs/"',
+    `data-pdf-assets="${esc(base)}assets/pdfjs/"`,
+  );
   const ids = new Set(
     [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]),
   );

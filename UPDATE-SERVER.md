@@ -446,3 +446,7 @@ The previous helper omitted new PDF/image modules, the PDF parts manifest and pr
 ## PDF reader layout
 
 Partitioned PDFs now have a contained toolbar, fit-page opening mode, Fit page and Full screen controls. The viewer stays inside its saved layer and prevents internal PDF content from stretching the webpage. Install this package and prepare fresh exports; use helper 1.0.16 to publish the matching compiler. Native PDF toolbar support varies by browser.
+
+## Unified PDF reader
+
+Editor, Preview and published PDFs now share the same Edge-style reader: continuous pages, thumbnails, page-number navigation, zoom, fit-page, rotation, fullscreen and complete download. Only nearby pages are drawn; split documents load their files as needed. Install this release, refresh editor tabs and prepare fresh exports with helper 1.0.17. Browser-native search/annotation menus are not part of this custom reader. No Nginx change is needed.
