@@ -56,6 +56,13 @@ try {
     });
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/example/`);
+  const customFrame = page.frameLocator('.custom-html-frame');
+  await customFrame
+    .getByRole('button', { name: 'Animate', exact: true })
+    .click();
+  await customFrame
+    .getByRole('button', { name: 'Animation works', exact: true })
+    .waitFor();
   const viewer = page.locator('[data-pdf-parts]');
   await viewer.locator('.pdf-reader-sheet canvas').first().waitFor();
   await viewer.locator('[data-reader-page]').fill('3');

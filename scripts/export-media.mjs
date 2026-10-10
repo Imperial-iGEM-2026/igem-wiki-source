@@ -50,8 +50,29 @@ export function exportMedia(
   for (const [key, value] of Object.entries(values)) {
     if (!key.startsWith('layout:') || removed.has(key.slice(7))) continue;
     const { nodes } = JSON.parse(value);
-    for (const node of nodes)
-      if (node.src && visible(node, nodes)) refs.set(node.src, node.kind);
+    for (const node of nodes) {
+      if (!visible(node, nodes)) continue;
+      if (node.src) refs.set(node.src, node.kind);
+      if (node.kind === 'html') {
+        const code = [node.html, node.css, node.javascript]
+          .filter(Boolean)
+          .join('\n');
+        // Explicit local asset references in snippets participate in the normal export mapping.
+        for (const [source] of code.matchAll(
+          /\/api\/media\/[a-f0-9-]+\.[a-z0-9]+|\/templates\/[a-zA-Z0-9_./-]+/g,
+        )) {
+          if (source.includes('..')) continue;
+          refs.set(
+            source,
+            /\.(mp4|webm)$/i.test(source)
+              ? 'video'
+              : /\.(mp3|wav|ogg)$/i.test(source)
+                ? 'audio'
+                : 'image',
+          );
+        }
+      }
+    }
   }
   const logo = JSON.parse(values['site:header'] || '{}').logo;
   if (logo) refs.set(logo, 'image');

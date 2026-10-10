@@ -16,7 +16,8 @@ export type BlockKind =
   | 'embed'
   | 'accordion'
   | 'equation'
-  | 'references';
+  | 'references'
+  | 'html';
 /** One collapsible section. The id keeps it stable when items move. */
 export type AccordionItem = {
   id: string;
@@ -27,6 +28,9 @@ export type AccordionItem = {
 export type ReferenceEntry = { id: string; text: string; url: string };
 export type CanvasNode = {
   references?: ReferenceEntry[];
+  html?: string;
+  css?: string;
+  javascript?: string;
   id: string;
   parentId?: string;
   layoutMode?: 'flow' | 'free';
@@ -198,6 +202,7 @@ export function validateLayout(input: unknown): input is CanvasLayout {
         'accordion',
         'equation',
         'references',
+        'html',
       ].includes(n.kind) ||
       !Number.isInteger(n.span) ||
       n.span < 1 ||
@@ -234,6 +239,12 @@ export function validateLayout(input: unknown): input is CanvasLayout {
       return false;
     if (n.indexHidden !== undefined && typeof n.indexHidden !== 'boolean')
       return false;
+    for (const key of ['html', 'css', 'javascript'] as const)
+      if (
+        n[key] !== undefined &&
+        (n.kind !== 'html' || typeof n[key] !== 'string')
+      )
+        return false;
     if (n.references !== undefined && !validReferences(n.references, n.kind))
       return false;
     if (n.items !== undefined && !validAccordionItems(n.items, n.kind))

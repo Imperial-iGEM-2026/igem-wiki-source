@@ -78,6 +78,9 @@ const editableKeys = new Set([
   'layoutMode',
   'items',
   'references',
+  'html',
+  'css',
+  'javascript',
 ]);
 // Collapsible sections from an AI: keep known ids, give new sections one.
 function accordionItems(items) {
@@ -849,7 +852,7 @@ export function createMcp({
       },
       add_section: {
         description:
-          'Add a section. Default is a heading + paragraph text block placed after `after` (a section id) or at the end. subsection=true makes an H3 subsection. Use kind image/video/embed/button with src or linkTo. Use kind equation with LaTeX math source in body (no document preamble). Use kind references with references [{id,text,url}] and cite using [@SECTION_ID/ENTRY_ID] in page text. Use kind "accordion" with `items` for collapsible sections (FAQ-style): readers can open several at once, and opening one never changes the address or scrolls the page.',
+          'Add a section. Default is a heading + paragraph text block placed after `after` (a section id) or at the end. subsection=true makes an H3 subsection. Use kind image/video/embed/button with src or linkTo. Use kind html with html, css and javascript strings for self-contained sandboxed animations (no external scripts or fetch). Use kind equation with LaTeX math source in body (no document preamble). Use kind references with references [{id,text,url}] and cite using [@SECTION_ID/ENTRY_ID] in page text. Use kind "accordion" with `items` for collapsible sections (FAQ-style): readers can open several at once, and opening one never changes the address or scrolls the page.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -870,8 +873,12 @@ export function createMcp({
                 'accordion',
                 'equation',
                 'references',
+                'html',
               ],
             },
+            html: { type: 'string' },
+            css: { type: 'string' },
+            javascript: { type: 'string' },
             references: {
               type: 'array',
               description:
@@ -928,6 +935,7 @@ export function createMcp({
               'accordion',
               'equation',
               'references',
+              'html',
               ...mediaKinds,
             ].includes(kind)
           )
@@ -952,6 +960,14 @@ export function createMcp({
                 ? { linkLabel: String(input.linkLabel).slice(0, 150) }
                 : {}),
               ...(kind === 'section' ? { layoutMode: 'flow' } : {}),
+              ...(kind === 'html'
+                ? {
+                    html: input.html ?? '',
+                    css: input.css ?? '',
+                    javascript: input.javascript ?? '',
+                    minHeight: 360,
+                  }
+                : {}),
               ...(kind === 'references'
                 ? { references: input.references || [] }
                 : {}),

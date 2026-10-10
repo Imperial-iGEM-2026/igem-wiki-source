@@ -86,8 +86,10 @@ export function nodeStyle(n: CanvasNode): CSSProperties {
     marginTop: n.marginTop,
     marginBottom: n.marginBottom,
     minHeight: n.minHeight,
-    height: n.kind === 'pdf' ? n.minHeight || 600 : undefined,
-    boxSizing: n.kind === 'pdf' ? 'border-box' : undefined,
+    height: ['pdf', 'html'].includes(n.kind)
+      ? n.minHeight || (n.kind === 'pdf' ? 600 : 360)
+      : undefined,
+    boxSizing: ['pdf', 'html'].includes(n.kind) ? 'border-box' : undefined,
     borderRadius: n.radius,
     border:
       n.borderWidth !== undefined
@@ -371,7 +373,7 @@ export function CanvasSurface({
         data-index-hidden={n.indexHidden || undefined}
         style={{
           ...nodeStyle(n),
-          ...(n.kind === 'pdf' && parent?.layoutMode === 'free'
+          ...(['pdf', 'html'].includes(n.kind) && parent?.layoutMode === 'free'
             ? { height: n.freeHeight ?? 80, minHeight: n.freeHeight ?? 80 }
             : {}),
           ...(sponsor
@@ -389,7 +391,9 @@ export function CanvasSurface({
                 top: n.y ?? 20,
                 width: (n.freeWidth ?? 40) + '%',
                 minHeight: n.freeHeight ?? 80,
-                ...(n.kind === 'pdf' ? { height: n.freeHeight ?? 80 } : {}),
+                ...(['pdf', 'html'].includes(n.kind)
+                  ? { height: n.freeHeight ?? 80 }
+                  : {}),
               }
             : {}),
         }}
@@ -433,7 +437,8 @@ export function CanvasSurface({
           editing
             ? (e) => {
                 const target = e.target as HTMLElement;
-                if (target.closest('[data-citation-link],.modern-pdf-reader')) return;
+                if (target.closest('[data-citation-link],.modern-pdf-reader'))
+                  return;
                 if (
                   target.closest(
                     '.studio-section-handle,.studio-resize,.field-editor',
@@ -564,10 +569,12 @@ export function CanvasSurface({
               aria-label={
                 n.kind === 'pdf'
                   ? 'Resize PDF width and height'
-                  : 'Resize section width'
+                  : n.kind === 'html'
+                    ? 'Resize Custom HTML width and height'
+                    : 'Resize section width'
               }
               title={
-                n.kind === 'pdf'
+                ['pdf', 'html'].includes(n.kind)
                   ? 'Drag to resize width and height; Left/Right changes columns'
                   : 'Drag to resize; Left/Right changes columns'
               }

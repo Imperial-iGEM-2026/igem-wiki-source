@@ -910,6 +910,32 @@ try {
       (n) => n.id === extraSection.id,
     ),
   );
+  const custom = await call(key, 'add_section', {
+    page: 'many-sections',
+    heading: 'Animation',
+    kind: 'html',
+    html: '<p>Custom animation</p>',
+    css: 'p {color:blue}',
+    javascript: 'document.body.dataset.ready="yes"',
+  });
+  await call(key, 'update_section', {
+    page: 'many-sections',
+    id: custom.id,
+    changes: { javascript: 'document.body.dataset.ready="updated"' },
+  });
+  const savedCustom = JSON.parse(
+    (await chromeRow('many-sections')).value,
+  ).nodes.find((node) => node.id === custom.id);
+  assert.equal(savedCustom.kind, 'html');
+  assert.equal(savedCustom.javascript, 'document.body.dataset.ready="updated"');
+  await rejects(
+    call(key, 'update_section', {
+      page: 'many-sections',
+      id: custom.id,
+      changes: { html: { invalid: true } },
+    }),
+    /invalid|layout|value/i,
+  );
   await call(key, 'delete_page', { slug: 'many-sections' });
 
   await api(

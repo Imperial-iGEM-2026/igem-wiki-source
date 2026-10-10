@@ -3195,3 +3195,11 @@
   background: var(--studio-surface);
   object-fit: contain;
 }
+
+.studio-html-editor { display:grid; gap:10px; }
+.studio-html-tabs { display:flex; gap:4px; padding:4px; border-radius:8px; background:var(--studio-inset); }
+.studio-html-tabs button { flex:1; }
+.studio-html-tabs button[aria-pressed="true"] { color:var(--studio-accent); background:var(--studio-accent-soft); border-color:var(--studio-accent-border); }
+.studio-html-editor textarea { width:100%; min-height:240px; resize:vertical; border:1px solid var(--studio-border); border-radius:6px; padding:12px; background:var(--studio-surface); color:var(--studio-ink); font:12px/1.65 Consolas,monospace; tab-size:2; white-space:pre; overflow:auto; }
+.studio-html-editor p { margin:0; font-size:12px; line-height:1.6; color:var(--studio-muted); }
+.studio-html-editor details { font-size:12px; }

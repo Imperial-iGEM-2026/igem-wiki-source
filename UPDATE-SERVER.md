@@ -454,3 +454,7 @@ Editor, Preview and published PDFs now share the same Edge-style reader: continu
 ### PDF layout isolation fix
 
 The PDF reader now isolates its toolbar and pages from saved page CSS. This prevents notebook styles from hiding the toolbar, shifting pages or creating a second horizontal scrollbar. The download action is inside the reader; the detached original-file link is removed. Install the updated archive and refresh editor tabs. Generate a fresh export to update an already published wiki; helper 1.0.17 remains compatible.
+
+## Custom HTML element
+
+This release adds **Insert element → Custom HTML** with HTML/CSS/JavaScript tabs, live sandboxed preview, a working animation starter, runtime errors and adjustable dimensions. The server validates and saves the three code fields, and the assistant can create/edit these elements. Install the package and refresh editor tabs before creating them. Fresh exports preserve the same animation frame. Use upload helper 1.0.18 so its bundled compiler also collects explicit custom-code media references.

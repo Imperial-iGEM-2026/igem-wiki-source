@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, createElement } from 'react';
 import { ReferenceList } from './references';
 import { EquationBlock, MathText } from './equation-block';
+import { CustomHtmlBlock } from './custom-html-block';
 import { PdfReader } from './pdf-reader';
 import { Download, Box } from 'lucide-react';
 import { embedURL, type CanvasNode } from './canvas-schema';
@@ -107,6 +108,8 @@ export function MediaBlock({
             </details>
           ))}
         </div>
+      ) : node.kind === 'html' ? (
+        <CustomHtmlBlock node={node} />
       ) : node.kind === 'references' ? (
         <ReferenceList nodeId={node.id} entries={node.references || []} />
       ) : node.kind === 'equation' ? (
@@ -201,15 +204,17 @@ export function MediaBlock({
           <MathText text={node.caption} />
         </p>
       )}
-      {node.body && !['text', 'equation', 'references'].includes(node.kind) && (
-        <details className="media-transcript">
-          <summary>Transcript / description</summary>
-          <p>{node.body}</p>
-        </details>
-      )}
+      {node.body &&
+        !['text', 'equation', 'references', 'html'].includes(node.kind) && (
+          <details className="media-transcript">
+            <summary>Transcript / description</summary>
+            <p>{node.body}</p>
+          </details>
+        )}
       {node.src &&
         node.kind !== 'embed' &&
         node.kind !== 'pdf' &&
+        node.kind !== 'html' &&
         (node.kind !== 'image' || failed) && (
           <a
             className="media-download"

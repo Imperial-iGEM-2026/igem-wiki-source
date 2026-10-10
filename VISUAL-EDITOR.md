@@ -144,3 +144,11 @@ Logo selection now uses Choose logo or Replace logo with a thumbnail, rather tha
 ### Compact context menu and deletion
 
 Right-click a selected element for Text…, Link… (when applicable), Ask AI, More and Delete. CSS and layer controls live under More. Delete or the Delete key removes the selected nested element from the visible page; it does not delete its containing section. Undo restores it. Save layout persists the deletion. Imported elements use a scoped CSS display rule so the original template is retained and the change travels with preview/static export. Whole-layer deletion retains the existing custom-layer removal/imported-layer hiding behavior. Locked layers cannot be deleted.
+
+## Custom HTML animations
+
+Choose **Insert element → Custom HTML**. The starting example animates three dots and changes speed when clicked. Select the element in Layers to open its **HTML**, **CSS** and **JavaScript** tabs. Preview refreshes shortly after typing stops; save the page to persist the code. Use Layout to set columns and height, or drag its resize handle. Use the layer handle or sidebar to select/move it; clicks inside the animation remain interactive.
+
+The same sandboxed frame is used in the editor, Preview and exported wiki. HTML fragments, inline SVG, CSS keyframes and ordinary JavaScript work. Runtime errors appear below the preview. Scripts cannot access the surrounding page, account storage, fetch APIs, external script libraries, forms, popups or top-level navigation. For visuals, use inline SVG/data images or public HTTPS images. Respect `prefers-reduced-motion` in your animations; the starter already does.
+
+Explicit `/api/media/...` and `/templates/...` references in code participate in export asset collection and URL mapping. Dynamically constructed paths cannot be discovered automatically. Use the updated upload helper 1.0.18 for these exports.

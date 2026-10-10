@@ -2683,3 +2683,8 @@ footer
 .partitioned-pdf[data-pdf-parts] .pdf-part-toolbar [hidden] { display:none!important; }
 .partitioned-pdf[data-pdf-parts]:fullscreen { width:100vw!important; height:100vh!important; border:0; border-radius:0; }
 /* Shared Edge-style reader: scoped controls do not inherit the wiki's button theme. */
+
+.canvas-section > .media-html { display:flex; flex-direction:column; height:100%; min-width:0; min-height:0; }
+.custom-html-block { position:relative; display:flex; flex:1 1 0; width:100%; height:100%; min-width:0; min-height:0; overflow:hidden; }
+.custom-html-frame { display:block; flex:1 1 0; width:100%; height:100%; min-width:0; min-height:0; border:0; }
+.custom-html-error { position:absolute; inset:auto 8px 8px; background:#fff4e5; color:#744b0b; border:1px solid #e8c685; border-radius:6px; padding:8px 10px; font:12px/1.5 system-ui,sans-serif; overflow-wrap:anywhere; }

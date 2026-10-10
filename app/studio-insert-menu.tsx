@@ -36,6 +36,7 @@ const items = [
   ['pdf', 'PDF', FileText],
   ['model', '3D model', Box],
   ['embed', 'Embed', Code2],
+  ['html', 'Custom HTML', Code2],
   ['accordion', 'Collapsible', ListCollapse],
 ] as const;
 export function StudioInsertMenu({

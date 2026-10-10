@@ -20,5 +20,5 @@ for(const file of files.filter(f=>f.path.startsWith('scripts/'))) {
  assert.ok(names.has(target),`${file.path} is missing ${target}`);
  }
 }
-for(const name of ['scripts/pdf-parts.mjs','scripts/image-export.mjs','publication/pdf-parts.json','publication/katex-LICENSE.txt','publication/pdf-processing-LICENSES.txt']) assert.ok(names.has(name),name);
+for(const name of ['app/custom-html-block.tsx','app/html-document.ts','app/pdf-reader.css','scripts/pdf-parts.mjs','scripts/image-export.mjs','publication/pdf-parts.json','publication/katex-LICENSE.txt','publication/pdf-processing-LICENSES.txt']) assert.ok(names.has(name),name);
 console.log('PASS: packaged helper publishes all compiler modules, PDF manifest and licences.');

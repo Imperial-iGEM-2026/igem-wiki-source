@@ -1891,3 +1891,61 @@ try {
 console.log(
   'PASS: citations resolve stable anchors and numbering, survive reorder, report missing entries, reject unsafe URLs and highlight with reduced-motion support.',
 );
+
+const customHtml = {
+  ...E.newNode('custom-code', 'html'),
+  html: '<button id="play">Play</button>',
+  css: 'button { color:blue; }',
+  javascript: 'document.querySelector("button").onclick = () => {};',
+  minHeight: 360,
+};
+const customLayout = {
+  ...E.emptyLayout,
+  nodes: [customHtml],
+  order: [customHtml.id],
+};
+assert.ok(E.validateLayout(customLayout));
+assert.equal(
+  E.validateLayout({
+    ...customLayout,
+    nodes: [{ ...customHtml, javascript: { run: true } }],
+  }),
+  false,
+);
+assert.equal(
+  E.validateLayout({
+    ...customLayout,
+    nodes: [{ ...customHtml, kind: 'text' }],
+  }),
+  false,
+);
+const customMarkup = E.renderCanvas(customLayout);
+assert.match(customMarkup, /sandbox="allow-scripts"/);
+assert.doesNotMatch(customMarkup, /allow-same-origin/);
+assert.match(customMarkup, /srcDoc=/i);
+assert.ok(
+  !customMarkup.includes('<button id="play">'),
+  'User markup must stay escaped inside srcdoc',
+);
+assert.match(customMarkup, /height:360px/);
+console.log(
+  'PASS: Custom HTML schema, opaque sandbox, escaped source and editor sizing.',
+);
+
+const { exportMedia: collectSnippetMedia } = await import('./export-media.mjs');
+const snippetMedia = collectSnippetMedia({
+  'layout:home': JSON.stringify({
+    ...customLayout,
+    nodes: [
+      {
+        ...customHtml,
+        html: '<img src="/api/media/abcdef.png">',
+        css: 'div{background:url(/api/media/123abc.jpg)}',
+      },
+    ],
+  }),
+});
+assert.ok(snippetMedia.has('/api/media/abcdef.png'));
+assert.ok(snippetMedia.has('/api/media/123abc.jpg'));
+
+assert.ok(!collectSnippetMedia({'layout:home':JSON.stringify({...customLayout,nodes:[{...customHtml,html:'<img src="/templates/../../private.png">'}]})}).has('/templates/../../private.png'));

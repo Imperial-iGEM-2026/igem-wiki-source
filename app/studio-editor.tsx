@@ -99,6 +99,8 @@ import { AiLinkDialog } from './ai-link-dialog';
 import { isChromeId } from './chrome-sync';
 import { projectFetch } from './project-api';
 import { ReferencesEditor, newReference } from './references-editor';
+import { CustomHtmlEditor } from './custom-html-editor';
+import { htmlExample } from './html-document';
 import { EquationBlock } from './equation-block';
 import { AccordionEditor, newAccordionItem } from './accordion-editor';
 import {
@@ -318,6 +320,7 @@ const kindHints: Record<BlockKind, string> = {
   video: 'Video — upload MP4/WebM or paste an HTTPS URL.',
   audio: 'Audio — upload a file or paste an HTTPS URL.',
   references: 'References — add sources and copy citations into your text.',
+  html: 'Custom HTML — create an isolated HTML, CSS and JavaScript animation.',
   equation: 'LaTeX equation — type math notation and preview it live.',
   pdf: 'PDF document — upload a file or paste an HTTPS URL.',
   model: '3D model — upload a self-contained GLB file.',
@@ -331,6 +334,7 @@ const kinds: [string, string][] = [
   ['text', 'Text'],
   ['equation', 'LaTeX equation'],
   ['references', 'References'],
+  ['html', 'Custom HTML'],
   ['image', 'Image'],
   ['video', 'Video'],
   ['audio', 'Audio'],
@@ -1081,6 +1085,7 @@ export function StudioEditor({
       ...(insertKind === 'references'
         ? { title: 'References', references: [newReference()] }
         : {}),
+      ...(insertKind === 'html' ? { ...htmlExample, minHeight: 360 } : {}),
       ...(insertKind === 'equation' ? { body: 'E = mc^2' } : {}),
       ...(insertKind === 'text' ? { body: 'Your text here' } : {}),
       ...(insertKind === 'accordion'
@@ -1112,7 +1117,7 @@ export function StudioEditor({
                 ? 44
                 : insertKind === 'image'
                   ? 160
-                  : insertKind === 'section'
+                  : insertKind === 'section' || insertKind === 'html'
                     ? 360
                     : 80,
           }
@@ -1629,7 +1634,7 @@ export function StudioEditor({
       dispatch({
         type: 'edit',
         value: patchNodes(currentRef.current, [id], {
-          ...(n.kind === 'pdf'
+          ...(['pdf', 'html'].includes(n.kind)
             ? {
                 minHeight: Math.max(
                   80,
@@ -3408,6 +3413,18 @@ export function StudioEditor({
                           onEnd={() => dispatch({ type: 'end' })}
                         />,
                       )}
+                    {node?.kind === 'html' &&
+                      group(
+                        'content',
+                        'Custom HTML',
+                        true,
+                        <CustomHtmlEditor
+                          key={node.id}
+                          node={node}
+                          onChange={(value, key) => patch(value, key)}
+                          onEnd={() => dispatch({ type: 'end' })}
+                        />,
+                      )}
                     {node?.kind === 'equation' &&
                       group(
                         'content',
@@ -3517,6 +3534,7 @@ export function StudioEditor({
                         'accordion',
                         'equation',
                         'references',
+                        'html',
                       ].includes(node.kind) &&
                       group(
                         'media',
@@ -3920,11 +3938,17 @@ export function StudioEditor({
                             node ? effectiveSpan(node) : 12,
                           )}
                           {number(
-                            node?.kind === 'pdf' ? 'Height (px)' : 'Min height',
+                            ['pdf', 'html'].includes(node?.kind || '')
+                              ? 'Height (px)'
+                              : 'Min height',
                             'minHeight',
-                            node?.kind === 'pdf' ? 80 : 0,
+                            ['pdf', 'html'].includes(node?.kind || '') ? 80 : 0,
                             2000,
-                            node?.kind === 'pdf' ? 600 : 0,
+                            node?.kind === 'pdf'
+                              ? 600
+                              : node?.kind === 'html'
+                                ? 360
+                                : 0,
                           )}
                         </div>
                         <Choice
