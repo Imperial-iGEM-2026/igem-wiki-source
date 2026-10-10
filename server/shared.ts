@@ -49,3 +49,5 @@ export { sponsorLayers } from '../app/sponsor-layers';
 
 export { igemAwards, igemPageCheck, publicationSlug } from '../app/igem-pages';
 export { resolveContentRows } from './content-rows';
+
+export { splitPdf, PDF_PART_BYTES } from '../scripts/pdf-parts.mjs';

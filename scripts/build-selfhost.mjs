@@ -83,3 +83,8 @@ await cp(path.join(root, 'ops'), path.join(out, 'ops'), { recursive: true });
 console.log(
   'Self-host release built at selfhost-dist/. Copy it to your Ubuntu server. Node 24 is the only runtime dependency; no npm install or build is needed on the server.',
 );
+
+await cp(
+  path.join(root, 'publication/pdf-processing-LICENSES.txt'),
+  path.join(out, 'client/pdf-processing-LICENSES.txt'),
+);

@@ -9,3 +9,6 @@ for (const root of document.querySelectorAll<HTMLElement>(
 
 import { startReferenceNavigation } from '../app/reference-navigation';
 startReferenceNavigation();
+
+import { startPdfParts } from '../app/pdf-parts-viewer';
+startPdfParts();

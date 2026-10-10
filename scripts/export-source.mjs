@@ -21,12 +21,14 @@ export async function exportSource(root) {
   for (const dir of ['app', 'components', 'hooks', 'lib']) await walk(dir);
   for (const name of [
     'publication/katex-LICENSE.txt',
+    'publication/pdf-processing-LICENSES.txt',
     'package-lock.json',
     'tsconfig.json',
     'ops/igem.gitlab-ci.yml',
     'scripts/build-igem.mjs',
     'scripts/export-static.mjs',
     'scripts/export-media.mjs',
+    'scripts/pdf-parts.mjs',
     'scripts/igem-resources.mjs',
     'scripts/build-options.mjs',
     'scripts/static-renderer.tsx',

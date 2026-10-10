@@ -1,4 +1,6 @@
 import {
+  splitPdf,
+  PDF_PART_BYTES,
   sponsorLayers,
   wikiPages,
   parseCustomPages,
@@ -6,8 +8,16 @@ import {
   igemAwards,
   igemPageCheck,
 } from './shared.mjs';
-import { readFile, stat, realpath } from 'node:fs/promises';
+import {
+  readFile,
+  stat,
+  realpath,
+  mkdtemp,
+  writeFile,
+  rm,
+} from 'node:fs/promises';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -43,7 +53,7 @@ const common = `Extract these ZIPs before uploading. Upload the files inside ass
 Keep the category subfolders (banners, logos, icons, images, documents, models, fonts, videos and audio). Only folders with files are included. The upload helper creates matching static-media folders on iGEM.
 Match each file to its original URL using upload-manifest.csv. Paste the returned iGEM URLs into publication/media-map.json in ZIP 01.
 Audited open-source template fonts and their OFL notices are included in assets/fonts. The helper uploads the fonts and configures them automatically. Other external files are listed but not downloaded.
-Files are copied without conversion: check acceptance and playback in the iGEM upload tools. See the local upload helper for the guided workflow.
+Large PDFs are automatically split into reading copies under 9 MB. The original remains in the editor. Other files are copied without conversion: check acceptance and playback in the iGEM upload tools. See the local upload helper for the guided workflow.
 `;
 
 export function createBundleExports({
@@ -56,8 +66,14 @@ export function createBundleExports({
   let sourcePromise,
     active = 0,
     pending = 0;
+  const discard = (id, plan) => {
+    plans.delete(id);
+    if (plan.tempDir)
+      void rm(plan.tempDir, { recursive: true, force: true }).catch(() => {});
+  };
   const prune = () => {
-    for (const [id, plan] of plans) if (plan.expires <= now()) plans.delete(id);
+    for (const [id, plan] of plans)
+      if (plan.expires <= now()) discard(id, plan);
   };
   async function localFile(source) {
     let root, relative;
@@ -139,12 +155,14 @@ export function createBundleExports({
       if (pending >= 2 || plans.size + pending >= 12)
         throw fail(429, 'Export is busy. Try again shortly.');
       pending++;
+      let tempDir;
+      let retained = false;
       try {
         // Limit retained snapshots; each user can keep two recent preparations.
-        for (const [id] of [...plans]
+        for (const [id, oldPlan] of [...plans]
           .filter(([, p]) => p.userId === userId)
           .slice(0, -1))
-          plans.delete(id);
+          discard(id, oldPlan);
         if (plans.size >= 12)
           throw fail(429, 'Export is busy. Try again shortly.');
         const cleanValues = Object.fromEntries(
@@ -174,6 +192,7 @@ export function createBundleExports({
           assets: [],
           media: [],
         };
+        const pdfParts = {};
         const rows = [],
           map = {};
         for (const [source, kind] of exportMedia(
@@ -193,6 +212,51 @@ export function createBundleExports({
               createHash('sha256').update(source).digest('hex').slice(0, 12) +
               '-' +
               path.basename(local.file);
+            if (kind === 'pdf' && local.size > PDF_PART_BYTES) {
+              let parts;
+              try {
+                parts = await splitPdf(await readFile(local.file));
+              } catch (error) {
+                throw fail(
+                  422,
+                  path.basename(local.file) + ': ' + error.message,
+                );
+              }
+              pdfParts[source] = [];
+              for (const part of parts) {
+                const partName =
+                  name.replace(/\.pdf$/i, '') +
+                  `-pages-${part.start}-${part.end}.pdf`;
+                const partSource =
+                  source + `?pdf-part=${part.start}-${part.end}`;
+                tempDir ||= await mkdtemp(
+                  path.join(tmpdir(), 'prion-pdf-export-'),
+                );
+                const file = path.join(tempDir, path.basename(partName));
+                await writeFile(file, part.data);
+                const info = await stat(file);
+                entries[key].push({
+                  name: partName,
+                  file,
+                  size: info.size,
+                  mtimeMs: info.mtimeMs,
+                });
+                rows.push({
+                  source: partSource,
+                  kind: 'pdf',
+                  bundle: names[key],
+                  file: partName,
+                });
+                map[partSource] =
+                  'https://static.igem.wiki/YOUR-TEAM/uploaded-file';
+                pdfParts[source].push({
+                  source: partSource,
+                  start: part.start,
+                  end: part.end,
+                });
+              }
+              continue;
+            }
             entries[key].push({ name, ...local });
           }
           rows.push({ source, kind, bundle: names[key], file: name });
@@ -248,6 +312,7 @@ Local verification: npm ci, then npm run build. The compiler checks required pag
 ${common}`;
         entries.source.push(
           textEntry('publication/content.json', content),
+          textEntry('publication/pdf-parts.json', json(pdfParts)),
           textEntry('publication/media-map.json', json(map)),
           textEntry(
             'publication/config.json',
@@ -308,7 +373,14 @@ ${common}`;
             ),
             textEntry('bundle-info.json', json(info)),
           );
-        plans.set(id, { userId, projectId: project.id, entries, expires });
+        plans.set(id, {
+          userId,
+          projectId: project.id,
+          entries,
+          expires,
+          tempDir,
+        });
+        retained = true;
         return {
           id,
           project: project.name,
@@ -328,6 +400,8 @@ ${common}`;
         };
       } finally {
         pending--;
+        if (tempDir && !retained)
+          await rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
     },
     async download({ id, key, userId, projectId, res }) {
@@ -383,7 +457,7 @@ ${common}`;
       }
     },
     close() {
-      plans.clear();
+      for (const [id, plan] of plans) discard(id, plan);
     },
   };
 }

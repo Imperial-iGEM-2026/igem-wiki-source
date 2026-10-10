@@ -430,3 +430,7 @@ Install the full release for the new section/button node types and parent/positi
 ## Judging and team-page attributions
 
 Template navigation now labels the former Attributions page Judging. Existing page IDs, saved content and custom names are preserved. Attributions is no longer a required wiki export route and the official embed URL is optional. The upload helper no longer creates an embed URL automatically. Submit the official attribution form through your iGEM team page. Install the updated application package and refresh editor tabs; no new Nginx change is needed for this update.
+
+## Progressive PDF publication
+
+Install this release, refresh the editor, and prepare fresh three-ZIP exports. Large local PDFs are split below 9 MB and uploaded as ordinary document files; the published page loads parts progressively and offers Download complete PDF. Existing exports must be prepared again. No new Nginx change is required. Original saved PDFs and page positioning remain unchanged. See STATIC-EXPORT.md for reading-copy limitations.

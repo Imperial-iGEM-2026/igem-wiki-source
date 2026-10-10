@@ -1,3 +1,4 @@
+import { splitPdf, PDF_PART_BYTES } from './pdf-parts.mjs';
 import { exportMedia, mediaFolder, templateFontCss } from './export-media.mjs';
 import { build } from 'vite';
 import {
@@ -54,6 +55,17 @@ if (
 const map = option('media-map')
   ? JSON.parse(await readFile(option('media-map'), 'utf8'))
   : {};
+let pdfParts = {};
+if (snapshot.format === 'prion-wiki-source') {
+  try {
+    pdfParts = JSON.parse(
+      await readFile(path.join(path.dirname(source), 'pdf-parts.json'), 'utf8'),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
+const pdfViewers = {};
 const strict = args.includes('--igem');
 let fontCss = option('font-css')
   ? await readFile(option('font-css'), 'utf8')
@@ -209,7 +221,39 @@ await writeFile(
   path.join(output, 'public/katex-LICENSE.txt'),
   await readFile(path.join(root, 'publication/katex-LICENSE.txt'), 'utf8'),
 );
+await writeFile(
+  path.join(output, 'public/pdf-processing-LICENSES.txt'),
+  await readFile(path.join(root, 'publication/pdf-processing-LICENSES.txt')),
+);
 for (const [url, kind] of refs) {
+  if (kind === 'pdf' && pdfParts[url]) {
+    let nextPage = 1;
+    const parts = pdfParts[url];
+    if (!Array.isArray(parts) || !parts.length)
+      throw Error('Invalid PDF parts: ' + url);
+    pdfViewers[url] = parts.map((part) => {
+      if (
+        !Number.isInteger(part.start) ||
+        !Number.isInteger(part.end) ||
+        part.start !== nextPage ||
+        part.end < part.start
+      )
+        throw Error('PDF page ranges must be complete and ordered: ' + url);
+      nextPage = part.end + 1;
+      const hosted = map[part.source];
+      if (
+        typeof hosted !== 'string' ||
+        !/^https:\/\/static\.igem\.wiki\//.test(hosted) ||
+        /["<>\s]|YOUR-TEAM/.test(hosted)
+      )
+        throw Error(
+          'Upload and map every PDF part before building: ' + part.source,
+        );
+      assets.push({ source: part.source, kind: 'pdf', publishedURL: hosted });
+      return { start: part.start, end: part.end, url: hosted };
+    });
+    continue;
+  }
   const mapped = map[url];
   if (mapped && /YOUR-TEAM|REPLACE-WITH-VIDEO-ID/.test(mapped))
     issues.push(
@@ -300,6 +344,41 @@ for (const [url, kind] of refs) {
           url +
           '. Download a complete portable snapshot.',
       );
+    if (kind === 'pdf' && (externalSize || bytes.length) > PDF_PART_BYTES) {
+      const parts = await splitPdf(external ? await readFile(external) : bytes);
+      pdfViewers[url] = [];
+      for (const part of parts) {
+        const partName =
+          filename.replace(/\.pdf$/i, '') +
+          `-pages-${part.start}-${part.end}.pdf`;
+        const partSource = url + `?pdf-part=${part.start}-${part.end}`;
+        const file = 'public/assets/media/' + partName;
+        await writeFile(path.join(output, file), part.data);
+        const hosted = map[partSource];
+        if (
+          hosted &&
+          (typeof hosted !== 'string' ||
+            !/^https:\/\/static\.igem\.wiki\//.test(hosted) ||
+            /["<>\s]|YOUR-TEAM/.test(hosted))
+        )
+          throw Error('Invalid hosted PDF part: ' + partSource);
+        if (!hosted)
+          issues.push('Upload and map PDF part on iGEM hosting: ' + partSource);
+        assets.push({
+          source: partSource,
+          kind: 'pdf',
+          file,
+          bytes: part.data.length,
+          publishedURL: hosted || null,
+        });
+        pdfViewers[url].push({
+          start: part.start,
+          end: part.end,
+          url: hosted || base + 'assets/media/' + partName,
+        });
+      }
+      continue;
+    }
     if (filename.endsWith('.glb')) {
       try {
         if (
@@ -438,6 +517,19 @@ for (const page of [undefined, ...wikiPages]) {
   html = html
     .replace(/<div class="collab-strip"[\s\S]*?<\/button><\/div>/g, '')
     .replace(/<section class="invitation"[\s\S]*?<\/button><\/section>/g, '');
+  for (const [original, parts] of Object.entries(pdfViewers)) {
+    html = html.replace(
+      /<iframe\b[^>]*src="([^"]*)"[^>]*><\/iframe>/g,
+      (frame, src) => {
+        if (src !== esc(original)) return frame;
+        return `<div class="partitioned-pdf" data-pdf-parts="${esc(JSON.stringify(parts))}"><div class="pdf-part-toolbar"><button type="button" data-pdf-prev>Previous part</button><label>Pages <select data-pdf-select aria-label="PDF page range">${parts.map((p, i) => `<option value="${i}">${p.start}–${p.end}</option>`).join('')}</select></label><button type="button" data-pdf-next>Next part</button><button type="button" data-pdf-download>Download complete PDF</button><button type="button" data-pdf-cancel hidden>Cancel download</button></div>${frame.replace(`src="${esc(original)}"`, `src="${esc(parts[0].url)}"`)}<p data-pdf-status role="status">${parts.at(-1).end} pages · Loads one part at a time</p><noscript>${parts.map((p) => `<a href="${esc(p.url)}">Pages ${p.start}–${p.end}</a>`).join(' · ')}</noscript></div>`;
+      },
+    );
+    html = html.replace(
+      /<a\b[^>]*href="([^"]*)"[^>]*>[\s\S]*?<\/a>/g,
+      (link, href) => (href === esc(original) ? '' : link),
+    );
+  }
   for (const [from, to] of Object.entries(mediaMap))
     html = html.split(esc(from)).join(esc(to));
   html = html.replace(
