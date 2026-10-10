@@ -4,6 +4,9 @@ Collaborative wiki editor and self-hosted Node server, with reusable templates a
 
 Start with [GITHUB-HANDOFF.md](GITHUB-HANDOFF.md) for development, deployment and transfer instructions.
 
+> [!IMPORTANT]
+> **Updating an existing server?** Follow [Server update: start here](UPDATE-SERVER.md#server-update-start-here). Pushing to GitHub does not deploy the server. Back up first, install the application archive, and complete the separate Nginx step.
+
 ## Build
 
 Use Node.js 24 and npm (package-lock.json is included).

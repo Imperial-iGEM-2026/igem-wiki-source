@@ -1,5 +1,51 @@
 # Update the existing Ubuntu server
 
+## Server update: start here
+
+> [!IMPORTANT]
+> **Updating GitHub does not deploy the running server.** Follow both steps below. Save open editor drafts before updating, then refresh every editor tab afterwards.
+
+> [!WARNING]
+> **Back up before installing.** Do not import a starter or migration snapshot during an ordinary update. The private backup contains credentials and drafts; keep it outside the website directory.
+
+### 1. Back up and install the application
+
+Upload the new `prion-server-ubuntu.tar.gz` to your home directory. Run the following in Bash on the server. It makes a private backup while the service is stopped and restarts the service if an intermediate command fails.
+
+```sh
+set -e
+prion_release_dir=$(mktemp -d "$HOME/prion-update.XXXXXX")
+tar -xzf "$HOME/prion-server-ubuntu.tar.gz" -C "$prion_release_dir"
+prion_backup_dir="/root/prion-backup-$(date +%Y%m%d-%H%M%S)"
+sudo install -d -m 700 "$prion_backup_dir"
+trap 'sudo systemctl start prion' EXIT
+sudo systemctl stop prion
+sudo tar -czf "$prion_backup_dir/prion.tar.gz" -C / opt/prion etc/prion.env var/lib/prion
+sudo bash "$prion_release_dir/prion-server/ops/install-ubuntu.sh"
+trap - EXIT
+sudo systemctl status prion --no-pager
+```
+
+### 2. Update and reload Nginx
+
+> [!IMPORTANT]
+> Installing the application does not update Nginx. Complete this separate step for the preview and PDF fixes, media upload changes, and longer AI requests. If you customised Nginx, merge the changes as described below.
+
+Update the Nginx configuration installed by our HTTPS setup. This enables the same-site preview route, removes the old media size cap, and permits longer Codex requests. If you customised this file, merge the equivalent changes from `/opt/prion/ops/nginx-prion.conf` instead of replacing your customisations.
+
+```sh
+sudo cp -a /etc/nginx/conf.d/prion.conf /etc/nginx/conf.d/prion.conf.before-project-preview
+sudo install -m 644 /opt/prion/ops/nginx-prion.conf /etc/nginx/conf.d/prion.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 3. Refresh and check
+
+Refresh every editor tab and check your existing pages and Preview. If the service fails, inspect `sudo journalctl -u prion -n 60 --no-pager`.
+
+## Release notes
+
 ## Change a project's template style, preview and roll back
 
 In **All projects & templates**, choose **Change template** beside the project. Save open editor drafts first. Pick a template and press **Preview template**. Review any saved page at desktop, tablet or mobile widths, then press **Apply previewed template**. Close the dialog to cancel without changing the project. Return to Change template and use **Roll back to …** to restore the previous style.
@@ -307,30 +353,7 @@ The inspector now uses compact collapsible groups, Insert opens beneath its trig
 
 This is a prebuilt release for the existing Node 24 installation. No npm install, frontend build or database re-import is needed on the 1 GB server. Keep the media hostname DNS-only. This release also needs the Nginx configuration update below. The installer preserves `/etc/prion.env`, `/var/lib/prion` and certificates.
 
-Upload the new `prion-server-ubuntu.tar.gz` to your home directory. Run the following in Bash on the server. It makes a private backup while the service is stopped and restarts the service if an intermediate command fails.
-
-```sh
-set -e
-prion_release_dir=$(mktemp -d "$HOME/prion-update.XXXXXX")
-tar -xzf "$HOME/prion-server-ubuntu.tar.gz" -C "$prion_release_dir"
-prion_backup_dir="/root/prion-backup-$(date +%Y%m%d-%H%M%S)"
-sudo install -d -m 700 "$prion_backup_dir"
-trap 'sudo systemctl start prion' EXIT
-sudo systemctl stop prion
-sudo tar -czf "$prion_backup_dir/prion.tar.gz" -C / opt/prion etc/prion.env var/lib/prion
-sudo bash "$prion_release_dir/prion-server/ops/install-ubuntu.sh"
-trap - EXIT
-sudo systemctl status prion --no-pager
-```
-
-Update the Nginx configuration installed by our HTTPS setup. This enables the same-site preview route, removes the old media size cap, and permits longer Codex requests. If you customised this file, merge the equivalent changes from `/opt/prion/ops/nginx-prion.conf` instead of replacing your customisations.
-
-```sh
-sudo cp -a /etc/nginx/conf.d/prion.conf /etc/nginx/conf.d/prion.conf.before-project-preview
-sudo install -m 644 /opt/prion/ops/nginx-prion.conf /etc/nginx/conf.d/prion.conf
-sudo nginx -t
-sudo systemctl reload nginx
-```
+See [Server update: start here](#server-update-start-here).
 
 Only reload if `nginx -t` succeeds. On failure, restore the saved configuration and test again. If your active config is installed elsewhere, update that active file instead; do not add a second duplicate server block.
 
