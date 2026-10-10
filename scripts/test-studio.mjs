@@ -277,7 +277,7 @@ assert.ok(
   'native PDF viewer must not be sandboxed',
 );
 assert.match(pdfFrame, /referrerPolicy="no-referrer"/i);
-assert.match(pdfHtml, /Open original PDF/);
+assert.doesNotMatch(pdfHtml, /class="media-download"/);
 const oldPdfMove = E.applySelectionStyle(
   '',
   '[data-layer-id="pdf-preview"] > div:nth-of-type(1)',

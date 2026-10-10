@@ -209,6 +209,7 @@ export function MediaBlock({
       )}
       {node.src &&
         node.kind !== 'embed' &&
+        node.kind !== 'pdf' &&
         (node.kind !== 'image' || failed) && (
           <a
             className="media-download"
@@ -217,12 +218,7 @@ export function MediaBlock({
             rel="noreferrer"
           >
             <Download size={14} />
-            Open original{' '}
-            {node.kind === 'model'
-              ? 'GLB'
-              : node.kind === 'pdf'
-                ? 'PDF'
-                : 'file'}
+            Open original {node.kind === 'model' ? 'GLB' : 'file'}
           </a>
         )}
     </div>

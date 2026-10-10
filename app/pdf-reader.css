@@ -1,0 +1,242 @@
+/* Component styles live in a shadow root so page CSS cannot reposition controls. */
+:host {
+  all: initial !important;
+  display: flex !important;
+  flex: 1 1 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  border: 1px solid #d3d7df !important;
+  border-radius: 8px !important;
+  background: #e6e7e9 !important;
+}
+:host(:fullscreen) {
+  width: 100vw !important;
+  height: 100vh !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+.reader-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.reader-shell {
+  color: #30343b;
+  font:
+    13px/1.4 'Segoe UI',
+    Arial,
+    sans-serif;
+}
+.reader-shell .pdf-reader-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  min-height: 48px;
+  background: #fafafa;
+  border-bottom: 1px solid #d5d7db;
+  z-index: 2;
+}
+.reader-shell .pdf-reader-toolbar button {
+  display: inline-flex !important;
+  position: static !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 6px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: #3e434b !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+}
+.reader-shell .pdf-reader-toolbar button:hover {
+  background: #e7e9ed !important;
+}
+.reader-shell button:focus-visible,
+.reader-shell input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+.reader-shell .pdf-reader-toolbar button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.reader-shell .pdf-reader-toolbar button[hidden] {
+  display: none !important;
+}
+.reader-shell .pdf-reader-toolbar [data-reader-cancel] {
+  width: auto !important;
+}
+.reader-shell .pdf-reader-title {
+  max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  margin: 0 12px 0 4px;
+}
+.reader-shell .pdf-reader-navigation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.reader-shell .pdf-reader-navigation input {
+  width: 46px !important;
+  height: 28px !important;
+  padding: 3px !important;
+  text-align: center;
+  border: 1px solid #c6c9cf !important;
+  border-radius: 3px;
+  background: white !important;
+  color: #30343b !important;
+  font:
+    13px 'Segoe UI',
+    Arial,
+    sans-serif !important;
+  appearance: textfield;
+}
+.reader-shell input::-webkit-inner-spin-button {
+  appearance: none;
+}
+.reader-shell .pdf-reader-divider {
+  height: 22px;
+  border-left: 1px solid #d5d7db;
+  margin: 0 7px;
+}
+.reader-shell .pdf-reader-spacer {
+  flex: 1;
+}
+.reader-shell [data-reader-zoom] {
+  min-width: 34px;
+  text-align: center;
+  font-size: 12px;
+}
+.reader-shell .pdf-reader-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.reader-shell .pdf-reader-scroll {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  background: #e6e7e9;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+.reader-shell .pdf-reader-sheet {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin: 0 auto 20px;
+  background: white;
+  color: #94a3b8;
+  box-shadow: 0 1px 5px #0003;
+}
+.reader-shell .pdf-reader-sheet canvas {
+  display: block;
+  max-width: none !important;
+  border-radius: 0 !important;
+}
+.reader-shell .pdf-reader-thumbnails {
+  flex: 0 0 154px;
+  width: 154px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: #f3f3f3;
+  border-right: 1px solid #cfd2d7;
+}
+.reader-shell .pdf-reader-thumbnails[hidden] {
+  display: none;
+}
+.reader-shell .pdf-reader-thumb {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 128px !important;
+  padding: 8px !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: #555 !important;
+  margin: 0 0 8px !important;
+  cursor: pointer;
+  font:
+    12px 'Segoe UI',
+    Arial,
+    sans-serif;
+}
+.reader-shell .pdf-reader-thumb:hover {
+  background: #e2e7ee !important;
+  border-color: #b8c9df !important;
+}
+.reader-shell [data-thumb] {
+  display: block;
+  background: white;
+  box-shadow: 0 1px 3px #0003;
+}
+.reader-shell .pdf-reader-status {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  background: #fafafa;
+  border-top: 1px solid #d5d7db;
+  color: #6b7280;
+  font:
+    11px/1.5 'Segoe UI',
+    Arial,
+    sans-serif;
+}
+.reader-shell .pdf-reader-loading {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+}
+@media (max-width: 600px) {
+  .reader-shell .pdf-reader-title,
+  .reader-shell .pdf-reader-divider {
+    display: none;
+  }
+  .reader-shell .pdf-reader-toolbar {
+    gap: 1px;
+    padding: 4px;
+  }
+  .reader-shell .pdf-reader-scroll {
+    padding: 12px;
+  }
+  .reader-shell .pdf-reader-thumbnails {
+    flex-basis: 132px;
+    width: 132px;
+    padding: 2px;
+  }
+}

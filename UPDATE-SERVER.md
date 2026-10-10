@@ -450,3 +450,7 @@ Partitioned PDFs now have a contained toolbar, fit-page opening mode, Fit page a
 ## Unified PDF reader
 
 Editor, Preview and published PDFs now share the same Edge-style reader: continuous pages, thumbnails, page-number navigation, zoom, fit-page, rotation, fullscreen and complete download. Only nearby pages are drawn; split documents load their files as needed. Install this release, refresh editor tabs and prepare fresh exports with helper 1.0.17. Browser-native search/annotation menus are not part of this custom reader. No Nginx change is needed.
+
+### PDF layout isolation fix
+
+The PDF reader now isolates its toolbar and pages from saved page CSS. This prevents notebook styles from hiding the toolbar, shifting pages or creating a second horizontal scrollbar. The download action is inside the reader; the detached original-file link is removed. Install the updated archive and refresh editor tabs. Generate a fresh export to update an already published wiki; helper 1.0.17 remains compatible.

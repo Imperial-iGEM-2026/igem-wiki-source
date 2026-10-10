@@ -55,6 +55,29 @@ try {
   const reader = page.locator('.modern-pdf-reader');
   await reader.locator('.pdf-reader-sheet canvas').first().waitFor();
   const before = await reader.boundingBox();
+  // Broad saved notebook styles must never enter the reader's internal layout.
+  await page.addStyleTag({
+    content: `.media-pdf div { translate:180px -120px!important; width:1400px!important; }
+    .media-pdf .pdf-reader-toolbar { display:none!important; }
+    .media-pdf canvas { position:absolute!important; width:1800px!important; }`,
+  });
+  assert.deepEqual(
+    await reader.boundingBox(),
+    before,
+    'Saved CSS cannot displace the reader',
+  );
+  const toolbar = await reader.locator('.pdf-reader-toolbar').boundingBox();
+  assert.ok(
+    toolbar &&
+      toolbar.y >= before.y &&
+      toolbar.y + toolbar.height <= before.y + before.height,
+    'Toolbar stays visible inside the PDF box',
+  );
+  assert.equal(
+    await page.locator('.media-pdf > .media-download').count(),
+    0,
+    'Download is in the toolbar, not a detached footer',
+  );
   const layer = await page.locator('[data-layer-id="reader"]').boundingBox();
   assert.ok(
     before.x >= layer.x &&

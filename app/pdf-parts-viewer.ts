@@ -1,3 +1,4 @@
+import readerStyles from './pdf-reader.css?inline';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 type Part = { start: number; end: number; url: string };
@@ -21,6 +22,7 @@ export async function mountPdfReader(viewer: HTMLElement) {
   const parts: Part[] = JSON.parse(viewer.dataset.pdfParts!);
   const native = viewer.querySelector('iframe');
   const title = native?.title || 'PDF document';
+  viewer.replaceChildren();
   let alive = true,
     current = 1,
     zoom = 1,
@@ -28,19 +30,24 @@ export async function mountPdfReader(viewer: HTMLElement) {
     rotation = 0;
   let downloadController: AbortController | undefined;
   viewer.classList.add('modern-pdf-reader');
-  viewer.innerHTML = `<div class="pdf-reader-toolbar" role="toolbar" aria-label="PDF reader">${button('sidebar', 'Toggle page thumbnails')}<span class="pdf-reader-title"></span><div class="pdf-reader-navigation">${button('prev', 'Previous page')}<input data-reader-page type="number" min="1" value="1" aria-label="Page number"><span data-reader-total>/ …</span>${button('next', 'Next page')}</div><span class="pdf-reader-divider"></span>${button('minus', 'Zoom out')}<span data-reader-zoom>Fit</span>${button('plus', 'Zoom in')}${button('fit', 'Fit page')}${button('rotate', 'Rotate clockwise')}<span class="pdf-reader-spacer"></span>${button('download', 'Download complete PDF')}${button('full', 'Full screen')}<button type="button" data-reader-cancel hidden>Cancel</button></div><div class="pdf-reader-body"><aside class="pdf-reader-thumbnails" aria-label="Page thumbnails" hidden></aside><div class="pdf-reader-scroll" tabindex="0" aria-label="PDF pages"><div class="pdf-reader-loading">Loading document…</div></div></div><div class="pdf-reader-status" role="status">Loading document…</div>`;
-  viewer.querySelector<HTMLElement>('.pdf-reader-title')!.textContent = title;
-  const scroll = viewer.querySelector<HTMLElement>('.pdf-reader-scroll')!;
-  const sidebar = viewer.querySelector<HTMLElement>('.pdf-reader-thumbnails')!;
-  const status = viewer.querySelector<HTMLElement>('.pdf-reader-status')!;
-  const input = viewer.querySelector(
+  // Isolate the reader UI from saved page selectors and template styles.
+  const shadow = viewer.shadowRoot || viewer.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = readerStyles;
+  const ui = document.createElement('div');
+  ui.className = 'reader-shell';
+  shadow.replaceChildren(style, ui);
+  ui.innerHTML = `<div class="pdf-reader-toolbar" role="toolbar" aria-label="PDF reader">${button('sidebar', 'Toggle page thumbnails')}<span class="pdf-reader-title"></span><div class="pdf-reader-navigation">${button('prev', 'Previous page')}<input data-reader-page type="number" min="1" value="1" aria-label="Page number"><span data-reader-total>/ …</span>${button('next', 'Next page')}</div><span class="pdf-reader-divider"></span>${button('minus', 'Zoom out')}<span data-reader-zoom>Fit</span>${button('plus', 'Zoom in')}${button('fit', 'Fit page')}${button('rotate', 'Rotate clockwise')}<span class="pdf-reader-spacer"></span>${button('download', 'Download complete PDF')}${button('full', 'Full screen')}<button type="button" data-reader-cancel hidden>Cancel</button></div><div class="pdf-reader-body"><aside class="pdf-reader-thumbnails" aria-label="Page thumbnails" hidden></aside><div class="pdf-reader-scroll" tabindex="0" aria-label="PDF pages"><div class="pdf-reader-loading">Loading document…</div></div></div><div class="pdf-reader-status" role="status">Loading document…</div>`;
+  ui.querySelector<HTMLElement>('.pdf-reader-title')!.textContent = title;
+  const scroll = ui.querySelector<HTMLElement>('.pdf-reader-scroll')!;
+  const sidebar = ui.querySelector<HTMLElement>('.pdf-reader-thumbnails')!;
+  const status = ui.querySelector<HTMLElement>('.pdf-reader-status')!;
+  const input = ui.querySelector(
     '[data-reader-page]',
   ) as unknown as HTMLInputElement;
   const action = (name: string) =>
-    viewer.querySelector<HTMLButtonElement>(`[data-reader="${name}"]`)!;
-  const cancel = viewer.querySelector<HTMLButtonElement>(
-    '[data-reader-cancel]',
-  )!;
+    ui.querySelector<HTMLButtonElement>(`[data-reader="${name}"]`)!;
+  const cancel = ui.querySelector<HTMLButtonElement>('[data-reader-cancel]')!;
   const documents = new Map<
     number,
     { promise: Promise<PDFDocumentProxy>; active: number; used: number }
@@ -177,7 +184,7 @@ export async function mountPdfReader(viewer: HTMLElement) {
     action('next').disabled = current === total;
   };
   const refresh = () => {
-    for (const element of viewer.querySelectorAll<HTMLElement>('[data-page]')) {
+    for (const element of ui.querySelectorAll<HTMLElement>('[data-page]')) {
       const task = tasks.get(element);
       task?.cancel();
       element.dataset.rendered = 'false';
@@ -190,7 +197,7 @@ export async function mountPdfReader(viewer: HTMLElement) {
             if (visible.has(element)) void render(element);
           });
     }
-    viewer.querySelector<HTMLElement>('[data-reader-zoom]')!.textContent = fit
+    ui.querySelector<HTMLElement>('[data-reader-zoom]')!.textContent = fit
       ? 'Fit'
       : Math.round(zoom * 100) + '%';
   };
@@ -217,7 +224,7 @@ export async function mountPdfReader(viewer: HTMLElement) {
       parts[0].end = total;
     }
     input.max = String(total);
-    viewer.querySelector<HTMLElement>('[data-reader-total]')!.textContent =
+    ui.querySelector<HTMLElement>('[data-reader-total]')!.textContent =
       '/ ' + total;
     scroll.replaceChildren();
     for (let n = 1; n <= total; n++) {
@@ -317,7 +324,7 @@ export async function mountPdfReader(viewer: HTMLElement) {
         const sheet = sheets.find((el) => el.offsetTop + el.offsetHeight > top);
         if (sheet) {
           current = Number(sheet.dataset.page);
-          if (document.activeElement !== input) input.value = String(current);
+          if (shadow.activeElement !== input) input.value = String(current);
           action('prev').disabled = current === 1;
           action('next').disabled = current === total;
         }
