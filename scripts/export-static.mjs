@@ -1,6 +1,11 @@
 import { compressExportImage, IMAGE_UPLOAD_BYTES } from './image-export.mjs';
 import { splitPdf, PDF_PART_BYTES } from './pdf-parts.mjs';
-import { exportMedia, mediaFolder, templateFontCss } from './export-media.mjs';
+import {
+  exportMedia,
+  mediaFolder,
+  templateFontCss,
+  siteIcon,
+} from './export-media.mjs';
 import { build } from 'vite';
 import {
   readFile,
@@ -618,7 +623,7 @@ for (const page of [undefined, ...wikiPages]) {
   const doc =
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     esc(title) +
-    '</title><meta name="description" content="' +
+    `</title><link rel="icon" href="${esc(mediaMap[siteIcon(snapshot.values)])}"><meta name="description" content="` +
     esc(description) +
     '">' +
     css

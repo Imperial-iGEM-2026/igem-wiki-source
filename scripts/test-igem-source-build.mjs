@@ -48,6 +48,10 @@ for (const file of [
   'scripts/build-igem.mjs',
   'scripts/export-static.mjs',
   'scripts/export-media.mjs',
+  'scripts/pdf-parts.mjs',
+  'scripts/image-export.mjs',
+  'publication/katex-LICENSE.txt',
+  'publication/pdf-processing-LICENSES.txt',
   'scripts/igem-resources.mjs',
   'scripts/build-options.mjs',
   'scripts/static-renderer.tsx',
@@ -63,7 +67,7 @@ await symlink(
   path.join(checkout, 'node_modules'),
   process.platform === 'win32' ? 'junction' : 'dir',
 );
-await mkdir(path.join(checkout, 'publication'));
+await mkdir(path.join(checkout, 'publication'), { recursive: true });
 await writeFile(
   path.join(checkout, 'LICENSE'),
   await readFile('publication/wiki-LICENSE.txt', 'utf8'),
@@ -104,7 +108,8 @@ function walk(n) {
   n.c?.forEach(walk);
 }
 template.pages.forEach((p) => p.layers.forEach((l) => walk(l.ast)));
-const { templateFonts } = await import('./export-media.mjs');
+const { templateFonts, siteIcon } = await import('./export-media.mjs');
+map[siteIcon(values)] = 'https://static.igem.wiki/teams/6377/icons/favicon.svg';
 for (const font of templateFonts(values))
   map[font.source] =
     'https://static.igem.wiki/teams/6377/test-fixture/' +
@@ -151,6 +156,11 @@ const html = await readFile(
   'utf8',
 );
 assert.match(html, /<iframe title="Project audio"/);
+assert.ok(
+  html.includes(
+    '<link rel="icon" href="https://static.igem.wiki/teams/6377/icons/favicon.svg">',
+  ),
+);
 assert.ok(!html.includes('fonts.googleapis.com'));
 assert.ok(!html.includes('/api/media/'));
 assert.ok(!html.includes('<audio'));

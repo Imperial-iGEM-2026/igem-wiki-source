@@ -1,10 +1,28 @@
 // Shared by the offline compiler and the server's three-ZIP handoff.
+// Tab icons use the same source in the editor, preview and published HTML.
+export function siteIcon(values) {
+  let logo;
+  try {
+    logo = JSON.parse(values['site:header'] || '{}').logo;
+  } catch {}
+  if (
+    typeof logo === 'string' &&
+    /^(?:https:\/\/|\/(?!\/))/.test(logo) &&
+    !/[<>"\s]/.test(logo)
+  )
+    return logo;
+  return values['site:template'] && values['site:template'] !== 'blank'
+    ? '/templates/notebook-purple/favicon.svg'
+    : '/templates/notebook-purple/studio-icon.svg';
+}
+
 export function exportMedia(
   values,
   template,
   expandLayers = (layers) => layers,
 ) {
   const refs = new Map(template ? [] : [['/prion-hero.png', 'image']]);
+  refs.set(siteIcon(values), 'image');
   for (const font of templateFonts(values)) refs.set(font.source, 'font');
   const removed = new Set(JSON.parse(values['pages:removed'] || '[]'));
   const visible = (node, nodes) => {

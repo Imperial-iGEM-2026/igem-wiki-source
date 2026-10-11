@@ -1,5 +1,7 @@
 # Prion Studio
 
+**Website tab icon:** Projects use a compact reGELerate logo in the browser tab. A custom logo saved in **Header & logo** also becomes the tab icon. Three-ZIP exports include the icon in the media upload list and use its hosted URL in the published pages; re-export with the updated server and upload helper 1.0.19 or later.
+
 **Rename a project:** Open **All projects & templates → ⋯ → Rename project**, or use **Rename project** beneath the editor's project selector. Enter a name and choose **Save name**. The new name is saved for the team; pages, images, website branding and URLs are preserved. Projects are grouped under their currently applied template, including after a template change or rollback.
 
 **Header menu:** Pages shows the header menu: Home, the menu groups in order, and **Not in menu**. Drag pages between groups, or right-click a page to move it, reorder it or remove it from the menu. Add, rename (double-click the name), reorder and delete groups. The header, each page's left sidebar (its menu group, current page highlighted) and the "GROUP / PAGE" heading label update everywhere immediately. New pages start in **Not in menu** and use the same layout as template pages: heading, sidebar, and a content column where **Add section** places new sections.

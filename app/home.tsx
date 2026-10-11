@@ -1,6 +1,7 @@
 'use client';
 
 import { startReferenceNavigation } from './reference-navigation';
+import { siteIcon } from '../scripts/export-media.mjs';
 import { MathText } from './equation-block';
 import { TextEditDialog } from './text-edit-dialog';
 import { mergeContentRows } from './content-sync';
@@ -108,6 +109,20 @@ export default function Home({
     ? pageCatalog(data).find((page) => page.slug === selectedWiki.slug)
     : undefined;
   const deletedPage = selectedWiki && !wiki ? selectedWiki.slug : undefined;
+  const tabIcon = siteIcon({
+    'site:header': data['site:header']?.value,
+    'site:template': data['site:template']?.value,
+  });
+  useEffect(() => {
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.removeAttribute('type');
+    link.href = tabIcon;
+  }, [tabIcon]);
   useEffect(() => {
     if (!deletedPage) return;
     setWiki(undefined);
@@ -250,7 +265,12 @@ export default function Home({
         role={editing ? 'button' : undefined}
         title={editing ? 'Double-click to edit text' : undefined}
         onClick={(e) => {
-          if ((e.target as Element).closest('[data-citation-link],.modern-pdf-reader')) return;
+          if (
+            (e.target as Element).closest(
+              '[data-citation-link],.modern-pdf-reader',
+            )
+          )
+            return;
           if (!editing) return;
           e.preventDefault();
           e.stopPropagation();
@@ -407,7 +427,11 @@ export default function Home({
       <div
         onClickCapture={(e) => {
           const link = (e.target as HTMLElement).closest?.('a');
-          if (link?.hasAttribute('data-citation-link') || (e.target as Element).closest('.modern-pdf-reader')) return;
+          if (
+            link?.hasAttribute('data-citation-link') ||
+            (e.target as Element).closest('.modern-pdf-reader')
+          )
+            return;
           if (
             !publication &&
             !editing &&

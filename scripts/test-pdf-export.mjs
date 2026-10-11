@@ -130,6 +130,17 @@ const result = spawnSync(
 );
 assert.equal(result.status, 0, result.stdout + result.stderr);
 const html = await readFile(path.join(dir, 'render/public/index.html'), 'utf8');
+assert.match(
+  html,
+  /rel="icon" href="\/example\/templates\/notebook-purple\/studio-icon.svg"/,
+);
+assert.match(
+  await readFile(
+    path.join(dir, 'render/public/templates/notebook-purple/studio-icon.svg'),
+    'utf8',
+  ),
+  /<svg/,
+);
 assert.match(html, /data-pdf-parts/);
 assert.match(html, /assets\/pdfjs/);
 assert.match(html, /Pages/);
