@@ -514,13 +514,13 @@ export async function createAppServer({
       ) {
         const type = {
           js: 'text/javascript',
-            mjs: 'text/javascript',
-            wasm: 'application/wasm',
-            bcmap: 'application/octet-stream',
-            pfb: 'application/octet-stream',
-            icc: 'application/octet-stream',
-            ttf: 'font/ttf',
-            otf: 'font/otf',
+          mjs: 'text/javascript',
+          wasm: 'application/wasm',
+          bcmap: 'application/octet-stream',
+          pfb: 'application/octet-stream',
+          icc: 'application/octet-stream',
+          ttf: 'font/ttf',
+          otf: 'font/otf',
           css: 'text/css',
           woff2: 'font/woff2',
           svg: 'image/svg+xml',
@@ -644,6 +644,10 @@ export async function createAppServer({
             throw fail(400, 'Choose a template or Blank canvas.');
           const id = projects.create(body.name.trim(), body.templateId);
           return json(res, 201, { ...projects.list(), id });
+        }
+        if (body?.action === 'rename') {
+          projects.rename(body.id, body.name);
+          return json(res, 200, projects.list());
         }
         if (body?.action === 'delete') {
           projects.remove(body.id, body.replacementId);

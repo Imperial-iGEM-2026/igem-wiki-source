@@ -116,6 +116,36 @@ export function createProjects(db) {
     }
     return id;
   }
+  function rename(id, name) {
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 80)
+      throw Object.assign(
+        Error('Use a project name between 1 and 80 characters.'),
+        { status: 400 },
+      );
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (!has(id))
+        throw Object.assign(Error('Project not found.'), { status: 404 });
+      const trimmed = name.trim();
+      if (
+        list().projects.some(
+          (p) =>
+            p.id !== id && projectNameKey(p.name) === projectNameKey(trimmed),
+        )
+      )
+        throw Object.assign(
+          Error(
+            'A project with this name already exists. Choose a different name.',
+          ),
+          { status: 409 },
+        );
+      db.prepare('UPDATE projects SET name=? WHERE id=?').run(trimmed, id);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   function remove(id, replacementId) {
     const current = list();
     if (!has(id, true))
@@ -224,5 +254,15 @@ export function createProjects(db) {
     scopes.set(id, store);
     return store;
   }
-  return { list, has, create, setDefault, scope, templateId, remove, restore };
+  return {
+    list,
+    has,
+    create,
+    rename,
+    setDefault,
+    scope,
+    templateId,
+    remove,
+    restore,
+  };
 }

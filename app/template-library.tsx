@@ -13,6 +13,7 @@ import {
   RotateCcw,
   MoreHorizontal,
   Eye,
+  Pencil,
 } from 'lucide-react';
 import {
   Dialog,
@@ -30,6 +31,7 @@ import {
 import { Input } from '@/components/ui/input';
 import type { Project, Projects } from './project-api';
 import { TemplateChangeDialog } from './template-change-dialog';
+import { ProjectRenameDialog } from './project-rename-dialog';
 
 export function TemplateLibrary({
   initial,
@@ -45,9 +47,12 @@ export function TemplateLibrary({
     [error, setError] = useState(''),
     [deleting, setDeleting] = useState<Project | null>(null),
     [changing, setChanging] = useState<Project | null>(null),
+    [renaming, setRenaming] = useState<Project | null>(null),
     [replacementId, setReplacementId] = useState('');
   const creating = useRef(false);
-  const existing = data.projects.filter((p) => p.templateId === chosen);
+  const existing = data.projects.filter(
+    (p) => (p.appearanceId || p.templateId) === chosen,
+  );
   const sameName = data.projects.find(
     (p) => projectNameKey(p.name) === projectNameKey(title),
   );
@@ -138,6 +143,15 @@ export function TemplateLibrary({
     data.projects.some((p) => p.id !== deleting.id);
   return (
     <div className="template-library">
+      {renaming && (
+        <ProjectRenameDialog
+          key={renaming.id}
+          project={renaming}
+          projects={data.projects}
+          onClose={() => setRenaming(null)}
+          onRenamed={setData}
+        />
+      )}
       <header className="library-header">
         <a href="/workspace">
           <Layers size={20} /> Website Studio
@@ -305,6 +319,9 @@ export function TemplateLibrary({
                     >
                       <DropdownMenuItem onClick={() => setChanging(project)}>
                         <Layers size={16} /> Change template
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setRenaming(project)}>
+                        <Pencil size={16} /> Rename project
                       </DropdownMenuItem>
                       {data.defaultId !== project.id && (
                         <DropdownMenuItem

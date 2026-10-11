@@ -82,6 +82,15 @@ try {
   });
   assert.equal(response.status, 200);
   const applied = await response.json();
+  const listed = (await (await request('/api/projects')).json()).projects.find(
+    (p) => p.id === project,
+  );
+  assert.equal(listed.appearanceId, 'notebook-white');
+  assert.equal(
+    listed.templateId,
+    'regelerate',
+    'original template remains provenance only',
+  );
   assert.equal(
     (await rows()).find((row) => row.id === 'site:appearance').value,
     'notebook-white',
@@ -109,6 +118,116 @@ try {
   );
   console.log(
     'PASS: authenticated preview/apply/rollback API, preview bypass rejected, appearance propagates through content polling.',
+  );
+  assert.equal(
+    (await (await request('/api/projects')).json()).projects.find(
+      (p) => p.id === project,
+    ).appearanceId,
+    'regelerate',
+  );
+  const before = await rows();
+  const beforeList = await (await request('/api/projects')).json();
+  response = await request('/api/projects', {
+    action: 'rename',
+    id: project,
+    name: '  Our research  ',
+  });
+  assert.equal(response.status, 200);
+  const renamed = await response.json();
+  assert.equal(
+    renamed.projects.find((p) => p.id === project).name,
+    'Our research',
+  );
+  assert.equal(renamed.defaultId, beforeList.defaultId);
+  assert.deepEqual(
+    await rows(),
+    before,
+    'rename preserves every saved row and version',
+  );
+  assert.equal(
+    (
+      await request('/api/projects', {
+        action: 'rename',
+        id: project,
+        name: 'Our research',
+      })
+    ).status,
+    200,
+    'unchanged name is valid',
+  );
+  for (const name of ['', '  ', null, 42, 'x'.repeat(81)])
+    assert.equal(
+      (await request('/api/projects', { action: 'rename', id: project, name }))
+        .status,
+      400,
+    );
+  assert.equal(
+    (
+      await request('/api/projects', {
+        action: 'rename',
+        id: 'missing',
+        name: 'Name',
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await fetch(origin + '/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'rename',
+          id: project,
+          name: 'Unauthorized',
+        }),
+      })
+    ).status,
+    401,
+  );
+  const second = await (
+    await request('/api/projects', {
+      action: 'create',
+      name: 'Other project',
+      templateId: 'blank',
+    })
+  ).json();
+  assert.equal(
+    (
+      await request('/api/projects', {
+        action: 'rename',
+        id: second.id,
+        name: 'ＯＵＲ   research',
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await request('/api/projects', { action: 'delete', id: second.id }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (
+      await request('/api/projects', {
+        action: 'rename',
+        id: second.id,
+        name: 'Deleted project',
+      })
+    ).status,
+    404,
+  );
+  await new Promise((resolve) => server.close(resolve));
+  await start();
+  assert.equal(
+    (await (await request('/api/projects')).json()).projects.find(
+      (p) => p.id === project,
+    ).name,
+    'Our research',
+  );
+  assert.deepEqual(await rows(), before);
+  console.log(
+    'PASS: rename persistence, content preservation, duplicate/invalid/deleted names and authentication.',
   );
 } finally {
   await new Promise((resolve) => server.close(resolve));

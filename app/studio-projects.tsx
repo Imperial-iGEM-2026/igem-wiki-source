@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Folder, Plus, Globe, Check } from 'lucide-react';
+import { Folder, Plus, Globe, Check, Pencil } from 'lucide-react';
+import { ProjectRenameDialog } from './project-rename-dialog';
 import {
   Select,
   SelectTrigger,
@@ -20,6 +21,8 @@ export function StudioProjects({
   const [data, setData] = useState<Projects | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const project = data?.projects.find((p) => p.id === current);
   useEffect(() => {
     const controller = new AbortController();
     projectFetch('/api/projects', { signal: controller.signal })
@@ -56,6 +59,15 @@ export function StudioProjects({
   }
   return (
     <div className="studio-projects">
+      {renaming && project && data && (
+        <ProjectRenameDialog
+          key={project.id}
+          project={project}
+          projects={data.projects}
+          onClose={() => setRenaming(false)}
+          onRenamed={setData}
+        />
+      )}
       <div className="studio-projects-heading">
         <span>
           <Folder size={14} /> Project
@@ -97,6 +109,13 @@ export function StudioProjects({
           ))}
         </SelectContent>
       </Select>
+      <button
+        className="studio-default-project"
+        disabled={busy || !project}
+        onClick={() => setRenaming(true)}
+      >
+        <Pencil size={13} /> Rename project
+      </button>
       <button
         className="studio-default-project"
         disabled={busy || !data || data.defaultId === current}
