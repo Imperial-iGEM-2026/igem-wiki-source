@@ -1,6 +1,6 @@
 # Prion Studio
 
-**Sponsor lists:** Home and Our sponsors are independent. Edit each page's own logo layers; changing or deleting a homepage sponsor section no longer replaces the Sponsors page's content. Select the section in Layers and choose **Delete** to remove it, including its logos. **Undo** restores the section during the editing session. Deleted template sections stay removed after saving and reopening; the eye icon still hides a section without deleting it.
+**Sponsor lists:** Home and Our sponsors are independent. Edit each page's own logo layers; changing or deleting a homepage sponsor section no longer replaces the Sponsors page's content. Select the section in Layers and choose **Delete section** to remove it, including its logos. If a child layer is locked, the editor names it so you can unlock it before deleting. **Undo** restores the section during the editing session. Deleted template sections stay removed after saving and reopening; the eye icon still hides a section without deleting it.
 
 **Website tab icon:** Projects use a compact reGELerate logo in the browser tab. A custom logo saved in **Header & logo** also becomes the tab icon. Three-ZIP exports include the icon in the media upload list and use its hosted URL in the published pages; re-export with the updated server and upload helper 1.0.19 or later.
 
@@ -87,7 +87,7 @@ Undo and redo keep up to 50 layout steps in the current editing session. Typing 
 | Ctrl/⌘ Z | Undo layout |
 | Ctrl/⌘ Shift Z or Ctrl/⌘ Y | Redo layout |
 | Ctrl/⌘ D | Duplicate selected custom sections |
-| Delete | Delete custom sections; hide template sections |
+| Delete | Delete selected layers or the selected canvas element |
 | Alt ↑ / ↓ | Reorder selected layers |
 | Left / Right on the resize handle | Change width by one column |
 | Escape | Clear selection |
@@ -149,7 +149,7 @@ Logo selection now uses Choose logo or Replace logo with a thumbnail, rather tha
 
 ### Compact context menu and deletion
 
-Right-click a selected element for Text…, Link… (when applicable), Ask AI, More and Delete. CSS and layer controls live under More. Delete or the Delete key removes the selected nested element from the visible page; it does not delete its containing section. Undo restores it. Save layout persists the deletion. Imported elements use a scoped CSS display rule so the original template is retained and the change travels with preview/static export. Whole-layer deletion retains the existing custom-layer removal/imported-layer hiding behavior. Locked layers cannot be deleted.
+Right-click a selected element for Text…, Link… (when applicable), Ask AI, More and Delete. CSS and layer controls live under More. Delete or the Delete key removes the selected nested element from the visible page; it does not delete its containing section. Undo restores it. Save layout persists the deletion. Imported elements use a scoped CSS display rule so the original template is retained and the change travels with preview/static export. Use **Delete entire section** on the canvas, or **Delete section** in Layers, to remove the containing section and its children. Deleted template sections disappear from Layers and stay removed after saving; the eye button is for temporary hiding. A locked child blocks section deletion with an explanation. Undo restores deleted sections.
 
 ## Custom HTML animations
 

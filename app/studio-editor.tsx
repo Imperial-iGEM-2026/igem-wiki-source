@@ -985,10 +985,33 @@ export function StudioEditor({
       setError(String(e));
     }
   }
-  function remove() {
-    edit(removeNodes(currentRef.current, selected));
+  function removeLayers(ids: string[]) {
+    if (disabled || preview || cssPreview !== undefined) return;
+    const layout = currentRef.current;
+    const locked = descendants(layout, ids)
+      .map((id) => layout.nodes.find((n) => n.id === id))
+      .find((n) => n && nodeLocked(layout, n.id));
+    if (locked) {
+      setError(
+        `Cannot delete this section while “${locked.name || locked.title || locked.kind}” is locked. Unlock it in Layers, then delete the section again.`,
+      );
+      return;
+    }
+    const next = removeNodes(layout, ids);
+    if (same(next, layout)) {
+      setError(
+        'Nothing was deleted. Select the section in Layers and try again.',
+      );
+      return;
+    }
+    edit(next);
     setSelected([]);
     setTarget(null);
+    setMultiTargets([]);
+    setNotice('Section deleted. Undo restores it.');
+  }
+  function remove() {
+    removeLayers(selected);
   }
   function removeSelection() {
     if (disabled || preview || cssPreview !== undefined || !selected.length)
@@ -2459,10 +2482,7 @@ export function StudioEditor({
                           disabled={disabled || nodeLocked(current, node.id)}
                           onClick={remove}
                         >
-                          <Trash2 size={15} />{' '}
-                          {node.kind === 'template'
-                            ? 'Delete (hides template section)'
-                            : 'Delete section'}
+                          <Trash2 size={15} /> Delete section
                         </ContextMenuItem>
                       </>
                     ) : (
@@ -2913,9 +2933,34 @@ export function StudioEditor({
                             }
                             onClick={removeSelection}
                           >
-                            <Trash2 size={15} /> Delete
+                            <Trash2 size={15} /> Delete selected element
                             <span className="studio-context-shortcut">Del</span>
                           </ContextMenuItem>
+                          {selected.length === 1 &&
+                            (node.kind === 'template' ||
+                              node.kind === 'section' ||
+                              node.parentId) && (
+                              <ContextMenuItem
+                                variant="destructive"
+                                disabled={disabled || cssPreview !== undefined}
+                                onClick={() => {
+                                  let section = node;
+                                  while (
+                                    section.parentId &&
+                                    section.parentId !== CUSTOM_CONTENT
+                                  ) {
+                                    const parent = current.nodes.find(
+                                      (n) => n.id === section.parentId,
+                                    );
+                                    if (!parent) break;
+                                    section = parent;
+                                  }
+                                  removeLayers([section.id]);
+                                }}
+                              >
+                                <Trash2 size={15} /> Delete entire section
+                              </ContextMenuItem>
+                            )}
                         </>
                       )}
                     </ContextMenuContent>
@@ -4097,7 +4142,7 @@ export function StudioEditor({
                       <Copy size={16} />
                     </button>
                     <button
-                      title="Delete custom sections / hide template sections"
+                      title="Delete selected section"
                       disabled={disabled || !editable}
                       onClick={remove}
                     >
