@@ -1,5 +1,7 @@
 # Prion Studio
 
+**Sponsor lists:** Home and Our sponsors are independent. Edit each page's own logo layers; changing or deleting a homepage sponsor section no longer replaces the Sponsors page's content. Select the section in Layers and choose **Delete** to remove it, including its logos. **Undo** restores the section during the editing session. Deleted template sections stay removed after saving and reopening; the eye icon still hides a section without deleting it.
+
 **Website tab icon:** Projects use a compact reGELerate logo in the browser tab. A custom logo saved in **Header & logo** also becomes the tab icon. Three-ZIP exports include the icon in the media upload list and use its hosted URL in the published pages; re-export with the updated server and upload helper 1.0.19 or later.
 
 **Rename a project:** Open **All projects & templates → ⋯ → Rename project**, or use **Rename project** beneath the editor's project selector. Enter a name and choose **Save name**. The new name is saved for the team; pages, images, website branding and URLs are preserved. Projects are grouped under their currently applied template, including after a template change or rollback.

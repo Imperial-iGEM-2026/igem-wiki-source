@@ -49,6 +49,8 @@ export type CanvasNode = {
   background: string;
   padding: number;
   hidden: boolean;
+  /** Retained template tombstone: do not recreate it when opening the page. */
+  deleted?: boolean;
   linkTo?: string;
   links?: Record<string, string>;
   linkLabel?: string;
@@ -214,6 +216,11 @@ export function validateLayout(input: unknown): input is CanvasLayout {
       n.padding < 0 ||
       n.padding > 80 ||
       typeof n.hidden !== 'boolean'
+    )
+      return false;
+    if (
+      n.deleted !== undefined &&
+      (typeof n.deleted !== 'boolean' || (n.deleted && !n.hidden))
     )
       return false;
     for (const [key, max] of [
@@ -407,6 +414,7 @@ export function hierarchyOrder(layout: CanvasLayout): string[] {
       .filter(
         (id) =>
           !seen.has(id) &&
+          !layout.nodes.find((n) => n.id === id)?.deleted &&
           layout.nodes.find((n) => n.id === id)?.parentId === parent,
       )
       .flatMap((id) => {

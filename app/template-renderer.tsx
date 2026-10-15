@@ -171,7 +171,6 @@ export function ImportedPage({
             defaults: layer.defaults,
             linkPath: layer.linkPath,
             sponsorGrid: layer.sponsorGrid,
-            syncedSponsors: layer.syncedSponsors,
             sponsorSlot: layer.sponsorSlot,
           }}
           className="template-section-content"

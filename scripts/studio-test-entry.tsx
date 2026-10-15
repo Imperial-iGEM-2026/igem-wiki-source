@@ -37,9 +37,14 @@ export function renderStudio() {
     />,
   );
 }
-export function renderCanvas(layout: CanvasLayout) {
+export function renderCanvas(layout: CanvasLayout, editing = false) {
   return renderToStaticMarkup(
-    <CanvasSurface layout={layout} builtins={builtins} publication />,
+    <CanvasSurface
+      layout={layout}
+      builtins={builtins}
+      editing={editing}
+      publication={!editing}
+    />,
   );
 }
 export function renderTemplateAppearance(

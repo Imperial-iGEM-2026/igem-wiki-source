@@ -4,7 +4,12 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { generateKeyPair, SignJWT } from 'jose';
 import { createAppServer } from '../selfhost-dist/server/app.mjs';
-import { newNode } from '../selfhost-dist/server/shared.mjs';
+import {
+  newNode,
+  pageLayers,
+  materialize,
+  removeNodes,
+} from '../selfhost-dist/server/shared.mjs';
 
 const keys = await generateKeyPair('RS256');
 const environment = {
@@ -125,7 +130,48 @@ try {
     ).appearanceId,
     'regelerate',
   );
-  const before = await rows();
+  const sponsorRows = await rows();
+  const sponsorBlocks = Object.fromEntries(
+    sponsorRows.map((row) => [row.id, row]),
+  );
+  const homeRow = sponsorBlocks['layout:home'];
+  const homeLayers = pageLayers(sponsorBlocks, 'home').layers;
+  const sponsorSection = homeLayers.find((layer) => layer.sponsorGrid);
+  const homeLayout = materialize(JSON.parse(homeRow.value), homeLayers);
+  const withoutSponsors = removeNodes(homeLayout, [sponsorSection.id]);
+  assert.equal(
+    (
+      await request('/api/content', {
+        id: 'layout:home',
+        value: JSON.stringify(withoutSponsors),
+        version: homeRow.version,
+      })
+    ).status,
+    200,
+  );
+  const savedRows = await rows();
+  assert.equal(
+    JSON.parse(
+      savedRows.find((row) => row.id === 'layout:home').value,
+    ).nodes.find((node) => node.id === sponsorSection.id).deleted,
+    true,
+  );
+  assert.deepEqual(
+    materialize(
+      JSON.parse(savedRows.find((row) => row.id === 'layout:sponsors').value),
+      pageLayers(sponsorBlocks, 'sponsors').layers,
+    ).nodes.filter(
+      (n) => !['import-header-0', 'import-footer-0'].includes(n.id),
+    ),
+    materialize(
+      JSON.parse(sponsorBlocks['layout:sponsors'].value),
+      pageLayers(sponsorBlocks, 'sponsors').layers,
+    ).nodes.filter(
+      (n) => !['import-header-0', 'import-footer-0'].includes(n.id),
+    ),
+    'homepage deletion cannot change sponsor content (shared header/footer still sync)',
+  );
+  const before = savedRows;
   const beforeList = await (await request('/api/projects')).json();
   response = await request('/api/projects', {
     action: 'rename',

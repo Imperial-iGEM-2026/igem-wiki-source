@@ -1,6 +1,5 @@
 import { sponsorLayers } from './sponsor-layers';
-import { validateLayout, type CanvasNode } from './canvas-schema';
-import { materialize } from './studio-engine';
+import type { CanvasNode } from './canvas-schema';
 // Page-dependent changes to imported template markup, shared by the renderer
 // (browser, static export) and the server's AI tools so both see the same page.
 import {
@@ -29,7 +28,6 @@ export type RenderContext = {
 export type PageLayer = {
   defaults?: Partial<CanvasNode>;
   sponsorGrid?: boolean;
-  syncedSponsors?: CanvasNode[];
   sponsorSlot?: 'grid' | 'fixed';
   linkPath?: string;
   id: string;
@@ -250,41 +248,5 @@ export function pageLayers(
       : []),
     ...chrome.filter((l) => l.region !== 'header'),
   ];
-  const expanded = sponsorLayers(layers);
-  if (page === 'sponsors' && !context.removed.has('home')) {
-    const source = template.pages.find((p) => p.slug === 'home');
-    if (source && data['layout:home']) {
-      try {
-        const saved = JSON.parse(data['layout:home']!.value);
-        if (validateLayout(saved)) {
-          const sourceLayers = sponsorLayers(source.layers);
-          const resolved = materialize(saved, sourceLayers);
-          const nodes = new Map(resolved.nodes.map((n) => [n.id, n]));
-          const parents = new Set(
-            sourceLayers.filter((l) => l.sponsorGrid).map((l) => l.id),
-          );
-          const fixed = new Set(
-            sourceLayers
-              .filter((l) => l.sponsorSlot === 'fixed')
-              .map((l) => l.id),
-          );
-          const logos = resolved.order
-            .map((id) => nodes.get(id)!)
-            .filter(
-              (n) =>
-                n.kind === 'image' &&
-                parents.has(n.parentId || '') &&
-                !fixed.has(n.id) &&
-                !n.hidden &&
-                !nodes.get(n.parentId || '')?.hidden,
-            );
-          for (const layer of expanded)
-            if (layer.sponsorGrid) layer.syncedSponsors = logos;
-        }
-      } catch {
-        /* Preserve the existing sponsor page if the homepage cannot be read. */
-      }
-    }
-  }
-  return { context, layers: expanded };
+  return { context, layers: sponsorLayers(layers) };
 }

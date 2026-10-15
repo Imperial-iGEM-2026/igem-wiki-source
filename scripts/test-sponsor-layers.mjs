@@ -23,7 +23,12 @@ const blocks = (values) =>
       { value, version: 1, author: '' },
     ]),
   );
-for (const template of ['regelerate', 'notebook-purple', 'swiss']) {
+for (const template of [
+  'regelerate',
+  'notebook-purple',
+  'notebook-white',
+  'swiss',
+]) {
   if (!E.templates[template]) continue;
   for (const page of ['home', 'sponsors']) {
     const values = E.templateDefaults(template);
@@ -142,6 +147,23 @@ for (const template of ['regelerate', 'notebook-purple', 'swiss']) {
       html.indexOf('data-layer-id="' + logos[19].id) <
         html.indexOf('data-layer-id="' + logos[5].id),
     );
+    const removedSection = E.removeNodes(layout, [section.id]);
+    const reopened = E.materialize(
+      JSON.parse(JSON.stringify(removedSection)),
+      layers,
+    );
+    assert.ok(E.validateLayout(reopened));
+    assert.ok(!E.hierarchyOrder(reopened).includes(section.id));
+    assert.ok(!E.hierarchyOrder(reopened).includes(added.id));
+    values['layout:' + page] = JSON.stringify(reopened);
+    assert.doesNotMatch(
+      E.renderCompletePreview(blocks(values), page),
+      /data-sponsor-grid=/,
+    );
+    const deletedRefs = exportMedia(values, isolatedTemplate, E.sponsorLayers);
+    assert.ok(!deletedRefs.has(added.src));
+    const lockedChild = E.patchNodes(layout, [logos[5].id], { locked: true });
+    assert.deepEqual(E.removeNodes(lockedChild, [section.id]), lockedChild);
     console.log(
       `PASS ${template}/${page}: 20 individual logo layers, old overlay joins grid, image/link edits, hide/delete, duplicate/reorder, publication and export media.`,
     );

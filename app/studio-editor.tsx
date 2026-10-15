@@ -890,7 +890,7 @@ export function StudioEditor({
     setSelected(
       layout.order.filter((id) => {
         const n = layout.nodes.find((item) => item.id === id);
-        return n && !n.parentId && !nodeLocked(layout, id);
+        return n && !n.deleted && !n.parentId && !nodeLocked(layout, id);
       }),
     );
   }
@@ -2149,7 +2149,7 @@ export function StudioEditor({
               <>
                 <div className="studio-panel-title">
                   <strong>Layers</strong>
-                  <span>{current.nodes.length}</span>
+                  <span>{hierarchyOrder(current).length}</span>
                 </div>
                 <StudioInsertMenu
                   container={

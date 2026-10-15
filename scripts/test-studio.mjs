@@ -1654,7 +1654,7 @@ console.log(
   );
 }
 
-// Our sponsors uses the saved homepage list, never its own stale copies.
+// Sponsor pages use only their own saved content.
 const sponsorData = Object.fromEntries(
   Object.entries(E.templateDefaults('regelerate')).map(([k, value]) => [
     k,
@@ -1681,16 +1681,38 @@ sponsorLayout.nodes.push(addedLogo);
 sponsorLayout.order.unshift(addedLogo.id);
 sponsorData['layout:home'].value = JSON.stringify(sponsorLayout);
 const beforeSync = JSON.stringify(sponsorData);
-const synced = E.pageLayers(sponsorData, 'sponsors').layers.find(
-  (l) => l.sponsorGrid,
-).syncedSponsors;
-assert.equal(synced[0].id, addedLogo.id);
-assert.equal(synced[0].linkTo, addedLogo.linkTo);
-assert.ok(!synced.some((n) => n.id === firstLogo.id));
+const independent = E.renderCompletePreview(sponsorData, 'sponsors');
+assert.ok(!independent.includes('new-sponsor.png'));
+const sponsorOwnLayers = E.pageLayers(sponsorData, 'sponsors').layers;
+assert.ok(sponsorOwnLayers.every((layer) => !('syncedSponsors' in layer)));
 assert.equal(
   JSON.stringify(sponsorData),
   beforeSync,
   'rendering must not rewrite saved content',
+);
+const deletedSponsors = E.removeNodes(sponsorLayout, [sponsorParent]);
+assert.ok(E.validateLayout(deletedSponsors));
+assert.ok(!E.hierarchyOrder(deletedSponsors).includes(sponsorParent));
+const reopenedSponsors = E.materialize(
+  JSON.parse(JSON.stringify(deletedSponsors)),
+  sponsorSource,
+);
+assert.equal(
+  reopenedSponsors.nodes.find((n) => n.id === sponsorParent).deleted,
+  true,
+);
+sponsorData['layout:home'].value = JSON.stringify(reopenedSponsors);
+assert.ok(
+  !E.renderCompletePreview(sponsorData, 'home').includes('data-sponsor-grid='),
+);
+assert.equal(E.renderCompletePreview(sponsorData, 'sponsors'), independent);
+const sponsorHistory = E.historyReducer(
+  { current: sponsorLayout, past: [], future: [] },
+  { type: 'edit', value: deletedSponsors },
+);
+assert.deepEqual(
+  E.historyReducer(sponsorHistory, { type: 'undo' }).current,
+  sponsorLayout,
 );
 const imageMarkup = E.renderCanvas({
   ...E.emptyLayout,
@@ -1699,7 +1721,33 @@ const imageMarkup = E.renderCanvas({
 });
 assert.match(imageMarkup, /media-image-original/);
 assert.ok(!imageMarkup.includes('Open original file'));
-console.log('Sponsor sync and compact image controls passed.');
+console.log(
+  'PASS: independent sponsor pages, persistent section deletion, Undo and compact image controls.',
+);
+const deletedTemplate = {
+  ...E.emptyLayout,
+  nodes: [{ ...E.newNode('intro', 'template'), hidden: true, deleted: true }],
+  order: ['intro'],
+};
+assert.ok(
+  !E.renderCanvas(deletedTemplate, true).includes('data-layer-id="intro"'),
+);
+assert.ok(
+  E.renderCanvas(
+    {
+      ...deletedTemplate,
+      nodes: [{ ...deletedTemplate.nodes[0], deleted: false }],
+    },
+    true,
+  ).includes('data-layer-id="intro"'),
+  'Hide remains available for editing',
+);
+assert.ok(
+  !E.validateLayout({
+    ...deletedTemplate,
+    nodes: [{ ...deletedTemplate.nodes[0], deleted: 'yes' }],
+  }),
+);
 
 const equationNode = {
   ...E.newNode('equation-test', 'equation'),
@@ -1948,4 +1996,13 @@ const snippetMedia = collectSnippetMedia({
 assert.ok(snippetMedia.has('/api/media/abcdef.png'));
 assert.ok(snippetMedia.has('/api/media/123abc.jpg'));
 
-assert.ok(!collectSnippetMedia({'layout:home':JSON.stringify({...customLayout,nodes:[{...customHtml,html:'<img src="/templates/../../private.png">'}]})}).has('/templates/../../private.png'));
+assert.ok(
+  !collectSnippetMedia({
+    'layout:home': JSON.stringify({
+      ...customLayout,
+      nodes: [
+        { ...customHtml, html: '<img src="/templates/../../private.png">' },
+      ],
+    }),
+  }).has('/templates/../../private.png'),
+);

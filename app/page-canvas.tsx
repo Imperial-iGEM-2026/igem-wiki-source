@@ -75,11 +75,7 @@ export function PageCanvas({
       node.props as {
         'data-builtin-info'?: Pick<
           Builtin,
-          | 'defaults'
-          | 'sponsorGrid'
-          | 'sponsorSlot'
-          | 'linkPath'
-          | 'syncedSponsors'
+          'defaults' | 'sponsorGrid' | 'sponsorSlot' | 'linkPath'
         >;
       }
     )['data-builtin-info'],

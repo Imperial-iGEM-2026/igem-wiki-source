@@ -135,6 +135,20 @@ export const snapSpan = (
 ) =>
   Math.max(1, Math.min(12, Math.round(start + delta / ((width + gap) / 12))));
 export function removeNodes(layout: CanvasLayout, ids: string[]): CanvasLayout {
+  const roots = ids.filter((id) => !nodeLocked(layout, id));
+  if (descendants(layout, roots).some((id) => nodeLocked(layout, id)))
+    return layout;
+  // Preserve built-in IDs so materialize cannot recreate deleted template sections.
+  // Descendants stay with the tombstone for Undo, but leave the canvas and layer list.
+  const tombstones = new Set(
+    descendants(
+      layout,
+      roots.filter((id) => {
+        const node = layout.nodes.find((n) => n.id === id);
+        return node?.kind === 'template' || isSponsorLayer(id);
+      }),
+    ),
+  );
   const removed = new Set(
     layout.nodes
       .filter(
@@ -156,11 +170,7 @@ export function removeNodes(layout: CanvasLayout, ids: string[]): CanvasLayout {
     nodes: layout.nodes
       .filter((n) => !removed.has(n.id))
       .map((n) =>
-        ids.includes(n.id) &&
-        !n.locked &&
-        (n.kind === 'template' || isSponsorLayer(n.id))
-          ? { ...n, hidden: true }
-          : n,
+        tombstones.has(n.id) ? { ...n, hidden: true, deleted: true } : n,
       ),
   };
 }

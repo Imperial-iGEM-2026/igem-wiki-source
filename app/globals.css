@@ -2480,14 +2480,7 @@ footer
   outline: 2px solid #263e36;
   outline-offset: 3px;
 }
-.sponsor-sync-note {
-  grid-column: 1 / -1;
-  font: 13px/1.5 sans-serif;
-  color: #52645e;
-  padding: 10px;
-  background: #f1f5f3;
-  border-radius: 6px;
-}
+
 @media (hover: none) {
   .media-image-original {
     opacity: 1;

@@ -28,7 +28,6 @@ export type Builtin = {
   defaults?: Partial<CanvasNode>;
   linkPath?: string;
   sponsorGrid?: boolean;
-  syncedSponsors?: CanvasNode[];
   sponsorSlot?: 'grid' | 'fixed';
   id: string;
   label: string;
@@ -257,7 +256,7 @@ export function CanvasSurface({
       (!editorViewport || viewport > 760),
     );
     const builtin = builtinMap.get(id);
-    if (n.hidden && !editing) return null;
+    if (n.deleted || (n.hidden && !editing)) return null;
     const fillSlots = (element: ReactElement): ReactNode => {
       const props = element.props as Record<string, unknown> & {
         children?: ReactNode;
@@ -266,37 +265,6 @@ export function CanvasSurface({
       if (typeof slot === 'string')
         return nodeMap.has(slot) ? renderNode(slot) : null;
       if (props['data-sponsor-grid']) {
-        if (builtin?.syncedSponsors)
-          return cloneElement(
-            element as ReactElement<{ children: ReactNode }>,
-            {
-              children: (
-                <>
-                  {editing && (
-                    <p className="sponsor-sync-note">
-                      Logos sync from the homepage. Edit the homepage to update
-                      this list.
-                    </p>
-                  )}
-                  {builtin.syncedSponsors.map((logo) => (
-                    <a
-                      key={logo.id}
-                      className="sponsor-logo"
-                      href={logo.linkTo || undefined}
-                      target={logo.linkTo ? '_blank' : undefined}
-                      rel="noopener noreferrer"
-                    >
-                      <img
-                        src={logo.src}
-                        alt={logo.alt || logo.name || 'Sponsor'}
-                        loading="lazy"
-                      />
-                    </a>
-                  ))}
-                </>
-              ),
-            },
-          );
         const gridIds = allKids.filter(
           (child) =>
             nodeMap.get(child)?.kind === 'image' &&
