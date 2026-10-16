@@ -10,7 +10,7 @@ export function startPageIndex(root) {
     ? root.closest('.studio-stage')
     : null;
   const generated = new Map();
-  let sidebar, host, panel, list, toggle, title, grid;
+  let sidebar, host, panel, list, toggle, title, grid, tip;
   let entries = [],
     active = -1,
     frame = 0,
@@ -41,7 +41,7 @@ export function startPageIndex(root) {
       value ? 'Show page index' : 'Hide page index',
     );
     toggle.setAttribute('aria-expanded', String(!value));
-    list.hidden = value;
+    hideTip();
     title.hidden = value;
     grid?.setAttribute('data-page-index-collapsed', String(value));
     if (anchor && before !== undefined) {
@@ -87,11 +87,42 @@ export function startPageIndex(root) {
     panel.addEventListener('pointerdown', (e) => e.stopPropagation());
     panel.addEventListener('keydown', (e) => e.stopPropagation());
     head.append(title, toggle);
-    panel.append(head, list);
+    tip = document.createElement('div');
+    tip.className = 'wiki-page-index-tip';
+    tip.hidden = true;
+    tip.setAttribute('aria-hidden', 'true');
+    list.addEventListener('pointerleave', hideTip);
+    list.addEventListener('scroll', hideTip, { passive: true });
+    panel.append(head, list, tip);
     host.append(panel);
     setCollapsed(collapsed);
   }
+  function hideTip() {
+    if (tip) tip.hidden = true;
+    entries.forEach(({ link }) => link.removeAttribute('data-proximity'));
+  }
+  function showTip(index) {
+    if (!collapsed || !entries[index]) return;
+    const { heading, link } = entries[index];
+    const label = document.createElement('strong');
+    label.textContent = sectionIndexLabel(heading);
+    const excerpt = document.createElement('span');
+    excerpt.textContent = (heading.closest('.canvas-section,section')?.querySelector('p')?.textContent || '')
+      .trim().replace(/\s+/g, ' ').slice(0, 180);
+    tip.replaceChildren(label, excerpt);
+    tip.hidden = false;
+    const box = link.getBoundingClientRect(), bounds = panel.getBoundingClientRect();
+    const scale = bounds.width / panel.offsetWidth || 1;
+    tip.style.top = (mobile ? panel.offsetHeight + 8 :
+      Math.max(0, Math.min((box.top - bounds.top) / scale,
+        ((stage?.getBoundingClientRect().bottom || innerHeight) - bounds.top) / scale - tip.offsetHeight - 12))) + 'px';
+    entries.forEach(({ link }, i) => {
+      if (Math.abs(i - index) <= 3) link.dataset.proximity = String(Math.abs(i - index));
+      else link.removeAttribute('data-proximity');
+    });
+  }
   function rebuild() {
+    hideTip();
     mount();
     if (!host) return;
     const focused = list.querySelector('a:focus')?.getAttribute('href');
@@ -122,7 +153,16 @@ export function startPageIndex(root) {
       number.setAttribute('aria-hidden', 'true');
       number.textContent = String(i + 1).padStart(2, '0');
       const label = document.createElement('span');
+      label.className = 'wiki-page-index-label';
       label.textContent = sectionIndexLabel(heading);
+      link.setAttribute('aria-label', label.textContent);
+      const marker = document.createElement('span');
+      marker.className = 'wiki-page-index-marker';
+      marker.setAttribute('aria-hidden', 'true');
+      link.append(marker);
+      link.addEventListener('pointerenter', () => showTip(i));
+      link.addEventListener('focus', () => showTip(i));
+      link.addEventListener('blur', hideTip);
       link.append(number, label);
       link.addEventListener('click', (event) => {
         if (
@@ -134,6 +174,7 @@ export function startPageIndex(root) {
         )
           return;
         event.preventDefault();
+        hideTip();
         const top = heading.getBoundingClientRect().top;
         const offset = topOffset();
         const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -186,7 +227,7 @@ export function startPageIndex(root) {
     active = index;
     const link = entries[active]?.link;
     link?.setAttribute('aria-current', 'location');
-    if (link && !collapsed && !panel.matches(':hover,:focus-within')) {
+    if (link && !panel.matches(':hover,:focus-within')) {
       const box = link.getBoundingClientRect(),
         bounds = list.getBoundingClientRect();
       if (box.top < bounds.top || box.bottom > bounds.bottom)
@@ -295,7 +336,7 @@ export function startPageIndex(root) {
       'data-index-hidden',
     ],
   });
-  const onScroll = () => schedule();
+  const onScroll = () => { hideTip(); schedule(); };
   const onLoad = () => schedule(true);
   window.addEventListener('scroll', onScroll, { passive: true });
   stage?.addEventListener('scroll', onScroll, { passive: true });

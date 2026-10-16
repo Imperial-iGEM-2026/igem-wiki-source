@@ -117,7 +117,7 @@ try {
     0,
   );
   assert.equal(await nav.getByRole('link', { name: 'Our design' }).count(), 1);
-  assert.equal(await page.locator('.notebook-section-nav').count(), 1);
+  assert.equal(await page.locator('.notebook-section-nav').count(), 0);
   await nav.getByRole('link', { name: 'What we learned', exact: true }).click();
   await page.waitForFunction(() =>
     document
@@ -127,8 +127,10 @@ try {
   await nav
     .getByRole('button', { name: 'Hide page index', exact: true })
     .click();
-  assert.equal(await nav.locator('ol').isVisible(), false);
-  assert.equal(await page.locator('.notebook-section-nav').isVisible(), true);
+  assert.equal(await nav.locator('ol').isVisible(), true);
+  assert.equal(await nav.locator('.wiki-page-index-label').first().isVisible(), false);
+  await nav.getByRole('link', { name: 'Our design', exact: true }).hover();
+  assert.equal(await nav.locator('.wiki-page-index-tip').isVisible(), true);
   await page.reload();
   await nav
     .getByRole('button', { name: 'Show page index', exact: true })
@@ -151,7 +153,7 @@ try {
   await nav
     .getByRole('button', { name: 'Hide page index', exact: true })
     .click();
-  assert.equal(await nav.locator('ol').isVisible(), false);
+  assert.equal(await nav.locator('ol').isVisible(), true);
   assert.equal(await page.locator('.studio-selected').count(), 0);
   await nav
     .getByRole('button', { name: 'Show page index', exact: true })
@@ -164,7 +166,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'PASS page index: labels, hidden headings, anchor navigation, right navigator retained, collapse persistence, mobile and editor interactions.',
+    'PASS page index: labels, hidden headings, anchor navigation, merged marker rail, collapse persistence, mobile and editor interactions.',
   );
 } finally {
   await browser.close();

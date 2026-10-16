@@ -3304,8 +3304,8 @@ export function StudioEditor({
                       <span>{pageIndex.length}</span>
                     </div>
                     <p className="studio-help">
-                      Headings used by the page indexes. The left index omits
-                      the page title; the right marker rail includes it. Select
+                      Headings used by the page navigation. Content pages show
+                      a left index that folds into compact markers. Select
                       a section to rename, relabel or hide its entry.
                     </p>
                     {pageIndex.length ? (
@@ -3345,8 +3345,7 @@ export function StudioEditor({
                     </button>
                     {templateFor(ctx.data)?.id !== 'regelerate' && (
                       <p className="studio-help">
-                        The right-side marker rail is shown on reGELerate ·
-                        Notebook pages.
+                        Hide the left index to use compact section markers.
                       </p>
                     )}
                   </section>

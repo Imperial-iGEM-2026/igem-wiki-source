@@ -28,7 +28,8 @@ export function startSectionNavigator(root, { onInteraction = () => {} } = {}) {
     !['regelerate', 'notebook-purple', 'notebook-white'].includes(
       root.dataset.templateTheme,
     ) ||
-    root.dataset.editorViewport
+    root.dataset.editorViewport ||
+    root.querySelector('[data-page-index-host]')
   )
     return () => {};
   const main = root.querySelector('main');
