@@ -135,13 +135,23 @@
   font-size: 12px;
   opacity: 0.65;
 }
-[data-template-theme] [data-page-index-collapsed='false'] {
+[data-template-theme] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed='false'] {
   grid-template-columns: 220px minmax(0, 1fr);
   column-gap: 40px;
 }
-[data-template-theme] [data-page-index-collapsed='true'] {
+[data-template-theme] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed='true'] {
   grid-template-columns: 58px minmax(0, 1fr);
   column-gap: 24px;
+}
+/* Template prose has a reading-width cap even when its grid column grows.
+   Release that wrapper cap only while folded; authored element sizes remain. */
+[data-template-theme] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed='true'] > article {
+  min-width: 0;
+}
+[data-template-theme] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed='true'] > article > .wiki-prose {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
 }
 [data-template-theme]
   [data-page-index-sidebar][data-index-mobile='true']
@@ -155,22 +165,22 @@
   max-height: 260px;
 }
 @media (max-width: 780px) {
-  [data-template-theme] [data-page-index-collapsed] {
+  [data-template-theme] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed] {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
   [data-template-theme]
-    [data-layer-id='custom-content'][data-page-index-collapsed]
+    [data-layer-id='custom-content']:is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed]
     > .canvas-children {
     grid-column: 1;
   }
 }
-[data-mobile-preview] [data-page-index-collapsed] {
+[data-mobile-preview] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed] {
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 [data-mobile-preview]
-  [data-layer-id='custom-content'][data-page-index-collapsed]
+  [data-layer-id='custom-content']:is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed]
   > .canvas-children {
   grid-column: 1;
 }
@@ -181,12 +191,12 @@
 }
 
 [data-template-theme]
-  [data-page-index-collapsed]:has([data-index-mobile='true']) {
+  :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed]:has([data-index-mobile='true']) {
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 [data-template-theme]
-  [data-layer-id='custom-content'][data-page-index-collapsed]:has(
+  [data-layer-id='custom-content']:is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed]:has(
     [data-index-mobile='true']
   )
   > .canvas-children {
@@ -245,4 +255,12 @@
 [data-template-theme] [data-index-mobile='true'] .wiki-page-index-tip { left: 0; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   [data-template-theme] .wiki-page-index-marker { transition: none !important; }
+}
+
+/* Turning the sidebar off in page settings still removes its entire column. */
+[data-template-theme] .page-canvas[data-sidebar='false'] :is(.wiki-content, [data-layer-id='custom-content'])[data-page-index-collapsed] {
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-template-theme] .page-canvas[data-sidebar='false'] [data-layer-id='custom-content'][data-page-index-collapsed] > .canvas-children {
+  grid-column: 1;
 }

@@ -24,6 +24,7 @@ import {newNode,CUSTOM_CONTENT} from '/app/canvas-schema';
 import '/app/globals.css';
 const params=new URLSearchParams(location.search);
 const theme=params.get('theme')||'notebook-white';
+const page=params.get('page')||'reading-demo';
 const pages=JSON.stringify([{slug:'reading-demo',title:'A material that can mend itself'}]);
 const values={...templateDefaults(theme),...customDefaults(pages),[CUSTOM_PAGES]:pages};
 const layout=JSON.parse(values['layout:reading-demo']);
@@ -42,7 +43,7 @@ titles.forEach((title,i)=>{const id='chapter-'+i;layout.nodes.push({...newNode(i
 layout.nodes.push({...newNode('hidden-heading','text','Hidden draft'),parentId:CUSTOM_CONTENT,indexHidden:true});layout.order.push('hidden-heading');
 values['layout:reading-demo']=JSON.stringify(layout);
 const initial=Object.fromEntries(Object.entries(values).map(([id,value])=>[id,{value,version:1,author:'Test'}]));
-function Test(){const[data,setData]=useState(initial);return <CanvasContext.Provider value={{data,editing:params.has('editor'),busy:false,locked:false,dirty:()=>{},save:async(id,value,version)=>{setData(prev=>({...prev,[id]:{value,version:version+1,author:'Test'}}));return true;}}}><ImportedPage data={data} page="reading-demo" field={id=>data[id]?.value||''}/></CanvasContext.Provider>}
+function Test(){const[data,setData]=useState(initial);return <CanvasContext.Provider value={{data,editing:params.has('editor'),busy:false,locked:false,dirty:()=>{},save:async(id,value,version)=>{setData(prev=>({...prev,[id]:{value,version:version+1,author:'Test'}}));return true;}}}><ImportedPage data={data} page={page} field={id=>data[id]?.value||''}/></CanvasContext.Provider>}
 createRoot(document.getElementById('root')).render(<Test/>);
 `,
 );
@@ -164,6 +165,29 @@ try {
       .querySelector('.wiki-page-index a[aria-current]')
       ?.textContent.includes('References'),
   );
+  // Actual template prose must use the space released by the sidebar, not
+  // just move left with the old 710/780 px reading-width cap.
+  for (const theme of ['regelerate', 'notebook-white', 'notebook-purple', 'swiss']) {
+    for (const editor of [false, true]) {
+      await page.goto(url + '?page=description&theme=' + theme + (editor ? '&editor=1' : ''));
+      const show = nav.getByRole('button', { name: 'Show page index', exact: true });
+      const hide = nav.getByRole('button', { name: 'Hide page index', exact: true });
+      await nav.waitFor();
+      if (await show.isVisible()) await show.click();
+      const prose = page.locator('.wiki-content > article');
+      const expandedWidth = await prose.evaluate(el => el.getBoundingClientRect().width);
+      await hide.click();
+      const widths = await prose.evaluate(el => ({
+        prose: (el.querySelector('.wiki-prose') || el).getBoundingClientRect().width,
+        column: el.getBoundingClientRect().width,
+      }));
+      assert.ok(widths.prose > expandedWidth + 30, theme + ': collapsed content expands');
+      assert.ok(Math.abs(widths.prose - widths.column) < 2, theme + ': prose fills the column');
+      await show.click();
+      assert.ok(Math.abs(await prose.evaluate(el => el.getBoundingClientRect().width) - expandedWidth) < 2,
+        theme + ': expanding index restores original reading width');
+    }
+  }
   assert.deepEqual(errors, []);
   console.log(
     'PASS page index: labels, hidden headings, anchor navigation, merged marker rail, collapse persistence, mobile and editor interactions.',
