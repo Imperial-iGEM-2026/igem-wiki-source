@@ -2192,7 +2192,7 @@ export function StudioEditor({
                   className="studio-add-section"
                   disabled={disabled}
                   onClick={() => addSection()}
-                  title="Adds a titled section after the selected one; its heading appears in the right-side page index"
+                  title="Adds a titled section after the selected one; its heading appears in the page indexes"
                 >
                   <Plus size={16} />
                   <span>Add section</span>
@@ -3304,9 +3304,9 @@ export function StudioEditor({
                       <span>{pageIndex.length}</span>
                     </div>
                     <p className="studio-help">
-                      The markers on the right edge of the published page. Every
-                      visible heading is listed; select a section to rename,
-                      relabel or hide its entry.
+                      Headings used by the page indexes. The left index omits
+                      the page title; the right marker rail includes it. Select
+                      a section to rename, relabel or hide its entry.
                     </p>
                     {pageIndex.length ? (
                       <ol>
@@ -3896,7 +3896,7 @@ export function StudioEditor({
                               return listed.length
                                 ? 'Listed as: ' + listed.join(' · ')
                                 : node.indexHidden
-                                  ? 'Not listed in the right-side index.'
+                                  ? 'Not listed in the page indexes.'
                                   : 'Not listed yet — add a heading or choose Custom label.';
                             })()}
                           </p>

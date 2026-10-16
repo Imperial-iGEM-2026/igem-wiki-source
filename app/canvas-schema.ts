@@ -54,7 +54,7 @@ export type CanvasNode = {
   linkTo?: string;
   links?: Record<string, string>;
   linkLabel?: string;
-  // Right-side page index: a label adds this layer; indexHidden drops its headings.
+  // Page section indexes: a label adds this layer; indexHidden drops its headings.
   indexLabel?: string;
   indexHidden?: boolean;
   // 3 renders the heading as a subsection (h3); default is a section (h2).

@@ -10,6 +10,7 @@ export type DesignTarget = {
 
 /** Select exact text fragments using structure shared by editor and publication. */
 export function pickDesignTarget(clicked: Element): DesignTarget | null {
+  if (clicked.closest('[data-page-index-host]')) return null;
   const layer = clicked.closest('[data-layer-id]');
   const layerId = layer?.getAttribute('data-layer-id');
   if (!layer || !layerId || !/^[a-zA-Z0-9-]{1,90}$/.test(layerId)) return null;

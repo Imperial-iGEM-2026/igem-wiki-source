@@ -783,7 +783,8 @@
 }
 
 @media (max-width: 1000px) {
-  .page-canvas > .canvas-section.node-styled {
+  .page-canvas > .canvas-section.node-styled,
+  .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-tablet-span, 12) !important;
   }
 }
@@ -791,12 +792,14 @@
   .page-canvas:has(> .node-styled) {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-  .page-canvas > .canvas-section.node-styled {
+  .page-canvas > .canvas-section.node-styled,
+  .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-mobile-span, 12) !important;
   }
 }
 @container studioPage (max-width:1000px) {
-  .studio-artboard .page-canvas > .canvas-section.node-styled {
+  .studio-artboard .page-canvas > .canvas-section.node-styled,
+  .studio-artboard .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-tablet-span, 12) !important;
   }
 }
@@ -804,7 +807,8 @@
   .studio-artboard .page-canvas:has(> .node-styled) {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-  .studio-artboard .page-canvas > .canvas-section.node-styled {
+  .studio-artboard .page-canvas > .canvas-section.node-styled,
+  .studio-artboard .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-mobile-span, 12) !important;
   }
 }

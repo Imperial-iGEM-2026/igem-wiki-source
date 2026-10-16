@@ -20,7 +20,7 @@ export type RenderContext = {
   menu?: MenuGroup[];
   page?: string;
   title?: string;
-  /** The menu group of this page; rebuilds sidebar and heading eyebrow. */
+  /** The menu group of this page; rebuilds the heading eyebrow. */
   group?: MenuGroup;
   rebuild?: boolean;
   edited?: (fieldId: string) => boolean;
@@ -61,31 +61,6 @@ function customHeading(heading: TemplateAst, context: RenderContext) {
     return { ...node, c: node.c.map(fill) };
   };
   return fill(heading);
-}
-// Sidebar of a content page: the page's menu group, current page marked.
-function groupSidebar(aside: AstNode, context: RenderContext): AstNode {
-  const label = aside.c.find((c) => isNode(c) && c.t === 'p');
-  const anchor = aside.c.find((c) => isNode(c) && c.t === 'a');
-  if (!context.group) return { ...aside, c: [] };
-  const { 'aria-current': _current, ...linkAttrs } =
-    (anchor && isNode(anchor) && anchor.a) || {};
-  return {
-    ...aside,
-    c: [
-      ...(label && isNode(label)
-        ? [{ ...label, c: [context.group.label] }]
-        : []),
-      ...context.group.pages.map((page) => ({
-        t: 'a',
-        a: {
-          ...linkAttrs,
-          href: '/' + page.slug,
-          ...(page.slug === context.page ? { 'aria-current': 'page' } : {}),
-        },
-        c: [page.title],
-      })),
-    ],
-  };
 }
 // "GROUP / PAGE" eyebrow, unless the team edited the eyebrow text.
 function groupHeading(heading: AstNode, context: RenderContext): AstNode {
@@ -165,8 +140,18 @@ export function transformNode(
 ): AstNode | null {
   if (context.menu && node.t === 'nav' && hasClass(node, 'wiki-nav'))
     node = projectMenu(node, context.menu);
-  if (context.rebuild && node.t === 'aside' && hasClass(node, 'wiki-sidebar'))
-    node = groupSidebar(node, context);
+  if (node.t === 'aside' && hasClass(node, 'wiki-sidebar'))
+    return {
+      ...node,
+      a: {
+        ...node.a,
+        'data-page-index-sidebar': '',
+        'aria-label': 'Page sections',
+      },
+      // A dedicated host keeps the generated index outside React's child list.
+      // Existing page/menu content remains in saved data; this is presentation only.
+      c: [{ t: 'div', a: { 'data-page-index-host': '' }, c: [] }],
+    };
   if (
     context.rebuild &&
     context.group &&

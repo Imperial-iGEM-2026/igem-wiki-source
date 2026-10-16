@@ -5,6 +5,7 @@
 @import './studio-responsive.css';
 @import './studio-polish.css';
 @import './template-library.css';
+@import './page-index.css';
 @import './editor-loading.css';
 @theme inline {
   --color-background: var(--background);

@@ -373,7 +373,7 @@ export function CanvasSurface({
                     .closest('[data-layer-id]')
                     ?.getAttribute('data-layer-id') === id &&
                   !(e.target as HTMLElement).closest(
-                    'button,input,textarea,.editable,[data-citation-link],.modern-pdf-reader',
+                    'button,input,textarea,.editable,[data-citation-link],.modern-pdf-reader,[data-page-index-host]',
                   )
                 )
                   onFreeMove?.(e, id);
@@ -389,7 +389,7 @@ export function CanvasSurface({
                     .closest('[data-layer-id]')
                     ?.getAttribute('data-layer-id') !== id ||
                   element.closest(
-                    '.studio-section-handle,.studio-resize,input,textarea',
+                    '.studio-section-handle,.studio-resize,input,textarea,[data-page-index-host]',
                   )
                 )
                   return;
@@ -405,7 +405,11 @@ export function CanvasSurface({
           editing
             ? (e) => {
                 const target = e.target as HTMLElement;
-                if (target.closest('[data-citation-link],.modern-pdf-reader'))
+                if (
+                  target.closest(
+                    '[data-citation-link],.modern-pdf-reader,[data-page-index-host]',
+                  )
+                )
                   return;
                 if (
                   target.closest(

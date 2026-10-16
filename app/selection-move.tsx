@@ -59,7 +59,7 @@ export function useCanvasObjectMove(options: MoveOptions) {
       const clicked = e.target as Element;
       if (
         clicked.closest(
-          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor',
+          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor,[data-page-index-host]',
         )
       )
         return;

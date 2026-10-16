@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { generateKeyPair, SignJWT } from 'jose';
 import { createAppServer } from '../selfhost-dist/server/app.mjs';
+import { LAYOUT_WRITE_PROTOCOL } from '../selfhost-dist/server/shared.mjs';
 const keys = await generateKeyPair('RS256');
 const environment = {
   CF_ACCESS_TEAM_DOMAIN: 'https://example.cloudflareaccess.com',
@@ -47,6 +48,7 @@ const req = (url, body, project) =>
       origin: environment.CF_ACCESS_ORIGIN,
       'cf-access-jwt-assertion': jwt,
       'content-type': 'application/json',
+      'X-Prion-Layout-Protocol': LAYOUT_WRITE_PROTOCOL,
       ...(project ? { 'X-Prion-Project': project } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -83,7 +85,7 @@ try {
   );
   const list = await (await req('/api/projects')).json();
   assert.equal(list.projects.length, 0);
-  assert.equal(list.templates.length, 4);
+  assert.equal(list.templates.length, 5);
   assert.equal(list.archivedProjects[0].id, 'main');
   assert.equal((await req('/api/content', null, 'main')).status, 404);
   assert.equal(
@@ -177,7 +179,8 @@ try {
         {
           id: 'layout:team-journal',
           value: JSON.stringify(linked),
-          version: 1,
+          version: blankData.rows.find((r) => r.id === 'layout:team-journal')
+            .version,
         },
         ids.blank,
       )
@@ -235,7 +238,8 @@ try {
               },
             ],
           }),
-          version: 1,
+          version:
+            blankData.rows.find((r) => r.id === 'site:header')?.version ?? 0,
         },
         ids.blank,
       )
@@ -364,6 +368,7 @@ try {
         headers: {
           origin: environment.CF_ACCESS_ORIGIN,
           'content-type': 'application/json',
+          'X-Prion-Layout-Protocol': LAYOUT_WRITE_PROTOCOL,
         },
         body: JSON.stringify(deletion),
       })
@@ -378,6 +383,7 @@ try {
           origin: 'https://evil.example',
           'cf-access-jwt-assertion': jwt,
           'content-type': 'application/json',
+          'X-Prion-Layout-Protocol': LAYOUT_WRITE_PROTOCOL,
         },
         body: JSON.stringify(deletion),
       })

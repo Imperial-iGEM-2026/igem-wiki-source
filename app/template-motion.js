@@ -1,9 +1,10 @@
 import { createMotionLoop } from './motion-loop';
 import { startSectionNavigator } from './section-navigator';
+import { startPageIndex } from './page-index';
 import { startPurpleInteractions } from './purple-interactions';
 // Adapted from the two user-supplied websites; no network or editor access.
 export function startTemplateMotion(root) {
-const loop=createMotionLoop(root),cleanups=[startPurpleInteractions(root),startSectionNavigator(root,{onInteraction:value=>loop.setInteracting(value)})],observers=[];
+const loop=createMotionLoop(root),cleanups=[startPurpleInteractions(root),startSectionNavigator(root,{onInteraction:value=>loop.setInteracting(value)}),startPageIndex(root)],observers=[];
 const listenTo=(target,type,fn)=>{target?.addEventListener(type,fn);cleanups.push(()=>target?.removeEventListener(type,fn))};const listen=(type,fn)=>listenTo(root,type,fn);
 const requestAnimationFrame=fn=>loop.request(fn);
 const IntersectionObserver=class extends window.IntersectionObserver {constructor(...args){super(...args);observers.push(this)}};
