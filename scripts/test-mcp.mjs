@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, stat } from 'node:fs/promises';
+import { mkdtemp, stat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { generateKeyPair, SignJWT } from 'jose';
 import { createAppServer } from '../selfhost-dist/server/app.mjs';
@@ -292,6 +292,12 @@ try {
   assert.equal(note.status, 202);
   const { tools } = await rpc(key, 'tools/list', {});
   for (const name of [
+    'upload_media',
+    'start_media_upload',
+    'upload_media_chunk',
+    'get_media_upload',
+    'cancel_media_upload',
+    'get_media_upload_url',
     'list_pages',
     'get_page',
     'update_text',
@@ -666,6 +672,57 @@ try {
     /limited to one page/,
   );
 
+  // Media is received through MCP, uses normal media URLs, and can be inserted.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXs8AAAAASUVORK5CYII=', 'base64');
+  const uploaded = await call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: png.toString('base64') });
+  assert.equal(uploaded.complete, true);
+  assert.equal(uploaded.kind, 'image');
+  assert.match(uploaded.url, /^\/api\/media\/[a-f0-9-]+\.png$/);
+  assert.deepEqual(await readFile(path.join(dataDir, 'media', uploaded.url.split('/').pop())), png);
+  const imageSection = await call(scopedKey, 'add_section', { page: 'home', kind: 'image', heading: 'Uploaded figure', src: uploaded.url, alt: 'A test figure' });
+  assert.equal((await call(scopedKey, 'get_page', { page: 'home' })).sections.find(n=>n.id===imageSection.id).src, uploaded.url);
+  await rejects(call(scopedKey, 'upload_media', { page: other, name: 'figure.png', base64: png.toString('base64') }), /can only edit/);
+  await rejects(call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: Buffer.from('This is not an image file').toString('base64') }), /contents do not match/);
+  await rejects(call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: 'not base64' }), /base64/);
+  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: '../figure.png', size: 100 }), /filename/);
+  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: 'script.html', size: 100 }), /Unsupported/);
+  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: 'huge.pdf', size: 26*1024*1024 }), /25 MiB/);
+  await rejects(call(scopedKey, 'get_media_upload_url', { page: 'home', name: 'figure.png', size: png.length }), /not configured/);
+  const bytes = Buffer.alloc(700000, 65); Buffer.from('%PDF-1.7\n').copy(bytes);
+  const transfer = await call(scopedKey, 'start_media_upload', { page: 'home', name: 'notebook.pdf', size: bytes.length });
+  const first = bytes.subarray(0, transfer.chunkBytes).toString('base64');
+  const args = { page: 'home', uploadId: transfer.uploadId, offset: 0, base64: first };
+  const part = await call(scopedKey, 'upload_media_chunk', args);
+  assert.equal(part.complete, false);
+  assert.equal(part.nextOffset, transfer.chunkBytes);
+  assert.deepEqual(await call(scopedKey, 'upload_media_chunk', args), part);
+  assert.equal((await call(scopedKey, 'get_media_upload', { page: 'home', uploadId: transfer.uploadId })).nextOffset, transfer.chunkBytes);
+  await rejects(call(key, 'get_media_upload', { page: 'home', uploadId: transfer.uploadId }), /not found/);
+  await rejects(call(scopedKey, 'upload_media_chunk', { ...args, offset: transfer.chunkBytes + 1, base64: 'QUFBQQ==' }), /out of order/);
+  const last = { ...args, offset: transfer.chunkBytes, base64: bytes.subarray(transfer.chunkBytes).toString('base64') };
+  const complete = await call(scopedKey, 'upload_media_chunk', last);
+  assert.equal(complete.kind, 'pdf');
+  assert.equal(complete.complete, true);
+  assert.deepEqual(await call(scopedKey, 'upload_media_chunk', last), complete);
+  assert.deepEqual(await readFile(path.join(dataDir, 'media', complete.url.split('/').pop())), bytes);
+  await rejects(call(scopedKey, 'cancel_media_upload', { page: 'home', uploadId: transfer.uploadId }), /complete/);
+  const unfinished = await call(scopedKey, 'start_media_upload', { page: 'home', name: 'unfinished.pdf', size: 100 });
+  await call(scopedKey, 'upload_media_chunk', { page: 'home', uploadId: unfinished.uploadId, offset: 0, base64: bytes.subarray(0,32).toString('base64') });
+  await call(scopedKey, 'cancel_media_upload', { page: 'home', uploadId: unfinished.uploadId });
+  assert.equal((await readdir(path.join(dataDir, 'mcp-uploads'))).length, 0);
+  await rejects(call(scopedKey, 'get_media_upload', { page: 'home', uploadId: unfinished.uploadId }), /not found/);
+  // Batch calls are awaited in order, rather than serializing unresolved Promises.
+  const batchResponse = await fetch(origin + '/mcp?key=' + scopedKey, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([
+      {jsonrpc:'2.0',id:10001,method:'tools/call',params:{name:'upload_media',arguments:{page:'home',name:'batch.png',base64:png.toString('base64')}}},
+      {jsonrpc:'2.0',id:10002,method:'ping'},
+    ]),
+  });
+  const batch = await batchResponse.json();
+  assert.equal(JSON.parse(batch[0].result.content[0].text).complete, true);
+  assert.equal(batch[1].id, 10002);
+
   // Several AIs at once: every write is atomic and version-checked, so
   // parallel edits from two links all land and the page stays valid.
   const second = await (
@@ -938,16 +995,18 @@ try {
   );
   await call(key, 'delete_page', { slug: 'many-sections' });
 
+  const revokedUpload = await call(key, 'start_media_upload', {page:'home',name:'revoked.png',size:100});
   await api(
     '/api/mcp-links',
     { action: 'revoke', id: created.link.id },
     project,
   );
   assert.equal((await rpc(key, 'ping', {}, true)).status, 401);
+  assert.equal((await rpc(key, 'tools/call', {name:'upload_media_chunk',arguments:{page:'home',uploadId:revokedUpload.uploadId,offset:0,base64:png.toString('base64')}}, true)).status,401);
   assert.equal((await rpc(scopedKey, 'ping', {}, true)).status, 200);
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }
 console.log(
-  'PASS: MCP links (create/list/revoke, hashed secrets, page scope), protocol handshake, all page tools, validation errors, page create/delete with link cleanup.',
+  'PASS: MCP links (create/list/revoke, hashed secrets, page scope), protocol handshake, all page tools, media uploads and insertion, invalid bytes, chunk retries/cancellation/scope, awaited batch calls, validation errors, page create/delete with link cleanup.',
 );

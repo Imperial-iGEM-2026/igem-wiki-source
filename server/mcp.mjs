@@ -12,6 +12,7 @@ import {
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { allowedPageField } from './ai-page.mjs';
+import { createMcpMedia } from './mcp-media.mjs';
 import {
   cssError,
   emptyLayout,
@@ -150,6 +151,7 @@ Rules:
 - Edits save immediately and appear live to teammates, who may be editing too. Section edits only change the properties you send. update_text and set_page_css replace whole values: pass ifVersion from get_page.
 - The header menu is edited with move_page_in_menu or set_menu. New pages are not in the menu until you place them.
 - Keep scientific content accurate. Never invent results, data, names or citations; if information is missing, write a clear placeholder such as "[TODO: add growth curve data]" and say so in your reply.
+- Upload media before inserting it: upload_media accepts real file bytes as base64 up to 512 KiB. For larger files use start_media_upload, then upload_media_chunk with byte offsets (each chunk up to 512 KiB); the final chunk returns a permanent /api/media/ URL. get_media_upload resumes interrupted transfers; cancel_media_upload removes only unfinished uploads. If your client can send a binary HTTP POST, get_media_upload_url avoids base64 and returns a short-lived direct destination. Never invent bytes or treat a path on your computer as a server path. If your client cannot read an attachment, ask the user to attach it in a way your client can access or use the editor upload. Use the returned permanent URL as src in add_section/update_section; uploads alone do not insert or replace content.
 - Use get_preview_url to look at a page if you have a browser tool.`;
 
 export function createMcp({
@@ -167,8 +169,12 @@ export function createMcp({
   clientDir,
   file,
   mediaReadURL,
+  mediaUploadURL,
+  mediaUploadOrigin,
+  environment,
   dataDir,
 }) {
+  const mediaUploads = createMcpMedia({ db, dataDir, environment, fail });
   db.exec(
     'CREATE TABLE IF NOT EXISTS mcp_links (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, page TEXT, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, last_used_at INTEGER)',
   );
@@ -605,7 +611,46 @@ export function createMcp({
         );
     };
 
+    const mediaPage = { type: 'string', description: 'Page slug within this AI link’s scope' };
+    const uploadId = { type: 'string', description: 'Upload id returned by start_media_upload' };
+    const base64 = { type: 'string', description: 'Actual file bytes encoded as standard base64, no data URL prefix; maximum 512 KiB decoded' };
     const tools = {
+      upload_media: {
+        description: 'Upload a small image, PDF or other supported file (up to 512 KiB) directly through MCP. Returns a permanent media URL for add_section/update_section; does not alter page content. For larger files use chunk uploads or get_media_upload_url.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, name: { type: 'string', description: 'Filename including extension' }, base64 }, required: ['page', 'name', 'base64'] },
+        run(args) { return mediaUploads.upload(link, page(args.page), args); },
+      },
+      start_media_upload: {
+        description: 'Start a resumable upload of an image or file. Supply filename and exact byte size. Returns uploadId, nextOffset and chunkBytes. Send chunks in order with upload_media_chunk. Sessions last 24 hours and are private to this link and page. Supports the same formats and limits as the editor.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, name: { type: 'string' }, size: { type: 'integer', minimum: 16, description: 'Exact file size in bytes, not base64 length' } }, required: ['page', 'name', 'size'] },
+        run(args) { return mediaUploads.start(link, page(args.page), args); },
+      },
+      upload_media_chunk: {
+        description: 'Append up to 512 KiB of base64-encoded file bytes at nextOffset. First chunk must contain at least 16 bytes. Repeating the same bytes at the same offset is safe. Automatically completes when all declared bytes arrive and returns the permanent media URL.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, uploadId, offset: { type: 'integer', minimum: 0 }, base64 }, required: ['page', 'uploadId', 'offset', 'base64'] },
+        run(args) { return mediaUploads.append(link, page(args.page), args); },
+      },
+      get_media_upload: {
+        description: 'Check an upload’s receivedBytes, nextOffset and completion. Use after a lost response or reconnect to resume without duplicating the file.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, uploadId }, required: ['page', 'uploadId'] },
+        run(args) { return mediaUploads.status(link, page(args.page), args.uploadId); },
+      },
+      cancel_media_upload: {
+        description: 'Discard an unfinished upload and its temporary bytes. Cannot delete completed media or page content.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, uploadId }, required: ['page', 'uploadId'] },
+        run(args) { return mediaUploads.cancel(link, page(args.page), args.uploadId); },
+      },
+      get_media_upload_url: {
+        description: 'For clients with HTTP/file access: request a short-lived binary upload URL for a file on this page. POST the actual file bytes (not multipart or JSON) to that URL. The POST response contains the permanent /api/media/ URL. If direct media is unavailable, use start_media_upload instead. Never put the temporary upload URL in page content.',
+        inputSchema: { type: 'object', properties: { page: mediaPage, name: { type: 'string' }, size: { type: 'integer', minimum: 16 } }, required: ['page', 'name', 'size'] },
+        async run(args) {
+          page(args.page);
+          if (!mediaUploadURL) throw fail(409, 'Direct media is not configured. Use start_media_upload and upload_media_chunk instead.');
+          const ticket = await mediaUploadURL({ name: args.name, size: args.size }, { userId: agentId });
+          return { ...ticket, method: 'POST', headers: { 'Content-Type': 'application/octet-stream', Origin: mediaUploadOrigin },
+            body: 'Raw file bytes', note: 'This URL is a temporary secret. Use it only for the upload. Insert the permanent url from the HTTP response into the page.' };
+        },
+      },
       get_site_overview: {
         description:
           'Call this first. Returns the project name, the team’s brief for AI assistants, your task, what you may edit, the header menu (groups of pages), every page with its purpose on an iGEM wiki and whether it still has untouched template content, and the recommended workflow.',
@@ -916,7 +961,7 @@ export function createMcp({
               description: 'Frame (kind "section") id to place this inside',
             },
             subsection: { type: 'boolean' },
-            src: { type: 'string', description: 'HTTPS media URL' },
+            src: { type: 'string', description: 'HTTPS media URL or permanent /api/media/ URL returned by upload tools' },
             alt: { type: 'string' },
             caption: { type: 'string' },
             linkTo: { type: 'string' },
@@ -1303,7 +1348,7 @@ export function createMcp({
   function rpcError(id, code, message) {
     return { jsonrpc: '2.0', id: id ?? null, error: { code, message } };
   }
-  function answer(message, { tools, instructions, prompts }) {
+  async function answer(message, { tools, instructions, prompts }) {
     if (
       !message ||
       message.jsonrpc !== '2.0' ||
@@ -1326,7 +1371,7 @@ export function createMcp({
         serverInfo: {
           name: 'prion-studio',
           title: 'Prion Studio wiki',
-          version: '1.0.0',
+          version: '1.1.0',
         },
         instructions,
       });
@@ -1369,7 +1414,7 @@ export function createMcp({
       const tool = tools[params?.name];
       if (!tool) return rpcError(id, -32602, 'Unknown tool: ' + params?.name);
       try {
-        const output = tool.run(params.arguments || {});
+        const output = await tool.run(params.arguments || {});
         return rpcResult(id, {
           content: [{ type: 'text', text: JSON.stringify(output, null, 2) }],
         });
@@ -1441,15 +1486,21 @@ export function createMcp({
     } catch (error) {
       return reply(
         error.status === 413 ? 413 : 400,
-        rpcError(null, -32700, 'Parse error'),
+        rpcError(null, error.status === 413 ? -32600 : -32700, error.status === 413
+          ? 'MCP requests are limited to 1 MiB. Use upload_media_chunk with at most 512 KiB of decoded file bytes per call, or get_media_upload_url.'
+          : 'Parse error'),
       );
     }
     const current = session(link, token);
     if (Array.isArray(message)) {
-      const answers = message.map((m) => answer(m, current)).filter(Boolean);
+      const answers = [];
+      for (const m of message) {
+        const response = await answer(m, current);
+        if (response) answers.push(response);
+      }
       return answers.length ? reply(200, answers) : reply(202);
     }
-    const response = answer(message, current);
+    const response = await answer(message, current);
     return response ? reply(200, response) : reply(202);
   }
 

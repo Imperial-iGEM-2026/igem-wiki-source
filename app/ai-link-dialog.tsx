@@ -237,7 +237,7 @@ export function AiLinkDialog({
             <DialogTitle>Connect an AI</DialogTitle>
             <DialogDescription>
               Give Claude, ChatGPT or another MCP app a private link to edit
-              this wiki. Its edits appear live for everyone.
+              this wiki and upload images or files. Its edits appear live for everyone.
             </DialogDescription>
           </div>
         </header>

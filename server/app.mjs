@@ -486,6 +486,9 @@ export async function createAppServer({
     clientDir,
     file,
     mediaReadURL: media ? (key, user) => media.readURL(key, user) : null,
+    mediaUploadURL: media ? (body, user) => media.issueUpload(body, user) : null,
+    mediaUploadOrigin: config.origin,
+    environment,
     dataDir,
   });
   const changed = (req, projectId, ids) =>

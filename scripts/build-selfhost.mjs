@@ -68,6 +68,7 @@ for (const name of [
   'codex-worker.mjs',
   'live.mjs',
   'mcp.mjs',
+  'mcp-media.mjs',
 ])
   await cp(path.join(root, 'server', name), path.join(out, 'server', name));
 await cp(

@@ -118,6 +118,34 @@ const issue = async (name = 'test.png', size = png.length) =>
     body: JSON.stringify({ name, size }),
   });
 try {
+  // An AI link can authorize binary uploads without an Access login cookie.
+  const mcpProject = await (await main('/api/projects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'create',name:'Media MCP',templateId:'regelerate'})})).json();
+  const mcpLink = await (await main('/api/mcp-links', {method:'POST', headers:{'Content-Type':'application/json','X-Prion-Project':mcpProject.id}, body:JSON.stringify({name:'Media assistant',days:1,page:'home'})})).json();
+  const mediaTool = async (name, args) => {
+    const response = await request('media.example.com', relative(mcpLink.url), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})});
+    assert.equal(response.status,200);
+    const result = (await response.json()).result;
+    assert.equal(result.isError,undefined,result.content?.[0]?.text);
+    return JSON.parse(result.content[0].text);
+  };
+  const direct = await mediaTool('get_media_upload_url', {page:'home',name:'mcp.png',size:png.length});
+  assert.equal(direct.headers.Origin, environment.CF_ACCESS_ORIGIN);
+  const directResponse = await request('media.example.com', relative(direct.url), {method:direct.method,headers:direct.headers,body:png});
+  assert.equal(directResponse.status,200);
+  const directItem = await directResponse.json();
+  assert.deepEqual(await readFile(path.join(dataDir,'media',directItem.url.split('/').pop())),png);
+  // Chunk uploads are also readable via the production signed media gateway.
+  const chunked = await mediaTool('upload_media',{page:'home',name:'mcp-chunk.png',base64:png.toString('base64')});
+  const readChunked = await main(chunked.url);
+  assert.equal(readChunked.status,302);
+  assert.equal((await media(relative(readChunked.headers.get('location')))).status,200);
+  const resumed = await mediaTool('start_media_upload',{page:'home',name:'resume.png',size:png.length});
+  await mediaTool('upload_media_chunk',{page:'home',uploadId:resumed.uploadId,offset:0,base64:png.subarray(0,32).toString('base64')});
+  await new Promise(r=>server.close(r)); await start();
+  assert.equal((await mediaTool('get_media_upload',{page:'home',uploadId:resumed.uploadId})).nextOffset,32);
+  const resumedResult = await mediaTool('upload_media_chunk',{page:'home',uploadId:resumed.uploadId,offset:32,base64:png.subarray(32).toString('base64')});
+  assert.equal(resumedResult.complete,true);
+  assert.deepEqual(await readFile(path.join(dataDir,'media',resumedResult.url.split('/').pop())),png);
   assert.equal(
     (
       await request('editor.example.com', '/api/media-ticket', {
@@ -372,7 +400,7 @@ try {
     409,
   );
   console.log(
-    'PASS: signed media scope/signature/expiry/audience, Access-only ticket issuing, strict hosts/CORS, single-use uploads persisted across restart, file-type validation, proxy redirects without media bodies, protected downloads and ranges, 32 MiB video/GLB uploads, disk reservation checks.',
+    'PASS: signed media scope/signature/expiry/audience, Access-only ticket issuing, strict hosts/CORS, single-use uploads persisted across restart, file-type validation, proxy redirects without media bodies, protected downloads and ranges, 32 MiB video/GLB uploads, disk reservation checks, MCP binary upload authorization and chunk resume after restart.',
   );
 } finally {
   await new Promise((r) => server.close(r));
