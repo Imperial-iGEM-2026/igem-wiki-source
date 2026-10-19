@@ -1,7 +1,15 @@
+import { rewriteGoogleFonts } from './google-fonts.mjs';
+import { sharedPublicationAssets } from './share-publication-assets.mjs';
+import {
+  isRecording,
+  isVideoUniverseEmbed,
+  replaceRecordingFrames,
+} from './export-recordings.mjs';
 import { compressExportImage, IMAGE_UPLOAD_BYTES } from './image-export.mjs';
 import { splitPdf, PDF_PART_BYTES } from './pdf-parts.mjs';
 import {
   exportMedia,
+  PDF_WORKER_SOURCE,
   mediaFolder,
   templateFontCss,
   siteIcon,
@@ -15,6 +23,7 @@ import {
   readdir,
   copyFile,
   cp,
+  unlink,
 } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -67,6 +76,19 @@ if (snapshot.format === 'prion-wiki-source') {
   try {
     pdfParts = JSON.parse(
       await readFile(path.join(path.dirname(source), 'pdf-parts.json'), 'utf8'),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
+let googleFonts = {};
+if (snapshot.format === 'prion-wiki-source') {
+  try {
+    googleFonts = JSON.parse(
+      await readFile(
+        path.join(path.dirname(source), 'google-fonts.json'),
+        'utf8',
+      ),
     );
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
@@ -186,7 +208,8 @@ for (const [key, value] of Object.entries(snapshot.values)) {
           } catch {
             return Infinity;
           }
-        })() > 200000
+        })() >
+        1024 * 1024
       : value.length > 12000)
   )
     throw Error('Invalid field: ' + key);
@@ -206,15 +229,37 @@ const refs = exportMedia(
   ),
   template,
   sponsorLayers,
-  igemPageCheck,
-  publicationSlug,
 );
+for (const url of googleFonts.fonts || []) refs.set(url, 'font');
+for (const [source, kind] of refs) if (isRecording(kind)) refs.delete(source);
+const recordingTodos = [];
+// Only the render copy changes: invalid/empty media blocks must produce a TODO
+// instead of an empty frame (embedURL would otherwise silently discard them).
+for (const [key, block] of Object.entries(data)) {
+  if (!key.startsWith('layout:')) continue;
+  const layout = JSON.parse(block.value);
+  layout.nodes = layout.nodes.map((node) => {
+    if (node.kind === 'embed' && !isVideoUniverseEmbed(node.src))
+      return {
+        ...node,
+        kind: 'video',
+        src: node.src || 'https://video.igem.org/RECORDING-NOT-SET',
+      };
+    if (['video', 'audio'].includes(node.kind) && !node.src)
+      return { ...node, src: 'https://video.igem.org/RECORDING-NOT-SET' };
+    return node;
+  });
+  if (!validateLayout(layout))
+    throw Error('Invalid export recording layout: ' + key);
+  data[key] = { ...block, value: JSON.stringify(layout) };
+}
+
 await mkdir(path.join(output, 'public/assets/media'), { recursive: true });
 for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
   await cp(
     path.join(root, 'node_modules/pdfjs-dist', dir),
     path.join(output, 'public/assets/pdfjs', dir),
-    { recursive: true },
+    { recursive: true, filter: (source) => path.basename(source) !== 'quickjs-eval.wasm' },
   );
 // Source bundles contain LICENSE; editor checkouts keep the export licence scoped
 // to publication/ so exporting does not relicense the editor itself.
@@ -256,7 +301,7 @@ for (const [url, kind] of refs) {
       const hosted = map[part.source];
       if (
         typeof hosted !== 'string' ||
-        !/^https:\/\/static\.igem\.wiki\//.test(hosted) ||
+        !hosted.startsWith('https://static.igem.wiki/') ||
         /["<>\s]|YOUR-TEAM/.test(hosted)
       )
         throw Error(
@@ -297,7 +342,7 @@ for (const [url, kind] of refs) {
     let bytes = await readFile(path.join(root, 'public', url));
     if (
       /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(url) &&
-      bytes.length > IMAGE_UPLOAD_BYTES
+      (bytes.length > IMAGE_UPLOAD_BYTES || /\.(jpe?g|png)$/i.test(url))
     )
       bytes = compressExportImage(bytes, url).data;
     const file = 'public' + url;
@@ -376,7 +421,7 @@ for (const [url, kind] of refs) {
         if (
           hosted &&
           (typeof hosted !== 'string' ||
-            !/^https:\/\/static\.igem\.wiki\//.test(hosted) ||
+            !hosted.startsWith('https://static.igem.wiki/') ||
             /["<>\s]|YOUR-TEAM/.test(hosted))
         )
           throw Error('Invalid hosted PDF part: ' + partSource);
@@ -427,14 +472,16 @@ for (const [url, kind] of refs) {
     let compressed = false;
     if (
       /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(filename) &&
-      (externalSize || bytes.length) > IMAGE_UPLOAD_BYTES
+      ((externalSize || bytes.length) > IMAGE_UPLOAD_BYTES ||
+        /\.(jpe?g|png)$/i.test(filename))
     ) {
-      bytes = compressExportImage(
+      const checked = compressExportImage(
         external ? await readFile(external) : bytes,
         filename,
-      ).data;
+      );
+      bytes = checked.data;
       externalSize = bytes.length;
-      compressed = true;
+      compressed = checked.changed;
     }
     if (external && !compressed)
       await copyFile(
@@ -463,16 +510,6 @@ for (const [url, kind] of refs) {
       issues.push('External media must be moved to iGEM hosting: ' + url);
     assets.push({ source: url, kind, publishedURL: mapped || url });
   }
-  if (
-    (kind === 'video' || kind === 'audio' || kind === 'embed') &&
-    !/^https:\/\/video\.igem\.org\/videos\/embed\/[a-zA-Z0-9-]+$/.test(
-      mediaMap[url],
-    )
-  )
-    issues.push(
-      'Video/audio needs its iGEM Video Universe embed URL (https://video.igem.org/videos/embed/ID): ' +
-        url,
-    );
   if (
     ['image', 'pdf', 'model'].includes(kind) &&
     mediaMap[url].startsWith('https://video.igem.org/')
@@ -523,19 +560,58 @@ await build({
   },
 });
 const assetFiles = await readdir(path.join(output, 'public/assets'));
+const hostedPdfWorker = map[PDF_WORKER_SOURCE];
+if (hostedPdfWorker) {
+  if (typeof hostedPdfWorker !== 'string' || !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(hostedPdfWorker) || /YOUR-TEAM/.test(hostedPdfWorker))
+    throw Error('Upload the PDF JavaScript worker and use its actual static.igem.wiki URL.');
+  // The worker is a self-contained ES module. PDF.js wraps a cross-origin worker
+  // in a blob module; no relative module dependencies need URL rewriting.
+  let rewritten = false;
+  for (const file of assetFiles.filter((name) => name.endsWith('.js'))) {
+    const target = path.join(output, 'public/assets', file);
+    const original = await readFile(target, 'utf8');
+    const from = base + 'assets/pdf.worker.min.mjs';
+    if (original.includes(from)) {
+      await writeFile(target, original.replaceAll(from, hostedPdfWorker));
+      rewritten = true;
+    }
+  }
+  if (!rewritten) throw Error('Could not locate the PDF worker reference; refusing to remove its local copy.');
+  await unlink(path.join(output, 'public/assets/pdf.worker.min.mjs'));
+  assets.push({ source: PDF_WORKER_SOURCE, kind: 'runtime', publishedURL: hostedPdfWorker });
+}
 const css = assetFiles.filter((f) => f.endsWith('.css'));
-for (const file of css)
-  for (const url of cssResources(
-    await readFile(path.join(output, 'public/assets', file), 'utf8'),
-  ))
+for (const file of css) {
+  const target = path.join(output, 'public/assets', file);
+  const text = rewriteGoogleFonts(
+    await readFile(target, 'utf8'),
+    googleFonts,
+    mediaMap,
+  );
+  await writeFile(target, text);
+  for (const url of cssResources(text))
     if (/^(?:https?:)?\/\//i.test(url) && !igemURL(url))
-      issues.push('External stylesheet dependency: ' + url);
+      issues.push('External stylesheet dependency in ' + file + ': ' + url);
+}
 fontCss = templateFontCss(snapshot.values, mediaMap) + fontCss;
+const htmlLinkRoutes = Object.fromEntries([
+  ['/', base],
+  ['/home', base],
+  ...wikiPages.flatMap((p) => [
+    ['/' + p.slug, base + routeSlug(p.slug) + '/'],
+    ['/' + routeSlug(p.slug), base + routeSlug(p.slug) + '/'],
+  ]),
+]);
 const known = new Set(
   wikiPages.flatMap((p) => ['/' + p.slug, '/' + routeSlug(p.slug)]),
 );
+const sharedAssets = sharedPublicationAssets(output, base);
 for (const page of [undefined, ...wikiPages]) {
-  let html = render(data, page);
+  let html = replaceRecordingFrames(render(data, page), recordingTodos, {
+    page: page?.slug || 'home',
+    pageTitle: page?.title || 'Home',
+  });
+  html = rewriteGoogleFonts(html, googleFonts, mediaMap);
   if (fontCss) {
     html = html.replace(
       /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
@@ -560,13 +636,21 @@ for (const page of [undefined, ...wikiPages]) {
       (link, href) => (href === esc(original) ? '' : link),
     );
   }
-  for (const [from, to] of Object.entries(mediaMap))
-    html = html.split(esc(from)).join(esc(to));
-  html = html.replace(
-    /<(video|audio)\b[^>]*src="(https:\/\/video\.igem\.org\/videos\/embed\/[a-zA-Z0-9-]+)"[^>]*><\/\1>/g,
-    (_, kind, url) =>
-      `<iframe title="Project ${kind}" class="video-embed" src="${url}" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen></iframe>`,
+  // Match full URLs before their relative-path suffixes and replace once.
+  // Sequential substitutions can produce "https://editorhttps://static..."
+  // when both absolute and relative references point to the same template logo.
+  const replacements = new Map(
+    Object.entries(mediaMap).map(([from, to]) => [esc(from), esc(to)]),
   );
+  if (replacements.size) {
+    const pattern = [...replacements.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    html = html.replace(new RegExp(pattern, 'g'), (match) =>
+      replacements.get(match),
+    );
+  }
   html = html.replace(/href="(\/[^"]*)"/g, (match, value) => {
     if (value.startsWith('//')) return match;
     const [, pathname, suffix] = value.match(/^([^?#]*)(.*)$/);
@@ -629,20 +713,19 @@ for (const page of [undefined, ...wikiPages]) {
     css
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
-    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication">` +
+    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}">` +
     html +
     '</body></html>';
   if (/\b(?:href|src)="\/(api|auth)\//.test(doc) || /class="account"/.test(doc))
     throw Error(
       'Private runtime dependency remained in ' + (page?.slug || 'home'),
     );
-  const fontIssue =
-    'Published page loads Google Fonts; self-host licensed font files on iGEM hosting before submission.';
-  if (
-    /https?:\/\/fonts\.(?:googleapis|gstatic)\.com\b/.test(doc) &&
-    !issues.includes(fontIssue)
-  )
-    issues.push(fontIssue);
+  for (const [url] of doc.matchAll(
+    /https?:\/\/fonts\.(?:googleapis|gstatic)\.com[^\s"'<>\\)]*/g,
+  )) {
+    const issue = `Google Fonts dependency on ${page?.title || 'Home'} (${page?.slug || 'home'}): ${url}. Prepare a fresh export to download and host this font on iGEM.`;
+    if (!issues.includes(issue)) issues.push(issue);
+  }
   for (const url of externalResources(doc)) {
     const issue =
       'External embedded resource must move to iGEM infrastructure: ' + url;
@@ -651,13 +734,17 @@ for (const page of [undefined, ...wikiPages]) {
   const slug = page?.slug || '';
   const folder = path.join(output, 'public', routeSlug(slug));
   await mkdir(folder, { recursive: true });
-  await writeFile(path.join(folder, 'index.html'), doc);
+  const compactDoc = sharedAssets.rewrite(doc);
+  await writeFile(path.join(folder, 'index.html'), compactDoc);
   if (routeSlug(slug) !== slug) {
     const legacy = path.join(output, 'public', slug);
     await mkdir(legacy, { recursive: true });
-    await writeFile(path.join(legacy, 'index.html'), doc);
+    // Keep legacy links working without another complete copy of the page.
+    const target = base + routeSlug(slug) + '/';
+    await writeFile(path.join(legacy, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="canonical" href="${esc(target)}"><meta http-equiv="refresh" content="0;url=${esc(target)}"><title>${esc(title)}</title></head><body><a href="${esc(target)}">Continue to ${esc(title)}</a><script>location.replace(${JSON.stringify(target)}+location.search+location.hash)</script></body></html>`);
   }
 }
+await sharedAssets.write();
 await copyFile(
   path.join(output, 'public/index.html'),
   path.join(output, 'public/404.html'),
@@ -680,7 +767,8 @@ const report = {
     folder: mediaFolder(asset.source, asset.kind, snapshot.values),
   })),
   issues,
-  submissionReady: issues.length === 0,
+  recordingTodos,
+  submissionReady: issues.length === 0 && recordingTodos.length === 0,
   manualReview: [
     'Check hosted 3D models render correctly with embedded textures and no external decoders; remote model bytes are not inspected by this build.',
     'Review the public source for hidden/private data.',
@@ -691,7 +779,7 @@ const report = {
   ],
   note: 'Automated checks do not certify iGEM compliance. Review the current official rules and all team content.',
   mediaVerification:
-    'Files are copied, not transcoded. Extension, codec, uploader acceptance, remote URL availability and final playback require verification with the current iGEM upload tools. Inline SVG remains page markup.',
+    'Recordings are never uploaded, copied or mapped by this exporter. Replace recording TODOs in the editor with Video Universe iframe embeds and export again. Existing embed settings are preserved. Inline SVG remains page markup.',
 };
 await writeFile(
   path.join(output, 'publication-report.json'),
@@ -701,12 +789,9 @@ await writeFile(
   path.join(output, 'media-map.example.json'),
   JSON.stringify(
     Object.fromEntries(
-      [...refs.entries()].map(([url, kind]) => [
+      [...refs.entries()].map(([url]) => [
         url,
-        map[url] ||
-          (kind === 'video' || kind === 'audio' || kind === 'embed'
-            ? 'https://video.igem.org/videos/embed/REPLACE-WITH-VIDEO-ID'
-            : 'https://static.igem.wiki/YOUR-TEAM/uploaded-file'),
+        map[url] || 'https://static.igem.wiki/YOUR-TEAM/uploaded-file',
       ]),
     ),
     null,
@@ -724,6 +809,15 @@ await writeFile(
 console.log(
   `Exported ${report.pageCount} pages to ${output}. ${issues.length} publication issues listed in publication-report.json.`,
 );
+if (recordingTodos.length)
+  console.warn(
+    `${recordingTodos.length} recording TODOs: add Video Universe embeds in the editor, then export again. See publication-report.json.`,
+  );
+for (const issue of issues) console.error('Publication issue: ' + issue);
+for (const item of recordingTodos)
+  console.warn(
+    `Recording TODO on ${item.pageTitle || item.page}: ${item.title || item.source || item.kind}`,
+  );
 if (strict && issues.length) {
   console.error(
     'iGEM preflight failed; this is a review build, not submission-ready.',

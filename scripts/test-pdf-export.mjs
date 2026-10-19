@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { createBundleExports } from '../selfhost-dist/server/export-bundles.mjs';
 import { emptyLayout, newNode } from '../selfhost-dist/server/shared.mjs';
 import { extractZip } from '../upload-helper/files.mjs';
+import { PDF_WORKER_SOURCE } from './export-media.mjs';
 const dir = await mkdtemp(path.resolve('work/pdf-export-'));
 await mkdir(path.join(dir, 'media'));
 const pdf = await PDFDocument.create();
@@ -89,6 +90,10 @@ const manifest = await readFile(
 );
 assert.match(manifest, /pages-1-2.pdf/);
 assert.match(manifest, /pages-3-4.pdf/);
+assert.match(manifest, /pdfjs-6\.4\.299-worker\.js.*runtime/);
+const runtimeFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'assets/assets/runtime'));
+assert.equal(runtimeFiles.length, 1);
+assert.deepEqual(await readFile(path.join(dir, 'assets/assets/runtime', runtimeFiles[0])), await readFile('node_modules/pdfjs-dist/build/pdf.worker.min.mjs'));
 const imageFolder = path.join(dir, 'assets/assets/images');
 const imageFiles = await (
   await import('node:fs/promises')
@@ -102,6 +107,7 @@ const compressedImage = await readFile(
 assert.ok(compressedImage.length < 9_900_000);
 assert.equal(jpeg.decode(compressedImage).width, 2);
 const map = {
+  [PDF_WORKER_SOURCE]: 'https://static.igem.wiki/teams/1/runtime/pdf-worker.js',
   '/api/media/aacc.jpg': 'https://static.igem.wiki/teams/1/images/photo.jpg',
 };
 for (const part of parts['/api/media/aabb.pdf'])
@@ -145,13 +151,20 @@ assert.match(html, /data-pdf-parts/);
 assert.match(html, /assets\/pdfjs/);
 assert.match(html, /Pages/);
 assert.match(html, /custom-html-frame/);
-assert.match(html, /sandbox="allow-scripts"/);
-assert.match(html, /Animation works/);
+assert.match(html, /sandbox="allow-scripts allow-same-origin allow-presentation"/);
+const sharedURL = html.match(/data-html-source="([^"]+)"/)[1];
+const sharedParts = JSON.parse(await readFile(path.join(dir, 'render/public', sharedURL.slice('/example/'.length)), 'utf8'));
+const frameSource = (await Promise.all(sharedParts.map(async (part) => typeof part === 'string' ? part : JSON.parse(await readFile(path.join(dir, 'render/public', part.url.slice('/example/'.length)), 'utf8'))))).join('');
+assert.match(frameSource, /Animation works/);
+assert.ok(!frameSource.includes('/api/media/aacc.jpg'));
+const js = await readFile(path.join(dir, 'render/public/assets/wiki.js'), 'utf8');
+assert.match(js, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);
+await assert.rejects(readFile(path.join(dir, 'render/public/assets/pdf.worker.min.mjs')), { code: 'ENOENT' });
 assert.ok(!html.includes('/api/media/aacc.jpg'));
 assert.ok(!html.includes('<button id="animate">'));
 assert.ok(!html.includes('src="/api/media/aabb.pdf"'));
 exporter.close();
 console.log(
-  'PASS: large PDF splits through three-ZIP export, helper extracts parts, hosted mappings render progressive viewer. ' +
+  'PASS: two-ZIP export includes PDF worker and PDF parts; hosted mappings remove local worker; shared component reconstructs exactly. ' +
     dir,
 );

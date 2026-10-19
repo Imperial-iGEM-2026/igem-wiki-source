@@ -566,15 +566,16 @@
 .studio-canvas > .canvas-section {
   position: relative;
   outline: 1px solid transparent;
-  min-height: 55px;
   isolation: isolate;
+}
+.studio-canvas > .canvas-section:empty {
+  min-height: 55px;
 }
 .studio-canvas > .canvas-section:hover {
   outline-color: var(--studio-accent-border);
 }
 .studio-canvas > .canvas-section.studio-selected {
-  outline: 2px solid var(--studio-accent);
-  z-index: 2;
+  outline: none;
 }
 .studio-canvas > .canvas-hidden {
   opacity: 0.25 !important;
@@ -782,33 +783,35 @@
   background: inherit;
 }
 
+/* Responsive defaults have the same specificity in editor and publication.
+   Never override authored grid placement just because a layer is editable. */
 @media (max-width: 1000px) {
-  .page-canvas > .canvas-section.node-styled,
-  .canvas-children-flow > .canvas-section.node-styled {
+  :where(.page-css-root:not([data-editor-viewport])) .page-canvas > .canvas-section.node-styled,
+  :where(.page-css-root:not([data-editor-viewport])) .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-tablet-span, 12) !important;
   }
 }
 @media (max-width: 760px) {
-  .page-canvas:has(> .node-styled) {
+  :where(.page-css-root:not([data-editor-viewport])) .page-canvas:has(> .node-styled) {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-  .page-canvas > .canvas-section.node-styled,
-  .canvas-children-flow > .canvas-section.node-styled {
+  :where(.page-css-root:not([data-editor-viewport])) .page-canvas > .canvas-section.node-styled,
+  :where(.page-css-root:not([data-editor-viewport])) .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-mobile-span, 12) !important;
   }
 }
 @container studioPage (max-width:1000px) {
-  .studio-artboard .page-canvas > .canvas-section.node-styled,
-  .studio-artboard .canvas-children-flow > .canvas-section.node-styled {
+  :where([data-editor-viewport]) .page-canvas > .canvas-section.node-styled,
+  :where([data-editor-viewport]) .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-tablet-span, 12) !important;
   }
 }
 @container studioPage (max-width:760px) {
-  .studio-artboard .page-canvas:has(> .node-styled) {
+  :where([data-editor-viewport]) .page-canvas:has(> .node-styled) {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
-  .studio-artboard .page-canvas > .canvas-section.node-styled,
-  .studio-artboard .canvas-children-flow > .canvas-section.node-styled {
+  :where([data-editor-viewport]) .page-canvas > .canvas-section.node-styled,
+  :where([data-editor-viewport]) .canvas-children-flow > .canvas-section.node-styled {
     grid-column: span var(--node-mobile-span, 12) !important;
   }
 }
@@ -1441,8 +1444,7 @@
   z-index: 120;
 }
 .studio-target-element {
-  outline: 2px solid var(--studio-accent) !important;
-  outline-offset: 3px !important;
+  outline: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .studio-toggle [data-slot='switch-thumb'] {
@@ -1642,8 +1644,7 @@
   color: var(--studio-muted);
 }
 .studio-artboard .studio-target-element {
-  outline: 2px solid var(--studio-accent) !important;
-  outline-offset: 3px !important;
+  outline: none !important;
 }
 .studio-artboard:has(.studio-target-element)
   .studio-selected:not(.studio-target-element) {
@@ -3207,3 +3208,61 @@
 .studio-html-editor textarea { width:100%; min-height:240px; resize:vertical; border:1px solid var(--studio-border); border-radius:6px; padding:12px; background:var(--studio-surface); color:var(--studio-ink); font:12px/1.65 Consolas,monospace; tab-size:2; white-space:pre; overflow:auto; }
 .studio-html-editor p { margin:0; font-size:12px; line-height:1.6; color:var(--studio-muted); }
 .studio-html-editor details { font-size:12px; }
+
+/* Real edge/corner targets, above embedded content, usable with mouse or touch. */
+.studio button.studio-resize-height { top:auto; bottom:0; right:calc(50% - 15px); width:30px; height:12px; min-height:12px; cursor:ns-resize; }
+.studio button.studio-resize-both { top:auto; bottom:0; right:0; width:14px; height:14px; min-height:14px; cursor:nwse-resize; }
+.studio button.studio-resize { pointer-events:auto; }
+.studio button.studio-resize-width { right:0; }
+
+
+.studio-html-assets { margin:12px 0; padding:12px; border:1px solid var(--studio-line,#dce3ee); border-radius:10px; display:grid; gap:8px; background:var(--studio-accent-soft,#eff5ff); }
+.studio-html-assets label { font-size:12px; }
+.studio-html-assets input:not([type="file"]) { width:100%; min-width:0; padding:8px; border:1px solid var(--studio-line,#dce3ee); border-radius:6px; font-size:12px; }
+.studio-html-assets > button,.studio-html-asset-url > button { display:flex; align-items:center; justify-content:center; gap:6px; padding:8px; color:var(--studio-accent,#3478f6); border:1px solid var(--studio-line,#dce3ee); border-radius:6px; background:#fff; }
+.studio-html-assets p,.studio-html-assets output { margin:0; font-size:12px; line-height:1.5; }
+.studio-html-assets .studio-html-upload-error { color:#b42318; }
+.studio-html-asset-url { display:grid; gap:6px; }
+
+/* The frame keeps running, but selection/dragging belongs to the whole HTML layer. */
+.studio-canvas .custom-html-block[data-html-editing] .custom-html-frame {
+  pointer-events: none;
+}
+.studio-canvas .custom-html-block[data-html-editing] { cursor: move; }
+.studio-html-mode { white-space:nowrap; }
+.studio-html-mode[aria-pressed="true"] { background:var(--studio-accent-soft); color:var(--studio-accent); }
+
+
+/* Nested selections resize their own box, not the containing section. */
+.studio-artboard:has(.studio-target-element) .studio-selected:not(.studio-target-element) > .studio-resize,
+.studio-artboard:has(.studio-target-element) .studio-selected:not(.studio-target-element) > .studio-corner { display:none; }
+.studio button.studio-object-resize {
+  position:fixed; z-index:125; width:12px; height:30px; min-height:30px;
+  padding:0; border:1px solid #2563eb; border-radius:3px;
+  background:#fff; transform:translate(-50%,-50%); cursor:ew-resize;
+  touch-action:none; box-shadow:0 0 0 2px #fff;
+}
+
+.studio button.studio-object-resize-corner { width:14px; height:14px; min-height:14px; cursor:nwse-resize; }
+
+/* Editor chrome must never change the site's stacking order. */
+.studio-selection-outline {position:fixed;pointer-events:none;z-index:90;border:1.5px solid var(--studio-accent);box-sizing:border-box;}
+.studio-panel-toggles {display:flex;gap:2px;}
+.studio-panel-toggles button {padding:7px;}
+.studio-layer-search {display:grid;grid-template-columns:minmax(0,1fr) 85px;gap:6px;padding:0 12px 10px;}
+.studio-layer-search input,.studio-layer-search select {width:100%;min-width:0;border:1px solid var(--studio-border);border-radius:6px;padding:7px;background:var(--studio-panel);font-size:12px;}
+.studio-layer-search button {grid-column:1/-1;text-align:left;font-size:11px;padding:2px;}
+.studio-breadcrumb {display:flex;align-items:center;gap:5px;flex-shrink:0;overflow:auto;padding:4px 12px;border-bottom:1px solid var(--studio-border);font-size:11px;white-space:nowrap;}
+.studio-breadcrumb button {max-width:160px;overflow:hidden;text-overflow:ellipsis;padding:3px 5px;flex-shrink:0;}
+.studio-canvas-toolbar {flex-wrap:wrap;}
+.studio .studio-dock-grip {cursor:grab;touch-action:none;flex-shrink:0;}
+.studio .studio-dock-grip:active {cursor:grabbing;}
+.studio-text-dialog {width:min(860px,calc(100vw - 32px));max-width:calc(100vw - 32px)!important;}
+.studio-text-dialog textarea {height:min(50vh,520px);min-height:220px;max-height:none;resize:vertical;}
+.studio-text-dialog.studio-text-expanded {width:calc(100vw - 40px);}
+.studio-text-dialog.studio-text-expanded textarea {height:calc(100dvh - 250px);}
+.studio-text-expand {justify-self:end;display:flex;align-items:center;gap:6px;font-size:12px;}
+.studio-inline-text {position:fixed;z-index:110;border:2px solid var(--studio-accent);border-radius:8px;background:#fff;box-shadow:0 8px 30px #14233b26;overflow:hidden;}
+.studio-inline-text textarea {display:block;box-sizing:border-box;width:100%;resize:none;border:0;padding:12px;outline:none;font:15px/1.65 system-ui;color:#20232a;background:#fff;}
+.studio-inline-text > div {display:flex;gap:8px;justify-content:flex-end;padding:7px;border-top:1px solid var(--studio-border);}
+.studio-inline-text button {font-size:12px;padding:6px 8px;}

@@ -1,5 +1,6 @@
 import parse from 'postcss/lib/parse';
 import selectorParser from 'postcss-selector-parser';
+import { AtRule, type ChildNode } from 'postcss';
 
 // One parser and policy are used by the inspector, API, renderer and static export.
 // Rules can address page descendants only. Resource loading and global at-rules
@@ -19,6 +20,20 @@ export function compileCustomCss(
   )
     throw Error('CSS escapes, HTML, and control characters are not supported.');
   const root = parse(source, { from: undefined });
+  // Manual controls must win over authored !important rules too. During a
+  // drag we use inline !important; without a priority layer, committing that
+  // same value to a stylesheet can lose to a more specific page selector.
+  // Keep the stored selectors unchanged for editing, undo and migrations.
+  const controls = new Set<ChildNode>();
+  root.walkComments((comment) => {
+    const next = comment.next();
+    if (
+      comment.parent === root &&
+      comment.text === 'prion-selection-controls' &&
+      (next?.type === 'rule' ||
+        (next?.type === 'atrule' && next.name === 'media'))
+    ) controls.add(next);
+  });
   root.walkComments((comment) => {
     comment.remove();
   });
@@ -84,8 +99,20 @@ export function compileCustomCss(
         throw Error('Place valid CSS properties inside a selector block.');
       if (['behavior', '-moz-binding'].includes(node.prop.toLowerCase()))
         throw Error('This CSS property is not supported.');
+      // The editor's page can be narrower than the browser window. Match its
+      // viewport-based typography and full-bleed sections to the page canvas.
+      if (editor)
+        node.value = node.value.replace(/(-?(?:\d*\.)?\d+)vw\b/gi, '$1cqw');
     } else throw Error('Unsupported CSS syntax.');
   });
+  // Important declarations in a layer outrank unlayered important styles,
+  // regardless of selector specificity. Compile only after normal validation,
+  // and use the same layer in editor, preview and static export.
+  if (controls.size) {
+    const layer = new AtRule({ name: 'layer', params: 'studio-selection' });
+    for (const node of controls) layer.append(node.remove());
+    root.prepend(layer);
+  }
   return root.toString();
 }
 export function cssError(source: string): string {

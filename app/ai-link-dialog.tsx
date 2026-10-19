@@ -19,6 +19,7 @@ import { projectFetch } from './project-api';
 
 type AiLink = {
   id: string;
+  mode: 'standard' | 'developer';
   page: string | null;
   name: string;
   createdBy: string;
@@ -96,6 +97,8 @@ export function AiLinkDialog({
   const [name, setName] = useState('Claude');
   const [scope, setScope] = useState<'project' | 'page'>('project');
   const [days, setDays] = useState(7);
+  const [mode, setMode] = useState<'standard' | 'developer'>('standard');
+  const [confirmation, setConfirmation] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -126,6 +129,7 @@ export function AiLinkDialog({
   useEffect(() => {
     if (open) void load();
   }, [open, load]);
+  useEffect(() => { setConfirmation(null); }, [mode, name, scope, days]);
   // Closing forgets revealed links and resets the dialog.
   function close(next: boolean) {
     if (!next) {
@@ -137,6 +141,8 @@ export function AiLinkDialog({
       setRevoking(null);
       setView('mine');
       setLinks(null);
+      setMode('standard');
+      setConfirmation(null);
     }
     onOpenChange(next);
   }
@@ -220,6 +226,7 @@ export function AiLinkDialog({
   const meta = (link: AiLink, withOwner = false) =>
     [
       withOwner ? (link.mine ? 'You' : link.createdBy) : null,
+      link.mode === 'developer' ? 'Developer · source read/write' : 'Standard',
       link.page ? 'Page: ' + link.page : 'Whole project',
       'expires ' + when(link.expiresAt),
       link.lastUsedAt ? 'last used ' + when(link.lastUsedAt) : 'not used yet',
@@ -237,7 +244,7 @@ export function AiLinkDialog({
             <DialogTitle>Connect an AI</DialogTitle>
             <DialogDescription>
               Give Claude, ChatGPT or another MCP app a private link to edit
-              this wiki and upload images or files. Its edits appear live for everyone.
+              this wiki and upload images or files. Page edits appear live for everyone.
             </DialogDescription>
           </div>
         </header>
@@ -281,11 +288,18 @@ export function AiLinkDialog({
                   className="ai-connect-form"
                   onSubmit={async (event) => {
                     event.preventDefault();
+                    if (mode === 'developer' && !confirmation) {
+                      const grant = await post<{ confirmation: string }>({ action: 'prepare-developer' });
+                      if (grant) setConfirmation(grant.confirmation);
+                      return;
+                    }
                     const result = await post<{ url: string; link: AiLink }>({
                       action: 'create',
                       name,
                       days,
-                      page: scope === 'page' ? page : null,
+                      page: mode === 'standard' && scope === 'page' ? page : null,
+                      mode,
+                      ...(mode === 'developer' ? { confirmation, confirmDeveloper: true } : {}),
                     });
                     if (!result) return;
                     setUrls((all) => ({
@@ -296,9 +310,26 @@ export function AiLinkDialog({
                     setExpanded(result.link.id);
                     setFresh(result.link.id);
                     setCreating(false);
+                    setConfirmation(null);
+                    setMode('standard');
                     void load();
                   }}
                 >
+                  {!confirmation && <>
+                  <div className="ai-connect-field">
+                    <span id="ai-connect-mode">Access level</span>
+                    <div className="ai-connect-segments" role="radiogroup" aria-labelledby="ai-connect-mode">
+                      {(['standard', 'developer'] as const).map(value => (
+                        <label key={value}>
+                          <input type="radio" name="ai-connect-mode" checked={mode === value} onChange={() => setMode(value)} />
+                          <span>{value === 'standard' ? 'Standard' : 'Developer'}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <small>{mode === 'standard'
+                      ? 'Edit pages, styling and media with the usual editor checks.'
+                      : 'Read and edit this wiki’s source for exported builds. Requires your confirmation.'}</small>
+                  </div>
                   <label className="ai-connect-field">
                     <span>Name</span>
                     <input
@@ -309,7 +340,7 @@ export function AiLinkDialog({
                     />
                     <small>Shown to teammates while the AI is editing.</small>
                   </label>
-                  <div className="ai-connect-field">
+                  {mode === 'standard' && <div className="ai-connect-field">
                     <span id="ai-connect-scope">Can edit</span>
                     <div
                       className="ai-connect-segments"
@@ -333,7 +364,7 @@ export function AiLinkDialog({
                         </label>
                       ))}
                     </div>
-                  </div>
+                  </div>}
                   <div className="ai-connect-field">
                     <span id="ai-connect-expiry">Expires after</span>
                     <div
@@ -354,7 +385,18 @@ export function AiLinkDialog({
                       ))}
                     </div>
                   </div>
+                  </>}
+                  {mode === 'developer' && confirmation && (
+                    <section className="ai-connect-developer" aria-label="Developer permissions" aria-live="polite">
+                      <strong>{confirmation ? 'Confirm developer access' : 'Project source access'}</strong>
+                      <p>This link can edit all pages and read and change this wiki’s template/component source. Anyone holding the link has these permissions until it expires or you revoke it.</p>
+                      <p>Source edits are saved per project with rollback history and included in the next website-source ZIP. Build and deploy that ZIP to see them; the Studio canvas and Preview keep using the installed release.</p>
+                      <p>Server files, credentials, build scripts and dependencies cannot be changed. Revoking a link stops access; saved edits remain.</p>
+                      {confirmation && <p><b>Allow “{name}” developer access for {days} {days === 1 ? 'day' : 'days'}?</b></p>}
+                    </section>
+                  )}
                   <div className="ai-connect-actions">
+                    {confirmation && <button type="button" disabled={busy} onClick={() => setConfirmation(null)}>Back</button>}
                     {mine.length > 0 && (
                       <button type="button" onClick={() => setCreating(false)}>
                         Cancel
@@ -365,7 +407,7 @@ export function AiLinkDialog({
                       disabled={busy || !name.trim()}
                     >
                       <Link2 size={16} />
-                      {busy ? 'Creating…' : 'Create link'}
+                      {busy ? 'Working…' : mode === 'developer' ? (confirmation ? 'Confirm & create developer link' : 'Review developer access') : 'Create link'}
                     </button>
                   </div>
                 </form>

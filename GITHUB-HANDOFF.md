@@ -1,4 +1,4 @@
-# Development handoff — 10 October 2026
+# Development handoff — 19 October 2026
 
 ## What is included
 
@@ -13,7 +13,7 @@ This is the current full development source, not the small website-only iGEM exp
 - `publication/`: example publication configuration and third-party/export license notices.
 - npm lockfile, TypeScript/Vite configuration, documentation and a GitHub Actions build workflow.
 
-Recent functionality includes template preview/apply/rollback, compact project actions, homepage-to-sponsors synchronization, image replacement controls, LaTeX blocks and inline math, and references with clickable citations and highlighting.
+Recent functionality includes template preview/apply/rollback, compact project actions, independent homepage and sponsor sections, image replacement controls, LaTeX blocks and inline math, and references with clickable citations and highlighting.
 
 ## Move to GitHub
 

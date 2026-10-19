@@ -169,6 +169,40 @@
   gap: 15px;
   color: #9aa5b8;
 }
+.library-luca .library-template-cover {
+  background: #f4f1fc;
+  color: #121014;
+  position: relative;
+  overflow: hidden;
+}
+.library-luca .library-template-cover b {
+  font: 850 34px/1.05 system-ui, sans-serif;
+  letter-spacing: -1.5px;
+  z-index: 1;
+}
+.library-luca .library-template-cover b span {
+  display: block;
+  max-width: 180px;
+  font-size: 25px;
+  margin-top: 12px;
+}
+.library-luca .library-template-cover img {
+  position: absolute;
+  right: 16px;
+  bottom: 30px;
+  width: 105px;
+  height: 118px;
+  object-fit: contain;
+  rotate: -8deg;
+}
+.library-luca-note {
+  position: absolute;
+  bottom: 15px;
+  left: 24px;
+  font-size: 11px;
+  color: #4d4766;
+}
+.library-project-icon.library-luca { background: #f0eafa; color: #594584; }
 .library-blank .library-template-cover span {
   font-size: 12px;
 }

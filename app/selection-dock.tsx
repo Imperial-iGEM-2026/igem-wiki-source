@@ -13,6 +13,7 @@ import {
   Pencil,
   ArrowUp,
   ImagePlus,
+  GripHorizontal,
 } from 'lucide-react';
 import {
   Select,
@@ -71,6 +72,7 @@ export function SelectionDock({
   onSend,
   onLayer,
   onEditText,
+  onEditInline,
   onReplaceImage,
   uploadProgress,
   count = 1,
@@ -89,6 +91,7 @@ export function SelectionDock({
   onSend: (message: string) => void;
   onLayer: () => void;
   onEditText?: () => void;
+  onEditInline?: () => void;
   onReplaceImage?: (file: File) => void;
   uploadProgress?: number;
 }) {
@@ -97,6 +100,14 @@ export function SelectionDock({
   const controls = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<DockView | null>(null);
   const [message, setMessage] = useState('');
+  const [showAssistant, setShowAssistant] = useState(false);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const moving = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
   const dockVisible = view !== null;
   useLayoutEffect(() => {
     const element = artboard.current?.querySelector(target.selector);
@@ -105,6 +116,27 @@ export function SelectionDock({
       const frame = requestAnimationFrame(() => setView(null));
       return () => cancelAnimationFrame(frame);
     }
+    const clampPosition = (left: number, top: number) => {
+      const r = stage.current?.getBoundingClientRect();
+      return {
+        left: Math.max(
+          r?.left || 0,
+          Math.min(
+            (r?.right || window.innerWidth) -
+              (dock.current?.offsetWidth || 320),
+            left,
+          ),
+        ),
+        top: Math.max(
+          r?.top || 0,
+          Math.min(
+            (r?.bottom || window.innerHeight) -
+              (dock.current?.offsetHeight || 120),
+            top,
+          ),
+        ),
+      };
+    };
     let frame = 0;
     let appearance: Omit<DockView, 'left' | 'top' | 'width'> | null = null;
     let cachedToolWidth = 0;
@@ -185,7 +217,11 @@ export function SelectionDock({
           rotation: Math.round((parseFloat(style.rotate) || 0) * 10) / 10,
         };
       }
-      const next: DockView = { ...position, ...appearance };
+      const next: DockView = {
+        ...position,
+        ...clampPosition(position.left + offset.x, position.top + offset.y),
+        ...appearance,
+      };
       setView((previous) =>
         JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
       );
@@ -215,7 +251,16 @@ export function SelectionDock({
       window.removeEventListener('resize', schedule);
       document.removeEventListener('scroll', schedule, true);
     };
-  }, [target.selector, artboard, stage, revision, zoom, scope, dockVisible]);
+  }, [
+    target.selector,
+    artboard,
+    stage,
+    revision,
+    zoom,
+    scope,
+    dockVisible,
+    offset,
+  ]);
   if (!view) return null;
   const colour = (property: string, value: string, label: string) => (
     <HexColorPicker
@@ -234,6 +279,58 @@ export function SelectionDock({
       style={{ left: view.left, top: view.top, width: view.width }}
     >
       <div className="studio-dock-caption">
+        <button
+          className="studio-dock-grip"
+          aria-label="Move formatting toolbar"
+          title="Drag toolbar; arrow keys move it; double-click to reset"
+          onDoubleClick={() => setOffset({ x: 0, y: 0 })}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            moving.current = {
+              x: e.clientX,
+              y: e.clientY,
+              left: offset.x,
+              top: offset.y,
+            };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const start = moving.current;
+            if (start)
+              setOffset({
+                x: start.left + e.clientX - start.x,
+                y: start.top + e.clientY - start.y,
+              });
+          }}
+          onPointerUp={() => {
+            moving.current = null;
+          }}
+          onPointerCancel={() => {
+            moving.current = null;
+          }}
+          onKeyDown={(e) => {
+            if (
+              !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
+                e.key,
+              )
+            )
+              return;
+            e.preventDefault();
+            e.stopPropagation();
+            setOffset((p) => ({
+              x:
+                p.x +
+                (e.key === 'ArrowRight' ? 10 : e.key === 'ArrowLeft' ? -10 : 0),
+              y:
+                p.y +
+                (e.key === 'ArrowDown' ? 10 : e.key === 'ArrowUp' ? -10 : 0),
+            }));
+          }}
+        >
+          <GripHorizontal size={14} />
+        </button>
         {view.text ? <Type size={13} /> : <Square size={13} />}
         <span title={target.label}>
           {count > 1 ? `${count} selected` : target.label}
@@ -284,6 +381,24 @@ export function SelectionDock({
             <Pencil size={13} /> Edit text
           </button>
         )}
+        {onEditInline && (
+          <button
+            title="Edit text on canvas"
+            aria-label="Edit text on canvas"
+            disabled={disabled}
+            onClick={onEditInline}
+          >
+            On canvas
+          </button>
+        )}
+        <button
+          title="Ask AI about selection"
+          aria-label="Ask AI about selection"
+          aria-expanded={showAssistant}
+          onClick={() => setShowAssistant((v) => !v)}
+        >
+          <Sparkles size={14} />
+        </button>
         <small>
           {scope === 'all'
             ? 'All sizes'
@@ -482,33 +597,35 @@ export function SelectionDock({
           />
         )}
       </div>
-      <form
-        className="studio-dock-chat"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (disabled || !message.trim()) return;
-          onSend(message.trim());
-          setMessage('');
-        }}
-      >
-        <Sparkles size={15} aria-hidden="true" />
-        <input
-          aria-label="Ask AI about selected element"
-          placeholder="Ask AI to change this element…"
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          maxLength={4000}
-          disabled={disabled}
-        />
-        <button
-          type="submit"
-          aria-label="Send to Assistant"
-          title="Send to Assistant"
-          disabled={disabled || !message.trim()}
+      {showAssistant && (
+        <form
+          className="studio-dock-chat"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (disabled || !message.trim()) return;
+            onSend(message.trim());
+            setMessage('');
+          }}
         >
-          <ArrowUp size={16} />
-        </button>
-      </form>
+          <Sparkles size={15} aria-hidden="true" />
+          <input
+            aria-label="Ask AI about selected element"
+            placeholder="Ask AI to change this element…"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            maxLength={4000}
+            disabled={disabled}
+          />
+          <button
+            type="submit"
+            aria-label="Send to Assistant"
+            title="Send to Assistant"
+            disabled={disabled || !message.trim()}
+          >
+            <ArrowUp size={16} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

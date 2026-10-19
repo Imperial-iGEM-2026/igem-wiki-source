@@ -1,5 +1,15 @@
 # Prion Studio
 
+**Custom HTML interaction:** Select an HTML block (including a logo) and use **Interact with HTML** in the canvas toolbar. **Done interacting** returns to moving/resizing. Selecting another layer exits interaction mode. These controls stay outside the page artwork.
+
+**Workspace controls:** Use the two panel buttons beside Website Studio to hide or restore Layers and properties. Zoom keeps your selected element in view; **Fit selection** frames the current image, text or section. The floating formatting toolbar can be dragged by its grip (or moved with arrow keys while the grip is focused). Double-click the grip to reset it. The sparkle button opens its AI prompt.
+
+**Find a layer:** Search by name/title or filter by element type above Layers. Matching layers keep their parent rows visible. Clear filters to restore the whole tree. The breadcrumb above the canvas shows the selection's parents; click a parent to select it.
+
+**Long text:** Select native text, then choose **On canvas** in the formatting toolbar to edit in place. Use **Expand editor** for a larger dialog, and expand that dialog to use most of the window. Save text applies one undoable change; Escape/Cancel discards the draft, and Ctrl/⌘+Enter saves.
+
+**Preview your current section:** Preview starts at the selected layer, or the section nearest the visible top when nothing is selected. It labels saved content **All changes saved** and drafts **Includes unsaved edits**. Back to editor retains your workspace and selection.
+
 **Sponsor lists:** Home and Our sponsors are independent. Edit each page's own logo layers; changing or deleting a homepage sponsor section no longer replaces the Sponsors page's content. Select the section in Layers and choose **Delete section** to remove it, including its logos. If a child layer is locked, the editor names it so you can unlock it before deleting. **Undo** restores the section during the editing session. Deleted template sections stay removed after saving and reopening; the eye icon still hides a section without deleting it.
 
 **Website tab icon:** Projects use a compact reGELerate logo in the browser tab. A custom logo saved in **Header & logo** also becomes the tab icon. Three-ZIP exports include the icon in the media upload list and use its hosted URL in the published pages; re-export with the updated server and upload helper 1.0.19 or later.
@@ -153,9 +163,9 @@ Right-click a selected element for Text…, Link… (when applicable), Ask AI, M
 
 ## Custom HTML animations
 
-Choose **Insert element → Custom HTML**. The starting example animates three dots and changes speed when clicked. Select the element in Layers to open its **HTML**, **CSS** and **JavaScript** tabs. Preview refreshes shortly after typing stops; save the page to persist the code. Use Layout to set columns and height, or drag its resize handle. Use the layer handle or sidebar to select/move it; clicks inside the animation remain interactive.
+Choose **Insert element → Custom HTML**. The starting example animates three dots and changes speed when clicked. Select the element in Layers to open its **HTML**, **CSS** and **JavaScript** tabs. Preview refreshes shortly after typing stops; save the page to persist the code. Use Layout to set columns and height, or drag its resize handle. Drag anywhere on the block to move the whole HTML layer, or use arrow keys (Shift moves 10 pixels). Layout also has Horizontal / Vertical offset fields and Reset position offset. These offsets preserve the surrounding layout; use the layer handle or Move up / down to reorder. Choose Interact to click or scroll inside the animation, then Done interacting to return to positioning. Preview and export stay interactive. Standard MCP can use `move_section` with `offset: {x: 20, y: -10}` and an optional `scope` (`all`, `tablet`, `mobile`); use `{x: 0, y: 0}` to reset. `after` changes sibling order. Both methods preserve the HTML, CSS and JavaScript, and respect layer locks.
 
-The same sandboxed frame is used in the editor, Preview and exported wiki. HTML fragments, inline SVG, CSS keyframes and ordinary JavaScript work. Runtime errors appear below the preview. Scripts cannot access the surrounding page, account storage, fetch APIs, external script libraries, forms, popups or top-level navigation. For visuals, use inline SVG/data images or public HTTPS images. Respect `prefers-reduced-motion` in your animations; the starter already does.
+The same sandboxed frame is used in the editor, Preview and exported wiki. HTML fragments, inline SVG, CSS keyframes and ordinary JavaScript work. Runtime errors appear below the preview. Scripts cannot access the surrounding page, account storage, fetch APIs, external script libraries, forms, or direct popups/top-level navigation. Ordinary clicked HTML links are handled by the surrounding wiki: page links navigate normally, `target="_blank"` opens a separate tab, and matching fragment IDs scroll within the block. The editor shows a reminder to use Preview instead of navigating away from unsaved work. For visuals, use inline SVG/data images or public HTTPS images. HTTPS video/audio and iframe players from iGEM Video Universe, YouTube and Vimeo are supported. Player URL settings (for example `?title=0&warningTitle=0`) are preserved in HTML and normal Embed blocks. Add `allow="autoplay; fullscreen; picture-in-picture" allowfullscreen` to your player iframe to enable those features, subject to browser/provider policies. Use iGEM-hosted players for competition export. Custom code runs as an isolated data document so nested players can use their own origins while code cannot access the editor. Respect `prefers-reduced-motion` in your animations; the starter already does.
 
 Explicit `/api/media/...` and `/templates/...` references in code participate in export asset collection and URL mapping. Dynamically constructed paths cannot be discovered automatically. Use the updated upload helper 1.0.18 for these exports.
 
@@ -167,3 +177,18 @@ Explicit `/api/media/...` and `/templates/...` references in code participate in
 For assistants with local file and HTTP access, `get_media_upload_url` returns a temporary direct destination: POST the raw file there, then use the permanent URL in its response. This uses the existing media hostname and does not require an editor login cookie. Never save the temporary destination in a page. Clients without file access cannot upload an attachment they cannot read; upload it through the editor or attach it using a client that exposes the file bytes. After uploading, the assistant uses `add_section` or `update_section` to insert the returned `/api/media/...` URL. Alt text, captions and layout remain editable normally, and the media is included in exports when used on a page.
 
 After updating the server, refresh/reconnect the MCP connector so it discovers the new upload tools. Existing unexpired AI links continue to work.
+
+## Resize selected text
+
+Click a paragraph or heading once to select its text box. Drag its left or right edge handle to change the width; the text wraps live and keeps its font size. The containing section keeps its columns and other content. Double-click (or choose Edit text) to change the words. Use Select containing layer to return to section sizing. Width changes support Undo/Redo, respect layer locks and the selected desktop/tablet/mobile breakpoint, and are saved in the page CSS for Preview and export. Standard MCP can resize the exact text selector using `style_element` with `width`, `max-width: 100%` and `box-sizing: border-box`.
+
+
+### Pictures: add, resize and overlap
+
+Select a text block or section, then choose **Add images** in Design. Select multiple files to add separate image layers without replacing existing writing or pictures. For collapsibles, select the intended subsection first. **Replace this file** replaces only the selected image.
+
+Click a picture or choose its row in Layers to select the actual image. Drag it to move it; the outline follows. Drag either side handle or the bottom-right corner to resize while keeping its proportions. **Select containing layer** still lets you adjust the outer section separately.
+
+Right-click the picture itself or its Layers row and choose **Bring to front** or **Send to back**. These change overlap among siblings in the same container without changing the page's reading order. Layout also exposes **Layer order**; higher values appear in front. Use Layers to select a picture that is completely covered. Undo restores changes; locked layers cannot be moved or restacked.
+
+Standard MCP uses `add_section` with `kind:image` and `inside` set to a text/frame ID for additional images. `get_page` exposes `selectors.image`; `style_element` can change that picture's width, height and translate. Use `height:auto` and `max-height:none` for proportional resizing. Use `update_section` with integer `zIndex` to stack image layers, and keep existing IDs and content.

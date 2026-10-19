@@ -1,11 +1,15 @@
+import './build-studio-responsive.mjs';
 import { exportSource } from './export-source.mjs';
+import { PDF_WORKER_SOURCE } from './export-media.mjs';
 import { packageUploadHelper } from './package-upload-helper.mjs';
+import { packageImageRuntime } from './package-image-runtime.mjs';
 import { build } from 'vite';
 import { mkdir, cp, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { common, root } from './build-options.mjs';
 import './build-purple-template.mjs';
 await import('./build-white-template.mjs');
+await import('./build-luca-template.mjs');
 const out = path.join(root, 'selfhost-dist');
 await build({
   ...common,
@@ -42,6 +46,8 @@ await cp(
   path.join(out, 'client/templates'),
   { recursive: true },
 );
+await mkdir(path.join(out, 'client/templates/runtime'), { recursive: true });
+await cp(path.join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'), path.join(out, 'client', PDF_WORKER_SOURCE));
 await build({
   ...common,
   ssr: { noExternal: true },
@@ -52,9 +58,26 @@ await build({
     rolldownOptions: { output: { entryFileNames: 'shared.mjs' } },
   },
 });
+await build({
+  ...common,
+  ssr: { noExternal: true },
+  build: {
+    ssr: path.join(root, 'server/media-processing.ts'),
+    outDir: path.join(out, 'server'),
+    emptyOutDir: false,
+    rolldownOptions: { output: { entryFileNames: 'media-processing.mjs' } },
+  },
+});
 for (const name of [
   'app.mjs',
   'export-bundles.mjs',
+  'export-jobs.mjs',
+  'export-processing.mjs',
+  'export-validation-cache.mjs',
+  'export-media-worker.mjs',
+  'image-native.mjs',
+  'image-native-child.mjs',
+  'image-native-process.mjs',
   'export-zip.mjs',
   'projects.mjs',
   'template-changes.mjs',
@@ -69,11 +92,22 @@ for (const name of [
   'live.mjs',
   'mcp.mjs',
   'mcp-media.mjs',
+  'mcp-section-code.mjs',
+  'project-source.mjs',
 ])
   await cp(path.join(root, 'server', name), path.join(out, 'server', name));
+await packageImageRuntime(root, path.join(out, 'server/image-runtime'));
 await cp(
   path.join(root, 'scripts/export-media.mjs'),
   path.join(out, 'server/export-media.mjs'),
+);
+await cp(
+  path.join(root, 'scripts/export-recordings.mjs'),
+  path.join(out, 'server/export-recordings.mjs'),
+);
+await cp(
+  path.join(root, 'scripts/google-fonts.mjs'),
+  path.join(out, 'server/google-fonts.mjs'),
 );
 await writeFile(
   path.join(out, 'server/export-source.json'),

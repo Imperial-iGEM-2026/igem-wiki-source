@@ -32,3 +32,39 @@ assert.throws(
 console.log(
   'PASS: JPEG compression, PNG transparency, unchanged originals, under-limit passthrough, named failures.',
 );
+
+// Small files need decoding too. Browsers can display incomplete JPEGs that
+// iGEM's image processor rejects; even a trailing EOI cannot repair missing scans.
+const scanStart = original.indexOf(Buffer.from([0xff, 0xda]));
+assert.ok(scanStart > 0);
+const scanData = scanStart + 2 + original.readUInt16BE(scanStart + 2);
+const truncatedScan = Buffer.concat([
+  original.subarray(0, scanData + 20),
+  Buffer.from([0xff, 0xd9]),
+]);
+for (const bad of [
+  original.subarray(0, original.length - 2),
+  original.subarray(0, scanData + 20),
+  truncatedScan,
+  Buffer.from('not an image'),
+]) {
+  assert.throws(
+    () => compressExportImage(bad, 'broken-small.jpg'),
+    /broken-small\.jpg: image validation failed/,
+  );
+}
+const damagedPng = Buffer.from(png);
+damagedPng[damagedPng.length - 6] ^= 1;
+assert.throws(
+  () => compressExportImage(damagedPng, 'damaged.png'),
+  /image validation failed/,
+);
+assert.equal(compressExportImage(png, 'healthy.png').data, png);
+assert.equal(
+  compressExportImage(Buffer.from('<svg/>'), 'logo.svg').changed,
+  false,
+);
+assert.deepEqual(original, before, 'validation does not rewrite the source');
+console.log(
+  'PASS: under-limit JPEG scans/end markers and PNG checksums are validated; healthy bytes preserved.',
+);

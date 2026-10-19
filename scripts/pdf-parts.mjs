@@ -10,7 +10,9 @@ export async function splitPdf(bytes, limit = PDF_PART_BYTES) {
     );
   const parts = [];
   async function range(start, end) {
-    const part = await PDFDocument.create();
+    // Export-time timestamps change the bytes/hash and defeat upload reuse.
+    // Parts are derived reading copies: omit generated metadata altogether.
+    const part = await PDFDocument.create({ updateMetadata: false });
     const pages = await part.copyPages(
       source,
       Array.from({ length: end - start }, (_, i) => start + i),

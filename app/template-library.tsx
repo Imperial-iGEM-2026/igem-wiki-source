@@ -188,6 +188,12 @@ export function TemplateLibrary({
                     <Plus size={34} />
                     <span>A fresh start.</span>
                   </>
+                ) : template.id === 'luca' ? (
+                  <>
+                    <b>reGELerate<span>Built to connect.</span></b>
+                    <img src="/templates/notebook-purple/logo-transparent.png" alt="" />
+                    <span className="library-luca-note">Bold type · interactive science</span>
+                  </>
                 ) : ['notebook-purple', 'notebook-white'].includes(
                     template.id,
                   ) ? (

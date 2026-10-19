@@ -1,5 +1,9 @@
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 'use client';
+import { copiedPage } from './custom-pages';
+import { SelectionOutline } from './selection-outline';
+import { InlineTextEditor } from './inline-text-editor';
+import { filterLayerIds, layerBreadcrumb } from './studio-view';
 import { TextEditDialog } from './text-edit-dialog';
 import { LinkEditor } from './link-editor';
 import { templateFor } from './templates';
@@ -15,6 +19,7 @@ import {
 } from './header-design';
 import { aiRequest } from './ai-request';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -60,13 +65,16 @@ import {
   ListTree,
   Plus,
   Bot,
+  PanelLeft,
+  PanelRight,
+  Scan,
 } from 'lucide-react';
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
-import { useDefaultLayout } from 'react-resizable-panels';
+import { useDefaultLayout, usePanelRef } from 'react-resizable-panels';
 import { useLayerDrag } from './use-layer-drag';
 import { preparePageSwitch } from './studio-navigation';
 import { pageCatalog, parseRemovedPages, REMOVED_PAGES } from './custom-pages';
@@ -94,6 +102,8 @@ import { CssPanel, type AssistantRequest } from './css-panel';
 import { cssError } from './custom-css';
 import { SelectionDock } from './selection-dock';
 import { useCanvasObjectMove } from './selection-move';
+import { SelectionResize } from './selection-resize';
+import { HtmlPositionControls } from './html-position-controls';
 import { StudioInsertMenu } from './studio-insert-menu';
 import { AiLinkDialog } from './ai-link-dialog';
 import { isChromeId } from './chrome-sync';
@@ -134,6 +144,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { CanvasSurface, type Builtin } from './canvas-surface';
+import { layerTreeRows } from './studio-layer-tree';
 import {
   CUSTOM_CONTENT,
   newNode,
@@ -147,6 +158,8 @@ import {
 } from './canvas-schema';
 import {
   duplicateNodes,
+  insertNode,
+  stackNode,
   freePlacement,
   historyReducer,
   materialize,
@@ -311,6 +324,7 @@ const mediaKinds: string[] = [
   'embed',
 ];
 const kindHints: Record<BlockKind, string> = {
+  shape: 'Shape — choose geometry, fill, border and dimensions.',
   text: 'Text section — a heading and paragraph. The heading appears in the page index.',
   section: 'Frame — a container you can place other elements inside.',
   button: 'Button — links to a website page or an external URL.',
@@ -329,6 +343,7 @@ const kindHints: Record<BlockKind, string> = {
     'Collapsible sections — readers open each one independently; the page never jumps.',
 };
 const kinds: [string, string][] = [
+  ['shape', 'Shape'],
   ['section', 'Section / frame'],
   ['button', 'Button'],
   ['text', 'Text'],
@@ -363,6 +378,7 @@ export function StudioEditor({
   const [pendingPage, setPendingPage] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [newPageOpen, setNewPageOpen] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<string | undefined>();
   const [newTitle, setNewTitle] = useState('');
   const [newSlug, setNewSlug] = useState('');
   const [pageError, setPageError] = useState('');
@@ -383,7 +399,28 @@ export function StudioEditor({
   useLayoutEffect(() => {
     currentRef.current = current;
   }, [current]);
+  const [layerQuery, setLayerQuery] = useState('');
+  const [layerKind, setLayerKind] = useState('all');
+  const layersPanel = usePanelRef(),
+    inspectorPanel = usePanelRef();
+  const [layersHidden, setLayersHidden] = useState(false),
+    [inspectorHidden, setInspectorHidden] = useState(false);
+  const [previewAnchor, setPreviewAnchor] = useState<{
+    id: string;
+    visit: number;
+  } | null>(null);
+  const [inlineText, setInlineText] = useState(false);
+  const [htmlInteraction, setHtmlInteraction] = useState<{
+    id: string;
+    selection: string[];
+  } | null>(null);
   const [collapsed, setCollapsed] = useState<string[]>([]);
+  const layerListRef = useRef<HTMLDivElement>(null);
+  const [accordionSelection, setAccordionSelection] = useState<{
+    layerId: string;
+    itemId: string;
+  } | null>(null);
+  const [accordionFocus, setAccordionFocus] = useState<{ id: string }>();
   const [insertInside, setInsertInside] = useState(true);
   const revealInserted = useRef<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]),
@@ -455,7 +492,8 @@ export function StudioEditor({
     property: 'title' | 'body' | 'linkLabel';
     value: string;
   } | null>(null);
-  function editElementText(picked: DesignTarget | null) {
+  function editElementText(picked: DesignTarget | null, inline = false) {
+    setInlineText(inline);
     if (
       !picked ||
       ctx.locked ||
@@ -477,6 +515,21 @@ export function StudioEditor({
             (picked.textProperty === 'linkLabel' ? item.title || 'Button' : ''),
         });
     }
+  }
+
+  function saveElementText() {
+    if (
+      !elementText ||
+      disabled ||
+      nodeLocked(currentRef.current, elementText.id)
+    )
+      return;
+    edit(
+      patchNodes(currentRef.current, [elementText.id], {
+        [elementText.property]: elementText.value,
+      }),
+    );
+    setElementText(null);
   }
   function editSelectedLink() {
     setPanel('design');
@@ -504,6 +557,52 @@ export function StudioEditor({
   }
   const [pageQuery, setPageQuery] = useState('');
   const [sidebarTab, setSidebarTab] = useState<'layers' | 'pages'>('layers');
+  useLayoutEffect(() => {
+    const id = target?.layerId || selected.at(-1);
+    if (!id || preview) return;
+    const layout = currentRef.current;
+    const ancestors = new Set<string>();
+    let parent = layout.nodes.find((item) => item.id === id)?.parentId;
+    while (parent && !ancestors.has(parent)) {
+      ancestors.add(parent);
+      parent = layout.nodes.find((item) => item.id === parent)?.parentId;
+    }
+    if (accordionSelection?.layerId === id) ancestors.add(id);
+    let scrollFrame = 0;
+    const frame = requestAnimationFrame(() => {
+      setSidebarTab('layers');
+      setCollapsed((previous) =>
+        previous.some((item) => ancestors.has(item))
+          ? previous.filter((item) => !ancestors.has(item))
+          : previous,
+      );
+      // Let the expanded rows mount before measuring the scroll region.
+      scrollFrame = requestAnimationFrame(() => {
+        const list = layerListRef.current;
+        const row =
+          (accordionSelection?.layerId === id
+            ? list?.querySelector<HTMLElement>(
+                `[data-studio-parent="${CSS.escape(id)}"][data-studio-item="${CSS.escape(accordionSelection.itemId)}"]`,
+              )
+            : null) ||
+          list?.querySelector<HTMLElement>(
+            `[data-studio-layer="${CSS.escape(id)}"]`,
+          );
+        if (!list || !row) return;
+        // Scroll only Layers. scrollIntoView would also move the page canvas.
+        const bounds = list.getBoundingClientRect(),
+          item = row.getBoundingClientRect();
+        if (item.top < bounds.top) list.scrollTop += item.top - bounds.top - 8;
+        else if (item.bottom > bounds.bottom)
+          list.scrollTop += item.bottom - bounds.bottom + 8;
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(scrollFrame);
+    };
+  }, [selected, target, accordionSelection, preview]);
+
   const [openPages, setOpenPages] = useState<string[]>(() => {
     try {
       const ids = JSON.parse(studioStorage.getItem('prion-open-pages') || '[]');
@@ -541,10 +640,24 @@ export function StudioEditor({
   const disabled = ctx.busy || ctx.locked || uploading || Boolean(conflict);
   const changed = !same(current, base.layout),
     textDirty = Boolean(textEdit && textEdit.value !== textEdit.original),
-    dirty = changed || textDirty || uploading;
+    dirty =
+      changed ||
+      textDirty ||
+      uploading ||
+      Boolean(
+        elementText &&
+        elementText.value !==
+          (current.nodes.find((n) => n.id === elementText.id)?.[
+            elementText.property
+          ] || ''),
+      );
   const node =
     selected.length === 1
       ? current.nodes.find((n) => n.id === selected[0])
+      : undefined;
+  const interactingHtmlId =
+    !preview && htmlInteraction?.selection === selected
+      ? htmlInteraction.id
       : undefined;
   const dockTarget = node
     ? target?.layerId === node.id
@@ -580,6 +693,159 @@ export function StudioEditor({
         styleTargets.at(-1)!
       : dockTarget;
   const styleLocked = styleTargets.some((t) => nodeLocked(current, t.layerId));
+  const filteredLayers = useMemo(
+    () => filterLayerIds(current, layerQuery, layerKind),
+    [current, layerQuery, layerKind],
+  );
+  const breadcrumbs = layerBreadcrumb(current, selected.at(-1));
+  const zoomRef = useRef(zoom);
+  useLayoutEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  const zoomAnchor = useRef<{
+    selector?: string;
+    x: number;
+    y: number;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
+  const selectionElement = useCallback(() => {
+    return artboard.current?.querySelector<HTMLElement>(
+      target?.selector || `[data-layer-id="${selected.at(-1)}"]`,
+    );
+  }, [target, selected]);
+  const changeZoom = useCallback(
+    (next: number, fitSelection = false) => {
+      const area = stageRef.current,
+        board = artboard.current;
+      if (area && board && next !== zoomRef.current) {
+        const bounds = area.getBoundingClientRect(),
+          element = selectionElement();
+        const r = (element || board).getBoundingClientRect();
+        const centerX = bounds.left + area.clientWidth / 2,
+          centerY = bounds.top + area.clientHeight / 2;
+        const x = fitSelection
+          ? r.left + r.width / 2
+          : Math.max(r.left, Math.min(r.right, centerX));
+        const y = fitSelection
+          ? r.top + Math.min(r.height, area.clientHeight) / 2
+          : Math.max(r.top, Math.min(r.bottom, centerY));
+        zoomAnchor.current = {
+          selector: element
+            ? target?.selector || `[data-layer-id="${selected.at(-1)}"]`
+            : undefined,
+          x: (x - r.left) / zoomRef.current,
+          y: (y - r.top) / zoomRef.current,
+          screenX: fitSelection
+            ? centerX
+            : Math.max(bounds.left + 24, Math.min(bounds.right - 24, x)),
+          screenY: fitSelection
+            ? centerY
+            : Math.max(bounds.top + 24, Math.min(bounds.bottom - 24, y)),
+        };
+      }
+      setZoom(next);
+    },
+    [selectionElement, target, selected],
+  );
+  useLayoutEffect(() => {
+    const anchor = zoomAnchor.current,
+      area = stageRef.current,
+      board = artboard.current;
+    if (!anchor || !area || !board) return;
+    zoomAnchor.current = null;
+    const element = anchor.selector
+      ? board.querySelector(anchor.selector)
+      : board;
+    if (!element) return;
+    const r = element.getBoundingClientRect();
+    area.scrollLeft += r.left + anchor.x * zoom - anchor.screenX;
+    area.scrollTop += r.top + anchor.y * zoom - anchor.screenY;
+  }, [zoom]);
+  function fitSelected() {
+    const element = selectionElement(),
+      area = stageRef.current;
+    if (!element || !area) return;
+    const r = element.getBoundingClientRect();
+    const next = Math.max(
+      0.1,
+      Math.min(
+        1.5,
+        (area.clientWidth - 56) / (r.width / zoom),
+        (area.clientHeight - 80) / Math.min(r.height / zoom, 500),
+      ),
+    );
+    setAutoFit(false);
+    changeZoom(next, true);
+    if (next === zoom)
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+  }
+  function openPreview() {
+    if (preview) {
+      setPreview(false);
+      return;
+    }
+    const area = stageRef.current?.getBoundingClientRect();
+    const visible =
+      area &&
+      Array.from(
+        artboard.current?.querySelectorAll<HTMLElement>('[data-layer-id]') ||
+          [],
+      )
+        .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+        .filter(
+          ({ rect }) =>
+            rect.bottom > area.top + 30 &&
+            rect.top < area.bottom &&
+            rect.height > 0,
+        )
+        .sort(
+          (a, b) =>
+            Math.abs(a.rect.top - area.top) - Math.abs(b.rect.top - area.top),
+        )[0]?.element;
+    const id = selected.at(-1) || visible?.dataset.layerId;
+    setPreviewAnchor(id ? { id, visit: Date.now() } : null);
+    setPreviewOpened(true);
+    setPreview(true);
+  }
+
+  const moveObject = (picked: DesignTarget, x: number, y: number) => {
+    if (disabled || nodeLocked(currentRef.current, picked.layerId)) return;
+    try {
+      const scope =
+        viewport <= 760 ? 'mobile' : viewport <= 1000 ? 'tablet' : 'all';
+      const element = artboard.current?.querySelector(picked.selector);
+      let customCss = normalizePdfPlacementCss(
+        currentRef.current.customCss || '',
+        currentRef.current.nodes
+          .filter((node) => node.kind === 'pdf')
+          .map((node) => node.id),
+      );
+      if (element && getComputedStyle(element).display === 'inline')
+        customCss = applySelectionStyle(
+          customCss,
+          picked.selector,
+          'display',
+          'inline-block',
+          scope,
+        );
+      customCss = applySelectionStyle(
+        customCss,
+        picked.selector,
+        'translate',
+        `${x}px ${y}px`,
+        scope,
+      );
+      setCssEnabled(true);
+      edit({ ...currentRef.current, customCss });
+      dispatch({ type: 'end' });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not move this element.',
+      );
+    }
+  };
+  const [objectResizing, setObjectResizing] = useState(false);
   const objectDragging = useCanvasObjectMove({
     artboard,
     target: dockTarget,
@@ -595,44 +861,7 @@ export function StudioEditor({
       setSelected([picked.layerId]);
       setTarget(picked);
     },
-    onMove: (picked, x, y) => {
-      if (disabled || nodeLocked(currentRef.current, picked.layerId)) return;
-      try {
-        const scope =
-          viewport <= 760 ? 'mobile' : viewport <= 1000 ? 'tablet' : 'all';
-        const element = artboard.current?.querySelector(picked.selector);
-        let customCss = normalizePdfPlacementCss(
-          currentRef.current.customCss || '',
-          currentRef.current.nodes
-            .filter((node) => node.kind === 'pdf')
-            .map((node) => node.id),
-        );
-        if (element && getComputedStyle(element).display === 'inline')
-          customCss = applySelectionStyle(
-            customCss,
-            picked.selector,
-            'display',
-            'inline-block',
-            scope,
-          );
-        customCss = applySelectionStyle(
-          customCss,
-          picked.selector,
-          'translate',
-          `${x}px ${y}px`,
-          scope,
-        );
-        setCssEnabled(true);
-        edit({ ...currentRef.current, customCss });
-        dispatch({ type: 'end' });
-      } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : 'Could not move this element.',
-        );
-      }
-    },
+    onMove: moveObject,
   });
   const spanKey =
     viewport <= 760 ? 'mobileSpan' : viewport <= 1000 ? 'tabletSpan' : 'span';
@@ -644,9 +873,21 @@ export function StudioEditor({
         : n.span;
   const container =
     node &&
-    (['section', 'template'].includes(node.kind)
+    (['section', 'template', 'accordion', 'text'].includes(node.kind)
       ? node
       : current.nodes.find((n) => n.id === node.parentId));
+  const insertItem =
+    container?.kind === 'accordion'
+      ? container.items?.find(
+          (item) =>
+            item.id ===
+            (accordionSelection?.layerId === container.id
+              ? accordionSelection.itemId
+              : node?.parentItemId),
+        )
+      : undefined;
+  const insertContainer =
+    container?.kind === 'accordion' && !insertItem ? undefined : container;
   const sponsorNode =
     node?.kind === 'image' &&
     Boolean(builtins.find((b) => b.id === node.parentId)?.sponsorGrid);
@@ -767,14 +1008,14 @@ export function StudioEditor({
     if (!stageRef.current || !autoFit) return;
     const stage = stageRef.current;
     const fit = () =>
-      setZoom(
+      changeZoom(
         Math.max(0.1, Math.min(1.5, (stage.clientWidth - 70) / viewport)),
       );
     const observer = new ResizeObserver(fit);
     observer.observe(stage);
     fit();
     return () => observer.disconnect();
-  }, [viewport, autoFit]);
+  }, [viewport, autoFit, changeZoom]);
   function patch(changes: Partial<CanvasNode>, group?: string) {
     edit(patchNodes(currentRef.current, selected, changes), group);
   }
@@ -783,7 +1024,16 @@ export function StudioEditor({
   function select(id: string, multiple: boolean | 'toggle' | 'range' = false) {
     if (ctx.locked) return;
     setPanel('design');
-    setTarget(null);
+    const image =
+      !multiple &&
+      currentRef.current.nodes.find((n) => n.id === id)?.kind === 'image'
+        ? artboard.current?.querySelector(
+            `[data-layer-id="${CSS.escape(id)}"] .media-image-frame > img`,
+          )
+        : null;
+    setTarget(image ? pickDesignTarget(image) : null);
+    setAccordionSelection(null);
+    setAccordionFocus(undefined);
     setMultiTargets([]);
     if (multiple === 'range' && selectionAnchor.current) {
       const order = hierarchyOrder(currentRef.current);
@@ -1091,7 +1341,11 @@ export function StudioEditor({
       ),
     );
   }
-  function add(insertKind: BlockKind, inside: boolean) {
+  function add(
+    insertKind: BlockKind,
+    inside: boolean,
+    destination?: { layerId: string; itemId: string },
+  ) {
     const n = {
       ...newNode(
         crypto.randomUUID(),
@@ -1126,70 +1380,81 @@ export function StudioEditor({
       ...(insertKind === 'section'
         ? { layoutMode: 'free' as const, minHeight: 360 }
         : {}),
-      ...(inside && container && !nodeLocked(current, container.id)
-        ? {
-            parentId: container.id,
-            x: 5,
-            y:
-              20 +
-              current.nodes.filter((n) => n.parentId === container.id).length *
-                24,
-            freeWidth: 40,
-            freeHeight:
-              insertKind === 'button'
-                ? 44
-                : insertKind === 'image'
-                  ? 160
-                  : insertKind === 'section' || insertKind === 'html'
-                    ? 360
-                    : 80,
-          }
-        : {}),
     };
-    if (!n.parentId && current.nodes.some((c) => c.id === CUSTOM_CONTENT))
-      Object.assign(n, { parentId: CUSTOM_CONTENT });
+    let next: CanvasLayout;
+    try {
+      next = insertNode(current, n, {
+        inside:
+          destination?.layerId || (inside ? insertContainer?.id : undefined),
+        insideItem:
+          destination?.itemId || (inside ? insertItem?.id : undefined),
+        after: selected.at(-1),
+        renderedHeights: insertionHeights(),
+      });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not add element.',
+      );
+      return;
+    }
+    const inserted = next.nodes.find((item) => item.id === n.id)!;
     revealInserted.current = n.id;
-    edit({
-      ...current,
-      nodes: [
-        ...current.nodes.map((item) =>
-          item.id === n.parentId &&
-          !item.layoutMode &&
-          !builtins.find((b) => b.id === item.id)?.sponsorGrid
-            ? { ...item, layoutMode: 'free' as const }
-            : item,
-        ),
-        n,
-      ],
-      order: n.parentId
-        ? [...current.order, n.id]
-        : insertAfterSelection(current.order, n.id),
-    });
-    if (n.parentId)
-      setCollapsed((previous) => previous.filter((id) => id !== n.parentId));
+    setAccordionSelection(null);
+    setAccordionFocus(undefined);
+    edit(next);
+    if (inserted.parentId)
+      setCollapsed((previous) =>
+        previous.filter((id) => id !== inserted.parentId),
+      );
     setSelected([n.id]);
     setTarget(null);
     setPanel('design');
     setPreview(false);
   }
-  // Top-level inserts land after the selected section (or its section), not at the page bottom.
-  function insertAfterSelection(
-    order: string[],
-    id: string,
-    after = selected.at(-1),
-  ) {
-    let anchor = current.nodes.find((n) => n.id === after);
-    while (anchor?.parentId && anchor.parentId !== CUSTOM_CONTENT)
-      anchor = current.nodes.find((n) => n.id === anchor!.parentId);
-    const index = anchor ? order.indexOf(anchor.id) : -1;
-    return index < 0
-      ? [...order, id]
-      : [...order.slice(0, index + 1), id, ...order.slice(index + 1)];
+  function insertionHeights(): Record<string, number> {
+    // offsetHeight is in layout pixels, unaffected by the editor's zoom.
+    return Object.fromEntries(
+      Array.from(
+        artboard.current?.querySelectorAll<HTMLElement>('[data-layer-id]') ||
+          [],
+      ).map((element) => [element.dataset.layerId!, element.offsetHeight]),
+    );
+  }
+  function editAccordionItem(layerId: string, itemId: string) {
+    select(layerId);
+    setAccordionSelection({ layerId, itemId });
+    setAccordionFocus({ id: itemId });
+    setInsertInside(true);
+    setPreview(false);
+  }
+  function addAccordionItem(layerId: string) {
+    const layout = currentRef.current;
+    const accordion = layout.nodes.find((item) => item.id === layerId);
+    if (disabled || !accordion || nodeLocked(layout, layerId)) return;
+    if ((accordion.items?.length || 0) >= 30) {
+      setError(
+        'This collapsible element already has 30 subsections. Add another collapsible element for more.',
+      );
+      return;
+    }
+    const item = newAccordionItem('New subsection', 'Add text here.');
+    edit(
+      patchNodes(layout, [layerId], {
+        items: [...(accordion.items || []), item],
+      }),
+    );
+    editAccordionItem(layerId, item.id);
   }
   // A subsection is an H3 text block: inside a frame when the anchor is one,
   // otherwise directly after the anchor's top-level section.
   function addSection(subsection = false, anchorId?: string) {
-    const anchor = current.nodes.find((n) => n.id === anchorId);
+    const anchor = current.nodes.find(
+      (n) => n.id === (anchorId ?? selected.at(-1)),
+    );
+    if (subsection && anchor?.kind === 'accordion') {
+      addAccordionItem(anchor.id);
+      return;
+    }
     const frame =
       subsection &&
       anchor?.kind === 'section' &&
@@ -1208,38 +1473,22 @@ export function StudioEditor({
         ? 'Write this subsection’s content here.'
         : 'Write this section’s content here.',
       ...(subsection ? { headingLevel: 3 as const } : {}),
-      ...(frame
-        ? {
-            parentId: frame.id,
-            ...(frame.layoutMode === 'free'
-              ? {
-                  x: 5,
-                  y:
-                    20 +
-                    current.nodes.filter((c) => c.parentId === frame.id)
-                      .length *
-                      24,
-                  freeWidth: 60,
-                  freeHeight: 120,
-                }
-              : {}),
-          }
-        : {}),
     };
-    if (!n.parentId && current.nodes.some((c) => c.id === CUSTOM_CONTENT))
-      n.parentId = CUSTOM_CONTENT;
+    let next: CanvasLayout;
+    try {
+      next = insertNode(current, n, {
+        inside: frame?.id,
+        after: anchorId ?? selected.at(-1),
+        renderedHeights: insertionHeights(),
+      });
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not add section.',
+      );
+      return;
+    }
     revealInserted.current = n.id;
-    edit({
-      ...current,
-      nodes: [...current.nodes, n],
-      order: frame
-        ? [...current.order, n.id]
-        : insertAfterSelection(
-            current.order,
-            n.id,
-            anchorId ?? selected.at(-1),
-          ),
-    });
+    edit(next);
     if (frame)
       setCollapsed((previous) => previous.filter((id) => id !== frame.id));
     setSelected([n.id]);
@@ -1577,6 +1826,76 @@ export function StudioEditor({
       setUploading(false);
     }
   }
+  async function addImages(files: File[]) {
+    if (disabled || !files.length) return;
+    const destination = insertContainer?.id;
+    const insideItem = insertItem?.id;
+    const after = selected.at(-1);
+    setUploading(true);
+    setError('');
+    const uploaded: CanvasNode[] = [];
+    const failures: string[] = [];
+    try {
+      for (const file of files) {
+        try {
+          if (!file.type.startsWith('image/'))
+            throw Error('Choose an image file.');
+          setProgress(0);
+          const result = await uploadMedia(file, setProgress);
+          uploaded.push({
+            ...newNode(crypto.randomUUID(), 'image'),
+            name: file.name.slice(0, 100),
+            src: result.url,
+            alt: '',
+            span: files.length > 1 ? 6 : 12,
+            padding: 8,
+          });
+        } catch (error) {
+          failures.push(
+            `${file.name}: ${error instanceof Error ? error.message : 'Upload failed.'}`,
+          );
+        }
+      }
+      if (uploaded.length) {
+        let next = currentRef.current;
+        let anchor = after;
+        for (const image of uploaded) {
+          next = insertNode(next, image, {
+            inside: destination,
+            insideItem,
+            after: anchor,
+            renderedHeights: insertionHeights(),
+          });
+          anchor = image.id;
+        }
+        edit(next);
+        setSelected([uploaded[uploaded.length - 1].id]);
+        setTarget(null);
+        if (destination)
+          setCollapsed((prev) => prev.filter((id) => id !== destination));
+        setNotice(
+          `${uploaded.length} image${uploaded.length === 1 ? '' : 's'} added as separate layers. Existing text and pictures are kept. Save to share.`,
+        );
+      }
+      if (failures.length) setError(failures.join(' '));
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not add images.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+  function arrange(direction: 'front' | 'back') {
+    if (!node || disabled) return;
+    try {
+      edit(stackNode(currentRef.current, node.id, direction));
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not arrange layer.',
+      );
+    }
+  }
   function freeGesture(
     event: PointerEvent<HTMLElement>,
     id: string,
@@ -1603,7 +1922,13 @@ export function StudioEditor({
       if (e.pointerId !== pointer) return;
       const dx = ((e.clientX - startX) / width) * 100,
         dy = (e.clientY - startY) / zoom;
-      const changes = freePlacement(item, dx, dy, resizing);
+      const axis = element.dataset.resizeAxis;
+      const changes = freePlacement(
+        item,
+        resizing && axis === 'height' ? 0 : dx,
+        resizing && axis === 'width' ? 0 : dy,
+        resizing,
+      );
       dispatch({
         type: 'edit',
         value: patchNodes(currentRef.current, [id], changes),
@@ -1623,7 +1948,7 @@ export function StudioEditor({
     element.addEventListener('lostpointercapture', end);
   }
   function resize(event: PointerEvent<HTMLButtonElement>, id: string) {
-    if (disabled) return;
+    if (disabled || nodeLocked(currentRef.current, id)) return;
     const resizing = currentRef.current.nodes.find((n) => n.id === id);
     if (
       viewport > 760 &&
@@ -1645,22 +1970,26 @@ export function StudioEditor({
       n = currentRef.current.nodes.find((n) => n.id === id)!;
     const startHeight =
       element.closest('[data-layer-id]')!.getBoundingClientRect().height / zoom;
-    const canvas = element.closest('.page-canvas')!;
-    const css = getComputedStyle(canvas);
+    const region = element.closest('[data-layer-id]')!.parentElement!;
+    const css = getComputedStyle(region);
     const width =
-        canvas.getBoundingClientRect().width / zoom -
-        parseFloat(css.paddingLeft) -
-        parseFloat(css.paddingRight),
-      group = 'resize-' + event.timeStamp;
-    element.setPointerCapture(event.pointerId);
-    const move = (e: globalThis.PointerEvent) =>
+      region.getBoundingClientRect().width / zoom -
+      (parseFloat(css.paddingLeft) || 0) -
+      (parseFloat(css.paddingRight) || 0);
+    const group = 'resize-' + event.timeStamp;
+    const pointer = event.pointerId;
+    const axis = element.dataset.resizeAxis || 'both';
+    element.setPointerCapture(pointer);
+    const move = (e: globalThis.PointerEvent) => {
+      if (e.pointerId !== pointer) return;
       dispatch({
         type: 'edit',
+        group,
         value: patchNodes(currentRef.current, [id], {
-          ...(['pdf', 'html'].includes(n.kind)
+          ...(axis !== 'width'
             ? {
                 minHeight: Math.max(
-                  80,
+                  20,
                   Math.min(
                     2000,
                     Math.round(startHeight + (e.clientY - startY) / zoom),
@@ -1668,24 +1997,30 @@ export function StudioEditor({
                 ),
               }
             : {}),
-          [spanKey]: snapSpan(
-            effectiveSpan(n),
-            (e.clientX - start) / zoom,
-            width,
-            currentRef.current.gap,
-          ),
+          ...(axis !== 'height'
+            ? {
+                [spanKey]: snapSpan(
+                  effectiveSpan(n),
+                  (e.clientX - start) / zoom,
+                  width,
+                  parseFloat(css.columnGap) || 0,
+                ),
+              }
+            : {}),
         }),
-        group,
       });
+    };
     const end = () => {
       element.removeEventListener('pointermove', move);
       element.removeEventListener('pointerup', end);
       element.removeEventListener('pointercancel', end);
+      element.removeEventListener('lostpointercapture', end);
       dispatch({ type: 'end' });
     };
     element.addEventListener('pointermove', move);
     element.addEventListener('pointerup', end);
     element.addEventListener('pointercancel', end);
+    element.addEventListener('lostpointercapture', end);
   }
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -1813,7 +2148,7 @@ export function StudioEditor({
         }
       }}
     >
-      <div className="studio-topbar">
+      <div className="studio-topbar" inert={Boolean(elementText && inlineText)}>
         <button
           className="studio-icon"
           onClick={ctx.exit}
@@ -1842,6 +2177,42 @@ export function StudioEditor({
               </span>
             </small>
           </div>
+        </div>
+        <div className="studio-panel-toggles">
+          <button
+            title={layersHidden ? 'Show Layers panel' : 'Hide Layers panel'}
+            aria-label={
+              layersHidden ? 'Show Layers panel' : 'Hide Layers panel'
+            }
+            aria-pressed={!layersHidden}
+            onClick={() =>
+              layersHidden
+                ? layersPanel.current?.expand()
+                : layersPanel.current?.collapse()
+            }
+          >
+            <PanelLeft size={17} />
+          </button>
+          <button
+            title={
+              inspectorHidden
+                ? 'Show properties panel'
+                : 'Hide properties panel'
+            }
+            aria-label={
+              inspectorHidden
+                ? 'Show properties panel'
+                : 'Hide properties panel'
+            }
+            aria-pressed={!inspectorHidden}
+            onClick={() =>
+              inspectorHidden
+                ? inspectorPanel.current?.expand()
+                : inspectorPanel.current?.collapse()
+            }
+          >
+            <PanelRight size={17} />
+          </button>
         </div>
         <div className="studio-history">
           <button
@@ -1973,8 +2344,7 @@ export function StudioEditor({
         />
         <button
           onClick={() => {
-            setPreviewOpened(true);
-            setPreview(!preview);
+            openPreview();
           }}
           disabled={ctx.locked}
         >
@@ -2046,9 +2416,17 @@ export function StudioEditor({
           page={page}
           onClose={() => setPreview(false)}
           data={previewData}
+          dirty={
+            changed ||
+            textDirty ||
+            cssPreview !== undefined ||
+            Boolean(pagePreview)
+          }
+          anchor={previewAnchor}
         />
       )}
       <ResizablePanelGroup
+        inert={Boolean(elementText && inlineText)}
         orientation="horizontal"
         defaultLayout={panelLayout.defaultLayout}
         onLayoutChanged={panelLayout.onLayoutChanged}
@@ -2058,12 +2436,16 @@ export function StudioEditor({
       >
         <ResizablePanel
           id="layers"
+          panelRef={layersPanel}
+          collapsible
+          collapsedSize={0}
+          onResize={(size) => setLayersHidden(size.inPixels < 1)}
           defaultSize="220px"
           minSize="160px"
           maxSize="420px"
           className="studio-panel"
         >
-          <aside className="studio-layers">
+          <aside className="studio-layers" inert={layersHidden}>
             <button
               className="studio-all-projects"
               onClick={() => navigatePage('__workspace__')}
@@ -2119,7 +2501,14 @@ export function StudioEditor({
                       : openHeader
                   }
                   pages={studioPages}
-                  onCreate={() => navigatePage('__new__')}
+                  onCreate={() => {
+                    setDuplicateSource(undefined);
+                    navigatePage('__new__');
+                  }}
+                  onDuplicate={(slug) => {
+                    setDuplicateSource(slug);
+                    navigatePage('__new__');
+                  }}
                   removed={removedTemplatePages}
                   {...(templateFor(ctx.data)
                     ? {
@@ -2172,16 +2561,79 @@ export function StudioEditor({
               <>
                 <div className="studio-panel-title">
                   <strong>Layers</strong>
-                  <span>{hierarchyOrder(current).length}</span>
+                  <span className="studio-layer-tree-tools">
+                    <span>{hierarchyOrder(current).length}</span>
+                    <button
+                      type="button"
+                      title="Expand all layers"
+                      aria-label="Expand all layers"
+                      onClick={() => setCollapsed([])}
+                    >
+                      <ChevronDown size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Collapse all layers"
+                      aria-label="Collapse all layers"
+                      onClick={() =>
+                        setCollapsed(
+                          current.nodes
+                            .filter(
+                              (n) =>
+                                n.kind === 'accordion' ||
+                                current.nodes.some(
+                                  (child) => child.parentId === n.id,
+                                ),
+                            )
+                            .map((n) => n.id),
+                        )
+                      }
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </span>
+                </div>
+                <div className="studio-layer-search">
+                  <input
+                    aria-label="Search layers"
+                    placeholder="Search layers…"
+                    value={layerQuery}
+                    onChange={(e) => setLayerQuery(e.target.value)}
+                  />
+                  <select
+                    aria-label="Filter layer type"
+                    value={layerKind}
+                    onChange={(e) => setLayerKind(e.target.value)}
+                  >
+                    <option value="all">All types</option>
+                    {kinds.map(([kind, label]) => (
+                      <option key={kind} value={kind}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  {(layerQuery || layerKind !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setLayerQuery('');
+                        setLayerKind('all');
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
                 </div>
                 <StudioInsertMenu
                   container={
-                    container
-                      ? container.name || container.title || 'section'
+                    insertContainer
+                      ? insertItem?.title ||
+                        insertContainer.name ||
+                        insertContainer.title ||
+                        'section'
                       : undefined
                   }
                   locked={Boolean(
-                    container && nodeLocked(current, container.id),
+                    insertContainer && nodeLocked(current, insertContainer.id),
                   )}
                   inside={insertInside}
                   onInside={setInsertInside}
@@ -2217,190 +2669,271 @@ export function StudioEditor({
                     if (!open || !(details.event.target instanceof Element))
                       return;
                     const id = details.event.target.closest<HTMLElement>(
-                      '[data-studio-layer]',
-                    )?.dataset.studioLayer;
-                    setTarget(null);
-                    setPanel('design');
-                    setSelected(id ? [id] : []);
+                      '[data-studio-layer], [data-studio-parent]',
+                    );
+                    const layerId =
+                      id?.dataset.studioLayer || id?.dataset.studioParent;
+                    if (layerId) select(layerId);
+                    else {
+                      setTarget(null);
+                      setPanel('design');
+                      setSelected([]);
+                    }
+                    const itemId =
+                      details.event.target.closest<HTMLElement>(
+                        '[data-studio-item]',
+                      )?.dataset.studioItem;
+                    setAccordionSelection(
+                      layerId && itemId ? { layerId, itemId } : null,
+                    );
+                    if (itemId) setInsertInside(true);
                   }}
                 >
                   <ContextMenuTrigger className="studio-layer-menu-area">
-                    <div className="studio-layer-list">
-                      {hierarchyOrder(current)
-                        .filter((id) => {
-                          let parent = current.nodes.find(
-                            (n) => n.id === id,
-                          )?.parentId;
-                          let depth = 0;
-                          while (parent && depth++ < 6) {
-                            if (collapsed.includes(parent)) return false;
-                            parent = current.nodes.find(
-                              (n) => n.id === parent,
-                            )?.parentId;
-                          }
-                          return true;
-                        })
-                        .map((id) => {
+                    <div className="studio-layer-list" ref={layerListRef}>
+                      {filteredLayers && !filteredLayers.size && (
+                        <output className="studio-help">
+                          No matching layers. Try another name or type.
+                        </output>
+                      )}
+                      {layerTreeRows(current, filteredLayers ? [] : collapsed)
+                        .filter(
+                          (row) =>
+                            !filteredLayers || filteredLayers.has(row.id),
+                        )
+                        .map((row) => {
+                          const { id, depth } = row;
                           const n = current.nodes.find((n) => n.id === id)!;
-                          return (
-                            <div
-                              key={id}
-                              data-studio-layer={id}
-                              style={{
-                                marginLeft: (() => {
-                                  let depth = 0,
-                                    p = n.parentId;
-                                  while (p && depth < 5) {
-                                    depth++;
-                                    p = current.nodes.find(
-                                      (item) => item.id === p,
-                                    )?.parentId;
-                                  }
-                                  return depth * 14;
-                                })(),
-                              }}
-                              className={
-                                'studio-layer' +
-                                (selected.includes(id) ? ' active' : '') +
-                                (n.hidden ? ' is-hidden' : '') +
-                                (drag.visual?.ids.includes(id)
-                                  ? ' is-dragging'
-                                  : '')
-                              }
-                            >
-                              {current.nodes.some(
-                                (child) => child.parentId === id,
-                              ) ? (
+                          if (row.type === 'item')
+                            return (
+                              <div
+                                key={id + ':' + row.item.id}
+                                className="studio-layer-item-row"
+                                data-studio-parent={id}
+                                data-studio-item={row.item.id}
+                                style={{ marginLeft: depth * 14 }}
+                              >
                                 <button
-                                  className="studio-layer-expand"
-                                  aria-label={
-                                    (collapsed.includes(id)
-                                      ? 'Expand '
-                                      : 'Collapse ') +
-                                    (n.name || n.title || 'section')
+                                  type="button"
+                                  className="studio-layer-subsection"
+                                  aria-label={`Edit subsection ${row.index + 1}: ${row.item.title || 'Untitled subsection'}`}
+                                  aria-pressed={
+                                    selected.includes(id) &&
+                                    accordionSelection?.itemId === row.item.id
                                   }
-                                  aria-expanded={!collapsed.includes(id)}
                                   onClick={() =>
-                                    setCollapsed((previous) =>
-                                      previous.includes(id)
-                                        ? previous.filter((item) => item !== id)
-                                        : [...previous, id],
+                                    editAccordionItem(id, row.item.id)
+                                  }
+                                >
+                                  <span className="studio-subsection-number">
+                                    {row.index + 1}
+                                  </span>
+                                  <span>
+                                    {row.item.title || 'Untitled subsection'}
+                                  </span>
+                                </button>
+                                <StudioInsertMenu
+                                  compact
+                                  container={
+                                    row.item.title || 'Untitled subsection'
+                                  }
+                                  locked={nodeLocked(current, id)}
+                                  disabled={disabled}
+                                  inside
+                                  onInside={() => {}}
+                                  onInsert={(kind) =>
+                                    add(kind, true, {
+                                      layerId: id,
+                                      itemId: row.item.id,
+                                    })
+                                  }
+                                />
+                              </div>
+                            );
+                          if (row.type === 'add-item')
+                            return (
+                              <button
+                                key={id + ':add'}
+                                type="button"
+                                data-studio-parent={id}
+                                className="studio-layer-add-subsection"
+                                style={{
+                                  marginLeft: depth * 14,
+                                  width: `calc(100% - ${depth * 14}px)`,
+                                }}
+                                disabled={
+                                  disabled ||
+                                  nodeLocked(current, id) ||
+                                  (n.items?.length || 0) >= 30
+                                }
+                                onClick={() => addAccordionItem(id)}
+                              >
+                                <Plus size={13} /> Add subsection
+                              </button>
+                            );
+                          return (
+                            <Fragment key={id}>
+                              <div
+                                key={id}
+                                data-studio-layer={id}
+                                style={{
+                                  marginLeft: depth * 14,
+                                }}
+                                className={
+                                  'studio-layer' +
+                                  (selected.includes(id) ? ' active' : '') +
+                                  (n.hidden ? ' is-hidden' : '') +
+                                  (drag.visual?.ids.includes(id)
+                                    ? ' is-dragging'
+                                    : '')
+                                }
+                              >
+                                {n.kind === 'accordion' ||
+                                current.nodes.some(
+                                  (child) => child.parentId === id,
+                                ) ? (
+                                  <button
+                                    className="studio-layer-expand"
+                                    aria-label={
+                                      (collapsed.includes(id)
+                                        ? 'Expand '
+                                        : 'Collapse ') +
+                                      (n.name || n.title || 'section')
+                                    }
+                                    aria-expanded={!collapsed.includes(id)}
+                                    onClick={() =>
+                                      setCollapsed((previous) =>
+                                        previous.includes(id)
+                                          ? previous.filter(
+                                              (item) => item !== id,
+                                            )
+                                          : [...previous, id],
+                                      )
+                                    }
+                                  >
+                                    {collapsed.includes(id) ? (
+                                      <ChevronRight size={12} />
+                                    ) : (
+                                      <ChevronDown size={12} />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span />
+                                )}
+                                <button
+                                  className="studio-grip"
+                                  disabled={
+                                    disabled || nodeLocked(current, n.id)
+                                  }
+                                  title="Drag layer; Alt + Up/Down also reorders"
+                                  onPointerDown={(e) => drag.start(e, id)}
+                                  onDragStart={(e) => e.preventDefault()}
+                                >
+                                  <GripVertical size={14} />
+                                </button>
+                                <button
+                                  className="studio-layer-name"
+                                  aria-pressed={selected.includes(id)}
+                                  title={layerBreadcrumb(current, n.id)
+                                    .map((n) => n.name || n.title || n.kind)
+                                    .join(' › ')}
+                                  onPointerDown={(e) => drag.start(e, id)}
+                                  onDragStart={(e) => e.preventDefault()}
+                                  onClick={(e) =>
+                                    select(
+                                      id,
+                                      e.ctrlKey || e.metaKey
+                                        ? 'toggle'
+                                        : e.shiftKey
+                                          ? 'range'
+                                          : false,
                                     )
                                   }
                                 >
-                                  {collapsed.includes(id) ? (
-                                    <ChevronRight size={12} />
+                                  {n.kind === 'image' && n.src && (
+                                    <img
+                                      className="studio-layer-thumb"
+                                      src={n.src}
+                                      alt=""
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  )}
+                                  <span>{n.name || n.title || n.kind}</span>
+                                  <small>
+                                    {n.kind === 'accordion'
+                                      ? `Collapsible · ${n.items?.length || 0} subsections`
+                                      : `${n.kind === 'template' ? 'Section' : kinds.find((kind) => kind[0] === n.kind)?.[1] || n.kind} · ${effectiveSpan(n)}/12`}
+                                  </small>
+                                </button>
+                                {pagePeers
+                                  .filter(
+                                    (peer) => peer.selection?.layerId === id,
+                                  )
+                                  .slice(0, 3)
+                                  .map((peer) => (
+                                    <i
+                                      key={peer.id}
+                                      className="studio-layer-peer"
+                                      style={{ background: peer.color }}
+                                      title={peer.name + ' has this selected'}
+                                    >
+                                      {peer.name.slice(0, 1).toUpperCase()}
+                                    </i>
+                                  ))}
+                                <button
+                                  title={n.hidden ? 'Show layer' : 'Hide layer'}
+                                  aria-label={
+                                    (n.hidden ? 'Show ' : 'Hide ') +
+                                    (n.name || n.title || n.kind)
+                                  }
+                                  aria-pressed={n.hidden}
+                                  disabled={
+                                    disabled || nodeLocked(current, n.id)
+                                  }
+                                  onClick={() =>
+                                    edit(
+                                      patchNodes(current, [id], {
+                                        hidden: !n.hidden,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  {n.hidden ? (
+                                    <EyeOff size={13} />
                                   ) : (
-                                    <ChevronDown size={12} />
+                                    <Eye size={13} />
                                   )}
                                 </button>
-                              ) : (
-                                <span />
-                              )}
-                              <button
-                                className="studio-grip"
-                                disabled={disabled || nodeLocked(current, n.id)}
-                                title="Drag layer; Alt + Up/Down also reorders"
-                                onPointerDown={(e) => drag.start(e, id)}
-                                onDragStart={(e) => e.preventDefault()}
-                              >
-                                <GripVertical size={14} />
-                              </button>
-                              <button
-                                className="studio-layer-name"
-                                aria-pressed={selected.includes(id)}
-                                title={n.name || n.title || n.kind}
-                                onPointerDown={(e) => drag.start(e, id)}
-                                onDragStart={(e) => e.preventDefault()}
-                                onClick={(e) =>
-                                  select(
-                                    id,
-                                    e.ctrlKey || e.metaKey
-                                      ? 'toggle'
-                                      : e.shiftKey
-                                        ? 'range'
-                                        : false,
-                                  )
-                                }
-                              >
-                                {n.kind === 'image' && n.src && (
-                                  <img
-                                    className="studio-layer-thumb"
-                                    src={n.src}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
-                                )}
-                                <span>{n.name || n.title || n.kind}</span>
-                                <small>
-                                  {n.kind === 'template' ? 'Section' : n.kind} ·{' '}
-                                  {effectiveSpan(n)}/12
-                                </small>
-                              </button>
-                              {pagePeers
-                                .filter(
-                                  (peer) => peer.selection?.layerId === id,
-                                )
-                                .slice(0, 3)
-                                .map((peer) => (
-                                  <i
-                                    key={peer.id}
-                                    className="studio-layer-peer"
-                                    style={{ background: peer.color }}
-                                    title={peer.name + ' has this selected'}
-                                  >
-                                    {peer.name.slice(0, 1).toUpperCase()}
-                                  </i>
-                                ))}
-                              <button
-                                title={n.hidden ? 'Show layer' : 'Hide layer'}
-                                aria-label={
-                                  (n.hidden ? 'Show ' : 'Hide ') +
-                                  (n.name || n.title || n.kind)
-                                }
-                                aria-pressed={n.hidden}
-                                disabled={disabled || nodeLocked(current, n.id)}
-                                onClick={() =>
-                                  edit(
-                                    patchNodes(current, [id], {
-                                      hidden: !n.hidden,
-                                    }),
-                                  )
-                                }
-                              >
-                                {n.hidden ? (
-                                  <EyeOff size={13} />
-                                ) : (
-                                  <Eye size={13} />
-                                )}
-                              </button>
-                              <button
-                                title={n.locked ? 'Unlock layer' : 'Lock layer'}
-                                aria-label={
-                                  (n.locked ? 'Unlock ' : 'Lock ') +
-                                  (n.name || n.title || n.kind)
-                                }
-                                aria-pressed={Boolean(n.locked)}
-                                disabled={disabled}
-                                onClick={() =>
-                                  edit(
-                                    patchNodes(
-                                      current,
-                                      [id],
-                                      { locked: !n.locked },
-                                      true,
-                                    ),
-                                  )
-                                }
-                              >
-                                {n.locked ? (
-                                  <LockKeyhole size={13} />
-                                ) : (
-                                  <UnlockKeyhole size={13} />
-                                )}
-                              </button>
-                            </div>
+                                <button
+                                  title={
+                                    n.locked ? 'Unlock layer' : 'Lock layer'
+                                  }
+                                  aria-label={
+                                    (n.locked ? 'Unlock ' : 'Lock ') +
+                                    (n.name || n.title || n.kind)
+                                  }
+                                  aria-pressed={Boolean(n.locked)}
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    edit(
+                                      patchNodes(
+                                        current,
+                                        [id],
+                                        { locked: !n.locked },
+                                        true,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  {n.locked ? (
+                                    <LockKeyhole size={13} />
+                                  ) : (
+                                    <UnlockKeyhole size={13} />
+                                  )}
+                                </button>
+                              </div>
+                            </Fragment>
                           );
                         })}
                       <div className="studio-drop-space">
@@ -2421,11 +2954,16 @@ export function StudioEditor({
                           <Plus size={15} /> Add section below
                         </ContextMenuItem>
                         <ContextMenuItem
-                          disabled={disabled}
+                          disabled={
+                            disabled ||
+                            nodeLocked(current, node.id) ||
+                            (node.kind === 'accordion' &&
+                              (node.items?.length || 0) >= 30)
+                          }
                           onClick={() => addSection(true, node.id)}
                         >
                           <ListTree size={15} />{' '}
-                          {node.kind === 'section'
+                          {['section', 'accordion'].includes(node.kind)
                             ? 'Add subsection inside'
                             : 'Add subsection below'}
                         </ContextMenuItem>
@@ -2458,6 +2996,18 @@ export function StudioEditor({
                         >
                           <LockKeyhole size={15} />{' '}
                           {node.locked ? 'Unlock layer' : 'Lock layer'}
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          disabled={disabled || nodeLocked(current, node.id)}
+                          onClick={() => arrange('front')}
+                        >
+                          <Layers size={15} /> Bring to front
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          disabled={disabled || nodeLocked(current, node.id)}
+                          onClick={() => arrange('back')}
+                        >
+                          <Layers size={15} /> Send to back
                         </ContextMenuItem>
                         {node.kind !== 'template' && (
                           <ContextMenuItem
@@ -2533,6 +3083,34 @@ export function StudioEditor({
               }
               onBrowse={() => setSidebarTab('pages')}
             />
+            {breadcrumbs.length > 0 && (
+              <nav
+                className="studio-breadcrumb"
+                aria-label="Selected element path"
+              >
+                {breadcrumbs.map((item, index) => (
+                  <Fragment key={item.id}>
+                    {index > 0 && <span aria-hidden="true">›</span>}
+                    <button
+                      title={item.name || item.title || item.kind}
+                      onClick={() => select(item.id)}
+                    >
+                      {item.name || item.title || item.kind}
+                    </button>
+                  </Fragment>
+                ))}
+                {target?.textProperty && (
+                  <span>
+                    ›{' '}
+                    {target.textProperty === 'body'
+                      ? 'Paragraph'
+                      : target.textProperty === 'title'
+                        ? 'Heading'
+                        : 'Link text'}
+                  </span>
+                )}
+              </nav>
+            )}
             <div className="studio-canvas-toolbar">
               <span>
                 <MousePointer2 size={14} />
@@ -2572,12 +3150,39 @@ export function StudioEditor({
                 />{' '}
                 px
               </label>
+              {node?.kind === 'html' && (
+                <button
+                  className="studio-html-mode"
+                  aria-pressed={interactingHtmlId === node.id}
+                  disabled={disabled || nodeLocked(current, node.id)}
+                  title="Use the embedded block’s controls. Finish to move or resize it again."
+                  onClick={() =>
+                    setHtmlInteraction(
+                      interactingHtmlId === node.id
+                        ? null
+                        : { id: node.id, selection: selected },
+                    )
+                  }
+                >
+                  {interactingHtmlId === node.id
+                    ? 'Done interacting'
+                    : 'Interact with HTML'}
+                </button>
+              )}
               <button
                 className="studio-fit"
                 onClick={() => setAutoFit(true)}
                 aria-pressed={autoFit}
               >
                 Fit
+              </button>
+              <button
+                disabled={!selected.length}
+                title="Fit selection"
+                aria-label="Fit selection"
+                onClick={fitSelected}
+              >
+                <Scan size={16} />
               </button>
               <label htmlFor="studio-zoom-size" className="studio-zoom">
                 Zoom{' '}
@@ -2591,7 +3196,7 @@ export function StudioEditor({
                   onFocus={() => setAutoFit(false)}
                   onCommit={(value) => {
                     setAutoFit(false);
-                    setZoom((value ?? 100) / 100);
+                    changeZoom((value ?? 100) / 100);
                   }}
                 />
                 %
@@ -2720,11 +3325,13 @@ export function StudioEditor({
                       }}
                     >
                       <CanvasSurface
+                        sourcePage={copiedPage(ctx.data, page)?.sourcePage}
                         templateId={templateFor(ctx.data)?.id}
                         appearanceId={ctx.data['site:appearance']?.value}
                         layout={pagePreview?.layout || current}
                         page={page}
                         editorViewport
+                        interactingHtmlId={interactingHtmlId}
                         viewport={viewport}
                         cssOverride={cssPreview}
                         disableCss={!cssEnabled}
@@ -2746,6 +3353,7 @@ export function StudioEditor({
                         }
                         editing={!preview && !pagePreview}
                         selected={selected}
+                        selectedItem={accordionSelection}
                         onSelect={(id, multiple) => {
                           // Modifier clicks are handled per element below.
                           if (!multiple) select(id);
@@ -2758,7 +3366,21 @@ export function StudioEditor({
                           if (multiple) toggleElement(element);
                           else {
                             setMultiTargets([]);
-                            setTarget(pickDesignTarget(element));
+                            const picked = pickDesignTarget(element);
+                            setTarget(picked);
+                            const itemId = element
+                              .closest('[data-item-id]')
+                              ?.getAttribute('data-item-id');
+                            setAccordionSelection(
+                              picked &&
+                                itemId &&
+                                current.nodes.find(
+                                  (n) => n.id === picked.layerId,
+                                )?.kind === 'accordion'
+                                ? { layerId: picked.layerId, itemId }
+                                : null,
+                            );
+                            setAccordionFocus(undefined);
                           }
                         }}
                         onLayerPointerDown={drag.start}
@@ -2828,14 +3450,36 @@ export function StudioEditor({
                         <Plus size={15} /> Add section below
                       </ContextMenuItem>
                       <ContextMenuItem
-                        disabled={disabled}
+                        disabled={
+                          disabled ||
+                          Boolean(node && nodeLocked(current, node.id)) ||
+                          (node?.kind === 'accordion' &&
+                            (node.items?.length || 0) >= 30)
+                        }
                         onClick={() => addSection(true, node?.id)}
                       >
                         <ListTree size={15} />{' '}
-                        {node?.kind === 'section'
+                        {node && ['section', 'accordion'].includes(node.kind)
                           ? 'Add subsection inside'
                           : 'Add subsection below'}
                       </ContextMenuItem>
+                      {node && (
+                        <>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            disabled={disabled || nodeLocked(current, node.id)}
+                            onClick={() => arrange('front')}
+                          >
+                            <Layers size={15} /> Bring to front
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            disabled={disabled || nodeLocked(current, node.id)}
+                            onClick={() => arrange('back')}
+                          >
+                            <Layers size={15} /> Send to back
+                          </ContextMenuItem>
+                        </>
+                      )}
                       <ContextMenuSub>
                         <ContextMenuSubTrigger>
                           <SlidersHorizontal size={15} /> More
@@ -2989,12 +3633,17 @@ export function StudioEditor({
         />
         <ResizablePanel
           id="inspector"
+          panelRef={inspectorPanel}
+          collapsible
+          collapsedSize={0}
+          onResize={(size) => setInspectorHidden(size.inPixels < 1)}
           defaultSize="300px"
           minSize="240px"
           maxSize="680px"
           className="studio-panel"
         >
           <aside
+            inert={inspectorHidden}
             className={
               'studio-inspector' +
               (panel === 'css' ? ' studio-inspector-assistant' : '')
@@ -3304,9 +3953,9 @@ export function StudioEditor({
                       <span>{pageIndex.length}</span>
                     </div>
                     <p className="studio-help">
-                      Headings used by the page navigation. Content pages show
-                      a left index that folds into compact markers. Select
-                      a section to rename, relabel or hide its entry.
+                      Headings used by the page navigation. Content pages show a
+                      left index that folds into compact markers. Select a
+                      section to rename, relabel or hide its entry.
                     </p>
                     {pageIndex.length ? (
                       <ol>
@@ -3457,12 +4106,30 @@ export function StudioEditor({
                           onEnd={() => dispatch({ type: 'end' })}
                         />,
                       )}
+                    {node?.kind === 'shape' && (
+                      <Choice
+                        label="Shape"
+                        value={node.shape || 'rectangle'}
+                        options={[
+                          'rectangle',
+                          'ellipse',
+                          'triangle',
+                          'diamond',
+                          'line',
+                          'arrow',
+                        ].map((s) => [s, s[0].toUpperCase() + s.slice(1)])}
+                        onChange={(v) =>
+                          patch({ shape: v as CanvasNode['shape'] })
+                        }
+                      />
+                    )}
                     {node?.kind === 'html' &&
                       group(
                         'content',
                         'Custom HTML',
                         true,
                         <CustomHtmlEditor
+                          disabled={disabled}
                           key={node.id}
                           node={node}
                           onChange={(value, key) => patch(value, key)}
@@ -3565,10 +4232,68 @@ export function StudioEditor({
                           </label>
                           <AccordionEditor
                             items={node.items || []}
+                            focusItem={accordionFocus}
+                            onAdd={() => addAccordionItem(node.id)}
+                            onInsert={(itemId, kind) =>
+                              add(kind, true, { layerId: node.id, itemId })
+                            }
+                            canRemove={(itemId) =>
+                              !descendants(
+                                current,
+                                current.nodes
+                                  .filter(
+                                    (child) =>
+                                      child.parentId === node.id &&
+                                      child.parentItemId === itemId,
+                                  )
+                                  .map((child) => child.id),
+                              ).some((id) => nodeLocked(current, id))
+                            }
                             onChange={(items, key) => patch({ items }, key)}
                             onEnd={() => dispatch({ type: 'end' })}
                           />
                         </>,
+                      )}
+                    {node &&
+                      [
+                        'text',
+                        'section',
+                        'template',
+                        'image',
+                        'accordion',
+                      ].includes(node.kind) && (
+                        <div className="studio-field">
+                          <label className="studio-upload">
+                            <Plus size={16} />{' '}
+                            {uploading
+                              ? `Uploading ${progress}%`
+                              : 'Add images'}
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                              disabled={
+                                disabled ||
+                                (node.kind === 'accordion' && !insertItem) ||
+                                Boolean(
+                                  insertContainer &&
+                                  nodeLocked(current, insertContainer.id),
+                                )
+                              }
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                e.target.value = '';
+                                void addImages(files);
+                              }}
+                            />
+                          </label>
+                          <p className="studio-help">
+                            Adds separate image layers inside the selected text
+                            or section. Select several files to add them
+                            together. Choose a subsection first for a
+                            collapsible.
+                          </p>
+                        </div>
                       )}
                     {node &&
                       ![
@@ -3579,6 +4304,7 @@ export function StudioEditor({
                         'equation',
                         'references',
                         'html',
+                        'shape',
                       ].includes(node.kind) &&
                       group(
                         'media',
@@ -3605,7 +4331,9 @@ export function StudioEditor({
                             <Upload size={16} />
                             {uploading
                               ? `Uploading ${progress}%`
-                              : 'Choose file'}
+                              : node.src
+                                ? 'Replace this file'
+                                : 'Choose file'}
                             <input
                               type="file"
                               disabled={disabled}
@@ -3904,7 +4632,8 @@ export function StudioEditor({
                     {group(
                       'layout',
                       'Layout',
-                      !node || ['section', 'template'].includes(node.kind),
+                      !node ||
+                        ['section', 'template', 'html'].includes(node.kind),
                       <>
                         {node &&
                           !['template', 'button', 'section'].includes(
@@ -3912,35 +4641,114 @@ export function StudioEditor({
                           ) && (
                             <Choice
                               label="Containing section"
-                              value={node.parentId || ''}
+                              value={
+                                node.parentItemId
+                                  ? `${node.parentId}:${node.parentItemId}`
+                                  : node.parentId || ''
+                              }
                               options={[
                                 ['', 'Page (top level)'],
                                 ...current.nodes
                                   .filter(
                                     (n) =>
-                                      ['section', 'template'].includes(
-                                        n.kind,
-                                      ) &&
+                                      [
+                                        'section',
+                                        'template',
+                                        'accordion',
+                                        'text',
+                                      ].includes(n.kind) &&
                                       !descendants(current, [node.id]).includes(
                                         n.id,
                                       ) &&
                                       !nodeLocked(current, n.id),
                                   )
-                                  .map(
-                                    (n) =>
-                                      [n.id, n.name || n.title || n.kind] as [
-                                        string,
-                                        string,
-                                      ],
+                                  .flatMap((n) =>
+                                    n.kind === 'accordion'
+                                      ? (n.items || []).map(
+                                          (item) =>
+                                            [
+                                              `${n.id}:${item.id}`,
+                                              `${n.name || n.title || 'Collapsible'} / ${item.title}`,
+                                            ] as [string, string],
+                                        )
+                                      : [
+                                          [
+                                            n.id,
+                                            n.name || n.title || n.kind,
+                                          ] as [string, string],
+                                        ],
                                   ),
                               ]}
-                              onChange={(parentId) =>
-                                patch({ parentId: parentId || undefined })
-                              }
+                              onChange={(destination) => {
+                                const [parentId, parentItemId] =
+                                  destination.split(':');
+                                patch({
+                                  parentId: parentId || undefined,
+                                  parentItemId,
+                                });
+                              }}
                             />
                           )}
+                        {node && (
+                          <>
+                            <div className="studio-grid">
+                              <button
+                                type="button"
+                                disabled={
+                                  disabled || nodeLocked(current, node.id)
+                                }
+                                onClick={() => arrange('front')}
+                              >
+                                <Layers size={14} /> Bring to front
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  disabled || nodeLocked(current, node.id)
+                                }
+                                onClick={() => arrange('back')}
+                              >
+                                <Layers size={14} /> Send to back
+                              </button>
+                            </div>
+                            {number(
+                              'Layer order',
+                              'zIndex',
+                              -1000000,
+                              1000000,
+                              0,
+                            )}
+                            <p className="studio-help">
+                              Higher layers cover lower layers in the same
+                              container. Move pictures to overlap them; their
+                              reading order stays unchanged.
+                            </p>
+                          </>
+                        )}
+                        {node?.kind === 'html' && (
+                          <HtmlPositionControls
+                            artboard={artboard}
+                            id={node.id}
+                            revision={current}
+                            viewport={viewport}
+                            disabled={disabled || nodeLocked(current, node.id)}
+                            onMove={(x, y) =>
+                              moveObject(
+                                {
+                                  layerId: node.id,
+                                  selector: `[data-layer-id="${node.id}"]`,
+                                  label: node.name || 'Custom HTML',
+                                },
+                                x,
+                                y,
+                              )
+                            }
+                          />
+                        )}
                         {node &&
-                          ['section', 'template'].includes(node.kind) && (
+                          ['section', 'template', 'text'].includes(
+                            node.kind,
+                          ) && (
                             <Choice
                               label="Children layout"
                               value={node.layoutMode || 'flow'}
@@ -3982,11 +4790,13 @@ export function StudioEditor({
                             node ? effectiveSpan(node) : 12,
                           )}
                           {number(
-                            ['pdf', 'html'].includes(node?.kind || '')
+                            ['pdf', 'html', 'shape'].includes(node?.kind || '')
                               ? 'Height (px)'
                               : 'Min height',
                             'minHeight',
-                            ['pdf', 'html'].includes(node?.kind || '') ? 80 : 0,
+                            ['pdf', 'html', 'shape'].includes(node?.kind || '')
+                              ? 80
+                              : 0,
                             2000,
                             node?.kind === 'pdf'
                               ? 600
@@ -4154,7 +4964,68 @@ export function StudioEditor({
           </aside>
         </ResizablePanel>
       </ResizablePanelGroup>
+      {!preview && !elementText && (
+        <SelectionOutline
+          artboard={artboard}
+          stage={stageRef}
+          targets={styleTargets}
+          revision={current}
+          zoom={zoom}
+        />
+      )}
       {dockAnchor &&
+        styleTargets.length === 1 &&
+        dockAnchor.selector !== `[data-layer-id="${dockAnchor.layerId}"]` &&
+        !disabled &&
+        !styleLocked &&
+        !preview &&
+        !ctx.locked &&
+        !drag.visual &&
+        !objectDragging &&
+        !elementText &&
+        cssPreview === undefined &&
+        !pagePreview && (
+          <SelectionResize
+            target={dockAnchor}
+            artboard={artboard}
+            stage={stageRef}
+            revision={current}
+            zoom={zoom}
+            onActive={setObjectResizing}
+            onResize={(picked, styles) => {
+              if (disabled || nodeLocked(currentRef.current, picked.layerId))
+                return;
+              try {
+                let customCss = currentRef.current.customCss || '';
+                const scope =
+                  viewport <= 760
+                    ? 'mobile'
+                    : viewport <= 1000
+                      ? 'tablet'
+                      : 'all';
+                for (const [property, value] of Object.entries(styles))
+                  customCss = applySelectionStyle(
+                    customCss,
+                    picked.selector,
+                    property,
+                    value,
+                    scope,
+                  );
+                setCssEnabled(true);
+                edit({ ...currentRef.current, customCss });
+                dispatch({ type: 'end' });
+              } catch (error) {
+                setError(
+                  error instanceof Error
+                    ? error.message
+                    : 'Could not resize this element.',
+                );
+              }
+            }}
+          />
+        )}
+      {dockAnchor &&
+        node?.kind !== 'shape' &&
         !pendingPage &&
         !newPageOpen &&
         !preview &&
@@ -4162,12 +5033,18 @@ export function StudioEditor({
         !drag.visual &&
         !contextMenuOpen &&
         !objectDragging &&
+        !objectResizing &&
         !elementText &&
         cssPreview === undefined && (
           <SelectionDock
             key={dockAnchor.selector}
             target={dockAnchor}
             count={styleTargets.length}
+            onEditInline={
+              dockAnchor.textProperty
+                ? () => editElementText(dockAnchor, true)
+                : undefined
+            }
             onReplaceImage={
               styleTargets.length === 1 &&
               node &&
@@ -4263,7 +5140,10 @@ export function StudioEditor({
               }
               openAssistant();
             }}
-            onLayer={() => select(dockAnchor.layerId)}
+            onLayer={() => {
+              select(dockAnchor.layerId);
+              setTarget(null);
+            }}
             onEditText={
               styleTargets.length === 1 &&
               (dockAnchor.fieldId || dockAnchor.textProperty)
@@ -4284,8 +5164,31 @@ export function StudioEditor({
           }}
         />
       )}
+      {elementText && inlineText && target && (
+        <InlineTextEditor
+          target={target}
+          artboard={artboard}
+          stage={stageRef}
+          value={elementText.value}
+          maxLength={
+            elementText.property === 'body'
+              ? 12000
+              : elementText.property === 'title'
+                ? 300
+                : 150
+          }
+          onChange={(value) =>
+            setElementText((previous) =>
+              previous ? { ...previous, value } : null,
+            )
+          }
+          onSave={saveElementText}
+          onCancel={() => setElementText(null)}
+          onExpand={() => setInlineText(false)}
+        />
+      )}
       <TextEditDialog
-        open={Boolean(elementText)}
+        open={Boolean(elementText) && !inlineText}
         value={elementText?.value || ''}
         maxLength={
           elementText?.property === 'body'
@@ -4300,16 +5203,7 @@ export function StudioEditor({
           )
         }
         onCancel={() => setElementText(null)}
-        onSave={() => {
-          if (!elementText || nodeLocked(currentRef.current, elementText.id))
-            return;
-          edit(
-            patchNodes(currentRef.current, [elementText.id], {
-              [elementText.property]: elementText.value,
-            }),
-          );
-          setElementText(null);
-        }}
+        onSave={saveElementText}
       />
       <Dialog
         open={pendingPage !== null}
@@ -4396,10 +5290,13 @@ export function StudioEditor({
         }}
       >
         <DialogContent className="studio-dialog">
-          <DialogTitle>Create a page</DialogTitle>
+          <DialogTitle>
+            {duplicateSource ? 'Duplicate page' : 'Create a page'}
+          </DialogTitle>
           <DialogDescription>
-            Add a page to your team wiki. It will also be included in static
-            export.
+            {duplicateSource
+              ? 'Copy the saved layout, content, images and styles to a new page. The original stays unchanged.'
+              : 'Add a page to your team wiki. It will also be included in static export.'}
           </DialogDescription>
           <label htmlFor="studio-new-page-title">
             Page title
@@ -4447,7 +5344,7 @@ export function StudioEditor({
                 setResolving(true);
                 setPageError('');
                 try {
-                  await ctx.createPage?.(newTitle, newSlug);
+                  await ctx.createPage?.(newTitle, newSlug, duplicateSource);
                   setNewPageOpen(false);
                 } catch (error) {
                   setPageError(
@@ -4460,7 +5357,11 @@ export function StudioEditor({
                 }
               }}
             >
-              {resolving ? 'Creating…' : 'Create page'}
+              {resolving
+                ? 'Creating…'
+                : duplicateSource
+                  ? 'Duplicate page'
+                  : 'Create page'}
             </button>
           </div>
         </DialogContent>

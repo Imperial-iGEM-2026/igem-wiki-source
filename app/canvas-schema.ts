@@ -17,7 +17,8 @@ export type BlockKind =
   | 'accordion'
   | 'equation'
   | 'references'
-  | 'html';
+  | 'html'
+  | 'shape';
 /** One collapsible section. The id keeps it stable when items move. */
 export type AccordionItem = {
   id: string;
@@ -27,12 +28,16 @@ export type AccordionItem = {
 };
 export type ReferenceEntry = { id: string; text: string; url: string };
 export type CanvasNode = {
+  siteRole?: 'header';
+  shape?: 'rectangle' | 'ellipse' | 'triangle' | 'diamond' | 'line' | 'arrow';
   references?: ReferenceEntry[];
   html?: string;
   css?: string;
   javascript?: string;
   id: string;
   parentId?: string;
+  /** Direct child of a specific subsection in an accordion parent. */
+  parentItemId?: string;
   layoutMode?: 'flow' | 'free';
   x?: number;
   y?: number;
@@ -81,6 +86,7 @@ export type CanvasNode = {
   letterSpacing?: number;
   fontFamily?: 'sans' | 'serif' | 'mono';
   opacity?: number;
+  zIndex?: number;
   shadow?: 'none' | 'soft' | 'raised';
   objectFit?: 'cover' | 'contain';
 };
@@ -116,6 +122,14 @@ export const newNode = (
   background: '',
   padding: 0,
   hidden: false,
+  ...(kind === 'shape'
+    ? {
+        shape: 'rectangle' as const,
+        minHeight: 160,
+        span: 4,
+        background: '#3478f6',
+      }
+    : {}),
 });
 export function safeMediaURL(src: string) {
   if (
@@ -137,24 +151,27 @@ export function safeMediaURL(src: string) {
 export function embedURL(src: string): string | null {
   try {
     const u = new URL(src);
-    if (u.protocol !== 'https:') return null;
+    if (u.protocol !== 'https:' || u.username || u.password || u.port)
+      return null;
     if (
       u.hostname === 'video.igem.org' &&
       /^\/videos\/embed\/[a-zA-Z0-9-]+$/.test(u.pathname)
     )
-      return u.origin + u.pathname;
+      return u.origin + u.pathname + u.search + u.hash;
     if (
       u.hostname === 'www.youtube.com' &&
       /^\/embed\/[a-zA-Z0-9_-]+$/.test(u.pathname)
     )
-      return 'https://www.youtube-nocookie.com' + u.pathname;
+      return (
+        'https://www.youtube-nocookie.com' + u.pathname + u.search + u.hash
+      );
     if (
       u.hostname === 'www.youtube-nocookie.com' &&
       /^\/embed\/[a-zA-Z0-9_-]+$/.test(u.pathname)
     )
-      return u.origin + u.pathname;
+      return u.origin + u.pathname + u.search + u.hash;
     if (u.hostname === 'player.vimeo.com' && /^\/video\/\d+$/.test(u.pathname))
-      return u.origin + u.pathname;
+      return u.origin + u.pathname + u.search + u.hash;
     return null;
   } catch {
     return null;
@@ -205,6 +222,7 @@ export function validateLayout(input: unknown): input is CanvasLayout {
         'equation',
         'references',
         'html',
+        'shape',
       ].includes(n.kind) ||
       !Number.isInteger(n.span) ||
       n.span < 1 ||
@@ -246,6 +264,11 @@ export function validateLayout(input: unknown): input is CanvasLayout {
       return false;
     if (n.indexHidden !== undefined && typeof n.indexHidden !== 'boolean')
       return false;
+    if (
+      n.siteRole !== undefined &&
+      (n.siteRole !== 'header' || !['section', 'template'].includes(n.kind))
+    )
+      return false;
     for (const key of ['html', 'css', 'javascript'] as const)
       if (
         n[key] !== undefined &&
@@ -274,6 +297,19 @@ export function validateLayout(input: unknown): input is CanvasLayout {
         ))
     )
       return false;
+    if (
+      n.shape !== undefined &&
+      (n.kind !== 'shape' ||
+        ![
+          'rectangle',
+          'ellipse',
+          'triangle',
+          'diamond',
+          'line',
+          'arrow',
+        ].includes(n.shape))
+    )
+      return false;
     if (n.src && !safeMediaURL(n.src)) return false;
     if (n.kind === 'embed' && n.src && !embedURL(n.src)) return false;
     for (const key of ['tabletSpan', 'mobileSpan'] as const)
@@ -288,9 +324,10 @@ export function validateLayout(input: unknown): input is CanvasLayout {
     )
       return false;
     if (n.locked !== undefined && typeof n.locked !== 'boolean') return false;
+    if (n.zIndex !== undefined && !Number.isInteger(n.zIndex)) return false;
     for (const [key, min, max] of [
       ['x', 0, 100],
-      ['y', 0, 2000],
+      ['y', 0, Number.MAX_SAFE_INTEGER],
       ['freeWidth', 5, 100],
       ['freeHeight', 20, 2000],
       ['paddingX', 0, 160],
@@ -306,6 +343,7 @@ export function validateLayout(input: unknown): input is CanvasLayout {
       ['lineHeight', 1, 2.5],
       ['letterSpacing', -3, 12],
       ['opacity', 10, 100],
+      ['zIndex', -1000000, 1000000],
     ] as const)
       if (
         n[key] !== undefined &&
@@ -337,6 +375,15 @@ export function validateLayout(input: unknown): input is CanvasLayout {
   for (const n of d.nodes) {
     if (n.layoutMode !== undefined && !['free', 'flow'].includes(n.layoutMode))
       return false;
+    const directParent = d.nodes.find((item) => item.id === n.parentId);
+    if (n.parentItemId !== undefined || directParent?.kind === 'accordion') {
+      if (
+        typeof n.parentItemId !== 'string' ||
+        directParent?.kind !== 'accordion' ||
+        !directParent.items?.some((item) => item.id === n.parentItemId)
+      )
+        return false;
+    }
     if (n.parentId !== undefined) {
       if (typeof n.parentId !== 'string' || n.kind === 'template') return false;
       let ancestor = n.parentId;
@@ -345,7 +392,7 @@ export function validateLayout(input: unknown): input is CanvasLayout {
         const parent = d.nodes.find((item) => item.id === ancestor);
         if (
           !parent ||
-          !['template', 'section'].includes(parent.kind) ||
+          !['template', 'section', 'accordion', 'text'].includes(parent.kind) ||
           seen.has(ancestor) ||
           seen.size > 5
         )
@@ -409,17 +456,24 @@ export function descendants(layout: CanvasLayout, ids: string[]): string[] {
 }
 export function hierarchyOrder(layout: CanvasLayout): string[] {
   const seen = new Set<string>();
-  const visit = (parent?: string): string[] =>
+  const visit = (parent?: string, item?: string): string[] =>
     layout.order
       .filter(
         (id) =>
           !seen.has(id) &&
           !layout.nodes.find((n) => n.id === id)?.deleted &&
-          layout.nodes.find((n) => n.id === id)?.parentId === parent,
+          layout.nodes.find((n) => n.id === id)?.parentId === parent &&
+          layout.nodes.find((n) => n.id === id)?.parentItemId === item,
       )
       .flatMap((id) => {
         seen.add(id);
-        return [id, ...visit(id)];
+        const node = layout.nodes.find((n) => n.id === id);
+        return [
+          id,
+          ...(node?.kind === 'accordion'
+            ? (node.items || []).flatMap((item) => visit(id, item.id))
+            : visit(id)),
+        ];
       });
   return visit();
 }

@@ -14,7 +14,7 @@ import {
   type RenderContext,
 } from './template-transform';
 import { PageCanvas } from './page-canvas';
-import styles from './template-styles.json';
+import { templateCss } from './template-css';
 import { startTemplateMotion } from './template-motion';
 const cases: Record<string, string> = {
   viewbox: 'viewBox',
@@ -110,35 +110,7 @@ export function TemplateStyles({
   appearanceId?: string;
   editor?: boolean;
 }) {
-  const css = useMemo(() => {
-    let css = (styles as Record<string, string>)[id] || '';
-    if (
-      appearanceId &&
-      appearanceId !== id &&
-      Object.hasOwn(styles, appearanceId)
-    ) {
-      const appearance = (styles as Record<string, string>)[appearanceId];
-      css +=
-        '\n' +
-        appearance
-          .replaceAll(
-            `data-template-theme="${appearanceId}"`,
-            `data-template-theme="${id}"`,
-          )
-          .replaceAll(
-            `data-template-theme='${appearanceId}'`,
-            `data-template-theme='${id}'`,
-          );
-    }
-    if (editor)
-      css = css
-        .replace(
-          /@media\s*\((max|min)-width\s*:\s*([^)]*)\)/g,
-          '@container studioPage ($1-width: $2)',
-        )
-        .replaceAll('vw', 'cqw');
-    return css;
-  }, [id, appearanceId, editor]);
+  const css = useMemo(() => templateCss(id, appearanceId, editor), [id, appearanceId, editor]);
   return <style>{css}</style>;
 }
 export function TemplateMotion({ id, page }: { id: string; page: string }) {

@@ -1,20 +1,36 @@
+**Image processing for a 1 GB VPS:** The server now uses bundled sharp/libvips in a separate process with a 64 MiB JavaScript heap, one native processing thread, and no operation cache. It reads through the final scanline without retaining full-size JavaScript pixel arrays, checks PNG chunk CRCs, and releases the native process after every image. Successful unchanged-file checks remain cached by content. Healthy under-limit files retain their original bytes. Converted export copies keep PNG transparency, apply JPEG orientation and have a maximum 4096-pixel edge.
+
+The existing 448 MiB service memory limit is unchanged. Baseline JPEGs and PNGs keep the 40 megapixel limit; progressive JPEGs above 24 megapixels stop before allocating full-image coefficient buffers and ask for a baseline JPEG or smaller export copy. Decoder memory is still additional to the 64 MiB JS heap. The package includes pinned Linux x64/ARM64 native binaries and licences; installation checks the decoder before stopping the service. Install the complete package, save drafts and refresh the editor, then Prepare again. No RAM-limit increase or server-side npm install is needed.
+
+**Faster image preparation:** Exports reuse a lightweight media worker and serialize heavy decoding to keep the server responsive. Successful checks of unchanged images are cached by their exact file contents for up to 30 days, including across server restarts. Changed files are checked again; failed checks and converted images are not cached. Connection timeouts now explain how to reconnect to the same background job with Prepare. Install this package and refresh the editor after saving drafts. The first export still needs to validate each new image.
+
+
+Google Fonts in exports: Prepare now downloads referenced Google Fonts and their original licence notices automatically. The font files join the static asset ZIP, and the updated upload helper maps them to iGEM URLs. Publication rewrites stylesheet links and CSS imports, including custom HTML frames, from a frozen manifest without fetching Google during CI. Download the new helper and prepare fresh ZIPs after this server update. Unavailable fonts or licence downloads produce a page/layer error. Recording TODOs remain visible in the export panel and build log.
+
 # Publish the wiki from source on iGEM
+
+**Image integrity before upload:** Export preparation now decodes local JPEG and PNG files even when they are below 10 MB. Truncated JPEG scans/end markers and invalid PNG data/checksums stop preparation with the affected file and page/layer in the existing media-error panel. Re-export the original in an image editor and upload a fresh copy, then prepare again. Valid images below the limit keep their original bytes. This checks locally packaged files; existing remote iGEM URLs and other image formats do not receive this decoding check.
 
 Corrected 5 October 2026 using the Wiki requirements supplied by the team. This replaces the earlier instructions to commit a compiled `public/` folder: **do not do that**. Compiled HTML, CSS and JavaScript are CI artifacts, not files to hand-upload or commit. GitLab must build from source on every push to `main`.
 
-## Easier handoff: three ZIPs
+## Manual recording embeds
 
-In the updated live editor, save your project, click **Export wiki**, check your registered team URL name, then click **Prepare three ZIPs**. Download each part with its ZIP button. No terminal or separate media-folder transfer is needed to create the three downloads.
+Upload video and audio to Video Universe yourself, finish their settings, and copy the HTML iframe into an HTML block (or its `src` into a Video embed block). The exporter preserves valid `https://video.igem.org/videos/embed/ID` players and their query settings. It does not upload, transcode, package or map recordings.
 
-All three downloads capture the same saved project. Links are private to your signed-in account and project, last 30 minutes, and stop working after a server restart. Use the refresh button to capture newer saves. Local files are checked before download; missing media must be restored or replaced. The source ZIP contains unset review declarations, so it cannot publish accidentally before configuration.
+Raw video/audio players and non-iGEM video players become amber TODO frames in the exported page. Their surrounding editor layout is retained; saved editor content is not changed. The export dialog and `publication/recording-todos.json` identify saved recordings to fix; the compiled `publication-report.json` also lists TODOs found in template/custom HTML. Re-export after replacing them. Builds remain available for review with TODOs, but `submissionReady` stays false until these are resolved. Arbitrary JavaScript-generated players still need a visual review.
+
+## Easier handoff: two ZIPs
+
+In the updated live editor, save your project, click **Export wiki**, check your registered team URL name, then click **Prepare two ZIPs**. Preparation runs in the background with the current file shown in the dialog, so large PDFs do not hit the proxy request timeout. Download each part with its ZIP button. No terminal or separate media-folder transfer is needed to create the two downloads.
+
+All two downloads capture the same saved project. Links are private to your signed-in account and project, last 30 minutes, and stop working after a server restart. Use the refresh button to capture newer saves. Local files are checked before download; missing static media must be restored or replaced. Missing recording files do not block export because they are not packaged. The source ZIP contains unset review declarations, so it cannot publish accidentally before configuration.
 
 The downloads are split by destination:
 
 1. **01-website-source.zip** — extract and merge the reviewed source into the official GitLab repository. The CI file and source content are included; no compiled website, embedded media, private snapshot wrapper, AI brief, server database or replacement LICENSE is included. Saved page values can still include hidden/unpublished text and require review.
-2. **02-static-assets.zip** — extract the image/document/model files and upload accepted formats through iGEM Uploads. Google Fonts are not downloaded automatically; licensed fonts still need the font setup below.
-3. **03-video-audio.zip** — extract and upload recordings to Video Universe. If the snapshot contains no local recordings, this ZIP explicitly says so. Remote media is listed but not downloaded.
+2. **02-static-assets.zip** — extract the image/document/model files and upload accepted formats through iGEM Uploads. Referenced Google Fonts and their licence notices are included automatically; other custom fonts still need the font setup below.
 
-Each contains `UPLOAD-FIRST.md`, bundle information and an upload manifest. ZIP 01 contains `publication/media-map.json`: paste the actual returned iGEM URLs against the original source keys. Archive names are convenience labels; do not assume that GitLab or iGEM's media tools automatically import a ZIP. Extract first. Uploading all three ZIP files themselves is not a publication workflow.
+Each contains `UPLOAD-FIRST.txt`, bundle information and an upload manifest. ZIP 01 contains `publication/media-map.json`: paste the actual returned iGEM URLs against the original source keys. Archive names are convenience labels; do not assume that GitLab or iGEM's media tools automatically import a ZIP. Extract first. Uploading both ZIP files themselves is not a publication workflow.
 
 For an **older local snapshot**, the optional command-line packager is still available with Python 3.10+ and Node.js 24 in the source kit:
 
@@ -31,7 +47,7 @@ Omit `--media-dir` when the snapshot already embeds the uploaded files. Choose a
 | Website source | Commit source, reviewed content data, build scripts and `package-lock.json` to `https://gitlab.igem.org/2026/imperial-college`. The supplied CI job runs `npm ci` and the compiler. |
 | URL paths | Use `/imperial-college/`. Notebook, Swiss and Purple include `contribution`, `engineering` and `human-practices`. Set `requiredPages` to the exact standard slugs of the selected awards; add missing pages in the editor. An existing route does not establish that its scientific content meets a criterion. |
 | Images, documents, fonts, static files | Upload to the team's CDN area, then map their actual `static.igem.wiki` URLs. The editor's private media domain is not a publication host. |
-| Video **and audio** | Upload to iGEM Video Universe and use the actual iframe embed URL. Both kinds now become iframe embeds in the export. An MP3 on the static CDN is not the required audio workflow. |
+| Video **and audio** | Upload to iGEM Video Universe and use the actual iframe embed URL. Add the iframe HTML or embed URL in the editor before exporting. Raw video/audio frames become TODO placeholders; recordings are excluded from upload ZIPs and media maps. An MP3 on the static CDN is not the required audio workflow. |
 | Runtime dependencies | Serve all dependencies from iGEM infrastructure. Literal external HTML/CSS dependencies are now flagged. This is not a complete JavaScript/network audit: run the official HAR check after deployment. Ordinary outbound citation links are allowed. |
 | Fonts | Notebook/Purple import Google Fonts until replaced. Supply `fontCss` with reviewed `@font-face` rules using iGEM-hosted font files; the compiler replaces Google Fonts imports. The editor need not lose its fonts. |
 | Licensing | Include the exported **CC BY 4.0 root LICENSE** for original team wiki work. Third-party materials retain their own licences. Check third-party rights and place source/license credits next to each asset. A footer-only credits list or a global CC BY notice does not replace inline credits. |
@@ -45,7 +61,7 @@ The updated editor streams ZIP64 files from the server to the browser download f
 
 Older editor versions limited base64 media snapshots to 150 MiB to avoid exhausting browser memory. That was an application safeguard, not an iGEM requirement. The authenticated `/api/export` metadata endpoint remains available for administrative scripts; it does not embed media.
 
-**Using the three ZIPs:** follow `UPLOAD-FIRST.md` in ZIP 01. After uploading ZIP 02/03 files and filling `publication/media-map.json`, configure `publication/config.json` (no review JSON is required). Continue with the licensing, font and build instructions below. The next snapshot commands are an alternative for existing local snapshots, not an extra prerequisite for the editor downloads.
+**Using the two ZIPs:** follow `UPLOAD-FIRST.txt` in ZIP 01. After uploading ZIP 02 files and filling `publication/media-map.json`, configure `publication/config.json` (no review JSON is required). Continue with the licensing, font and build instructions below. The next snapshot commands are an alternative for existing local snapshots, not an extra prerequisite for the editor downloads.
 
 ## 1. Save and review locally
 
@@ -75,7 +91,7 @@ Retrieve it using the team's private SSH/file-transfer workflow and extract it l
 Use the team's official, signed-in destinations:
 
 - [Imperial wiki uploads](https://teams.igem.org/6377/deliverables/wiki/uploads) for images, documents, fonts and other accepted static files.
-- [iGEM Video Universe](https://video.igem.org/) for **videos and audio**. Wait for processing and verify playback. Copy the iframe `src`, of the form `https://video.igem.org/videos/embed/ACTUAL-ID`, rather than a watch/share URL. This exporter uses the bare embed URL, without optional player query parameters.
+- [iGEM Video Universe](https://video.igem.org/) for **videos and audio**. Wait for processing and verify playback. Copy the iframe `src`, of the form `https://video.igem.org/videos/embed/ACTUAL-ID`, rather than a watch/share URL. Player query parameters such as `title=0` and `warningTitle=0` are preserved.
 - [Wiki instructions](https://teams.igem.org/go/deliverables/wiki) for the current allowed formats and limits.
 
 `wiki-review/publication-report.json` lists each asset's source URL and the local exported `file`. Upload those files and copy the returned URLs. Copy `wiki-review/media-map.example.json` to `publication/media-map.json` and replace every example value with the URL for that exact file. Keep the original source keys unchanged. Illustrative entries (not real uploaded destinations):
@@ -150,6 +166,10 @@ The strict mapped-media build does not need `public/` image files: it references
 
 Copy `ops/igem.gitlab-ci.yml` to the root as `.gitlab-ci.yml`, reconciling it with existing jobs so an older job cannot overwrite/deploy different output. It runs on every `main` push, installs from `package-lock.json`, builds all pages from source, and publishes `igem-build/public` as a Pages artifact. It uses the modern nested `pages.publish` syntax ([GitLab reference](https://docs.gitlab.com/ci/yaml/#pagespublish)); validate it in the team's GitLab CI Lint before deploying. The exact Node image version is pinned in the supplied job. Runtime assets still must be on iGEM infrastructure; downloading build dependencies in CI is a separate operation.
 
+If the build succeeds but **Uploading artifacts** fails with **413 Request Entity Too Large**, the GitLab coordinator or its reverse proxy rejected the archive. This is separate from the static uploader's per-file limit and Studio VPS memory. The supplied job explicitly enables Fastzip compression (`ARTIFACT_COMPRESSION_LEVEL: "slowest"`) and transfer progress; the build prints uncompressed size, a compressed ZIP estimate and the largest files. The estimate does not certify acceptance: iGEM's configured limit is not known. If compression still fails, give iGEM support the job ID, correlation ID and size output and ask them to check the artifact and proxy upload limits. Changing your own VPS Nginx configuration does not change iGEM GitLab. Do not remove required assets or bypass publication checks to conceal this failure.
+
+Compressed Pages artifacts do not support HTTP Range requests on GitLab Pages ([runner documentation](https://docs.gitlab.com/ci/runners/configure_runners/#artifact-and-cache-settings)). The iGEM export serves media/PDF parts from static iGEM hosting and recordings from Video Universe, so their range support is unaffected. If you customise the build to serve range-dependent files directly from Pages, use uncompressed artifacts (`fastest`) and arrange a sufficient upload limit instead.
+
 Add `/igem-build/`, `/.static-build/`, `/node_modules/`, `/work/` and private snapshot/export patterns to the official repository's `.gitignore`. A `.gitignore` entry does not untrack already committed files: inspect `git status`/the staged diff and remove previously committed compiled output from tracking through the team's normal review workflow, preserving the source and exported CC BY 4.0 LICENSE.
 
 ## 6. Build, deploy and check
@@ -192,7 +212,7 @@ Notebook and Purple Notebook exports include DM Sans (normal and italic), Caveat
 
 ## Large PDFs
 
-Prepare three ZIPs automatically partitions local PDFs larger than 9,000,000 bytes into valid PDFs below that target. Upload all parts through the helper as usual. `publication/pdf-parts.json` records page ranges and the helper maps each part to its uploaded URL. Rebuild the website after uploading. The original saved PDF and editor layout are unchanged.
+Prepare two ZIPs automatically partitions local PDFs larger than 9,000,000 bytes into valid PDFs below that target. Upload all parts through the helper as usual. `publication/pdf-parts.json` records page ranges and the helper maps each part to its uploaded URL. Rebuild the website after uploading. The original saved PDF and editor layout are unchanged.
 
 The editor, Preview and published wiki use the same Edge-style reader, with continuous page scrolling, thumbnails, page navigation, zoom, fit, rotation and fullscreen. Parts are fetched as needed and nearby pages are drawn progressively. **Download complete PDF** fetches all parts and merges their pages in order; it includes progress, cancellation and retry after errors. Downloading the full file needs browser memory and the media host must allow cross-origin fetching. Normal viewing does not download the whole notebook. Open the downloaded PDF in your browser or desktop reader for text search, printing and annotation; these are not included in the embedded reader.
 
@@ -201,3 +221,14 @@ Parts are reading copies: page appearance and order are retained, but document-l
 ## Large images
 
 Local JPEG and static PNG images above 9,900,000 bytes are automatically compressed during export. The original stays unchanged. JPEG quality is reduced first; images are resized proportionally if necessary. PNGs stay PNGs with transparency. Review exported scientific figures for legibility. Oversized unsupported formats (including animated images), unsafe/corrupt images, or images that cannot meet the target stop export with the filename and a request to compress or replace it. Re-export older ZIPs to benefit from this processing. The helper rejects static files of 10,000,000 bytes or larger before uploading.
+
+
+### Shared publication assets and uploaded PDF worker
+
+New two-ZIP exports with PDF elements include `assets/runtime/pdfjs-6.4.299-worker.js` (with a source-key prefix in the upload filename). Upload this JavaScript unchanged using the helper. The helper verifies its content type, CORS response and SHA-256 against the bundled original before preparing GitLab changes. Rejected JavaScript uploads or incompatible hosting stop with a clear error; do not disguise code as an image. A live upload acceptance check is still required.
+
+The source media map points `/templates/runtime/pdfjs-6.4.299-worker.js` to the actual upload URL. CI regenerates the same pinned worker from npm dependencies, rewrites its runtime reference, and removes its local copy only after finding that reference. Older exports without the mapping keep the local copy. The source and lockfile remain in GitLab; the hosted worker is only a runtime distribution asset.
+
+Template styles and custom HTML component parts are deduplicated by content. JSON components remain inert in the parent; the browser reconstructs the original opaque sandboxed document. Relative stylesheet URLs are kept inline. Canonical page aliases use redirects preserving query/hash. PDF scripting-engine WASM is not included because this reader does not import the PDF scripting sandbox; normal PDF resources remain.
+
+`IGEM_ARTIFACT_BUDGET_BYTES` in the generated CI defaults to 4,800,000 bytes of estimated compressed ZIP size. It stops an over-budget build before upload with actionable instructions. Adjust it if iGEM confirms a different limit. This conservative budget is not an assertion about the actual GitLab/proxy setting.

@@ -1,6 +1,7 @@
 'use client';
 import { useState, type DragEvent } from 'react';
 import {
+  Copy,
   ArrowDown,
   ArrowUp,
   File,
@@ -44,6 +45,7 @@ export function StudioPages({
   onNavigate,
   pages = studioPages,
   onCreate,
+  onDuplicate,
   onDelete,
   onRestore,
   removed = [],
@@ -54,6 +56,7 @@ export function StudioPages({
 }: {
   pages?: typeof studioPages;
   onCreate?: () => void;
+  onDuplicate?: (slug: string) => void;
   onDelete?: (slug: string) => Promise<void>;
   onRestore?: (slug: string) => Promise<void>;
   removed?: { slug: string; title: string }[];
@@ -272,6 +275,16 @@ export function StudioPages({
           <File size={14} />
           <span>{p.title}</span>
         </button>
+        {onDuplicate && (
+          <button
+            className="studio-page-delete"
+            aria-label={'Duplicate page ' + p.title}
+            title="Duplicate page"
+            onClick={() => onDuplicate(p.slug)}
+          >
+            <Copy size={13} />
+          </button>
+        )}
         {onDelete && (p.slug as string) !== 'home' && (
           <button
             className="studio-page-delete"

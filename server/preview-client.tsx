@@ -1,15 +1,39 @@
 import { createRoot } from 'react-dom/client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Home from '../app/home';
 import { pageCatalog } from '../app/custom-pages';
 import type { Blocks } from '../app/content';
 import '../app/globals.css';
 
-function Preview({ data, page }: { data: Blocks; page: string }) {
-  const [current, setCurrent] = useState(page);
+function Preview({
+  data,
+  page,
+  anchor,
+}: {
+  data: Blocks;
+  page: string;
+  anchor?: { id: string; visit: number };
+}) {
+  const lastVisit = useRef<number | undefined>(undefined);
+  const anchorId = anchor?.id,
+    anchorVisit = anchor?.visit;
   useEffect(() => {
-    setCurrent(page);
-  }, [page]);
+    if (!anchorId || lastVisit.current === anchorVisit) return;
+    lastVisit.current = anchorVisit;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-layer-id="${CSS.escape(anchorId)}"]`)
+          ?.scrollIntoView({ block: 'start' });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [anchorId, anchorVisit]);
+  const [current, setCurrent] = useState(page);
   useEffect(() => {
     if (parent !== window)
       parent.postMessage({ type: 'prion-preview-rendered' }, location.origin);
@@ -79,7 +103,22 @@ if (parent !== window) {
     )
       return;
     if (!event.data.data || typeof event.data.page !== 'string') return;
-    root.render(<Preview data={event.data.data} page={event.data.page} />);
+    const raw = event.data.anchor;
+    const anchor =
+      raw &&
+      typeof raw.id === 'string' &&
+      raw.id.length < 200 &&
+      typeof raw.visit === 'number'
+        ? { id: raw.id, visit: raw.visit }
+        : undefined;
+    root.render(
+      <Preview
+        key={event.data.page}
+        data={event.data.data}
+        page={event.data.page}
+        anchor={anchor}
+      />,
+    );
   });
   parent.postMessage({ type: 'prion-preview-ready' }, window.location.origin);
 } else if (location.pathname === '/mcp/preview') {

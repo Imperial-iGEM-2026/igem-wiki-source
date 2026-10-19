@@ -9,6 +9,13 @@ export function startPageIndex(root) {
   const stage = root.dataset.editorViewport
     ? root.closest('.studio-stage')
     : null;
+  // A transformed artboard changes sticky coordinates. Use a compositor scroll
+  // timeline in Studio so pinning follows the same frame as the canvas scroll.
+  // Older browsers retain the scale-aware JS fallback; visitors use sticky.
+  const editorScrollTimeline = Boolean(stage &&
+    CSS.supports('animation-timeline', '--studio-page-scroll') &&
+    CSS.supports('animation-range', '0px 100px'));
+  let nativeSticky = false;
   const generated = new Map();
   let sidebar, host, panel, list, toggle, title, grid, tip;
   let entries = [],
@@ -25,6 +32,12 @@ export function startPageIndex(root) {
   const size = new ResizeObserver(() => schedule());
   size.observe(main);
   size.observe(root);
+  if (stage) size.observe(stage);
+  // Zoom changes only the artboard's transform, so ResizeObserver does not
+  // fire. Recalculate the physical offset before reusing a canvas translation.
+  const artboard = stage && root.closest('.studio-artboard');
+  const zoomChanges = new MutationObserver(() => schedule());
+  if (artboard) zoomChanges.observe(artboard, { attributes: true, attributeFilter: ['style', 'class'] });
   function schedule(rebuild = false) {
     dirty ||= rebuild;
     if (!frame && !disposed) frame = requestAnimationFrame(update);
@@ -65,11 +78,14 @@ export function startPageIndex(root) {
     host = next;
     sidebar = host?.closest('[data-page-index-sidebar]');
     grid =
+      sidebar?.closest('[data-page-index-grid]') ||
       sidebar?.closest('[data-layer-id="custom-content"]') ||
       sidebar?.closest('.wiki-content');
     if (!host) return;
+    nativeSticky = !stage && Boolean(grid?.hasAttribute('data-page-index-grid') || root.dataset.templateTheme === 'luca');
     panel = document.createElement('nav');
     panel.className = 'wiki-page-index';
+    panel.toggleAttribute('data-native-sticky', nativeSticky);
     panel.setAttribute('aria-label', 'Page section index');
     const head = document.createElement('div');
     head.className = 'wiki-page-index-head';
@@ -182,7 +198,7 @@ export function startPageIndex(root) {
           : 'smooth';
         if (stage)
           stage.scrollTo({
-            top: stage.scrollTop + top - stage.getBoundingClientRect().top - 24,
+            top: stage.scrollTop + top - offset,
             behavior,
           });
         else {
@@ -213,10 +229,11 @@ export function startPageIndex(root) {
     active = -1;
   }
   function topOffset() {
-    if (stage) return stage.getBoundingClientRect().top + 24;
-    const header = root.querySelector('.wiki-header');
+    const header = root.querySelector('.wiki-header,[data-site-header]');
     const pinned =
       header && ['sticky', 'fixed'].includes(getComputedStyle(header).position);
+    if (stage) return Math.max(stage.getBoundingClientRect().top + 24,
+      pinned ? header.getBoundingClientRect().bottom + 16 : 0);
     return pinned
       ? Math.max(24, header.getBoundingClientRect().bottom + 16)
       : 24;
@@ -250,11 +267,38 @@ export function startPageIndex(root) {
     }
     const bounds = sidebar.getBoundingClientRect(),
       mainBox = main.getBoundingClientRect();
+    // Luca's full-width footer sits outside its article grid. Keep the index
+    // inside the article so a tall navigation card cannot cover the footer.
+    const contentBottom = nativeSticky || grid?.hasAttribute('data-page-index-grid') || root.dataset.templateTheme === 'luca'
+      ? (grid?.getBoundingClientRect().bottom ?? mainBox.bottom)
+      : mainBox.bottom;
     const offset = topOffset();
     // Pin against the whole page, including sections added below the template.
     const scale = root.getBoundingClientRect().width / root.offsetWidth || 1;
-    const pinned = !mobile && bounds.top < offset && bounds.width > 0;
+    const setPixel = (name, value) => {
+      const text = value.toFixed(2) + 'px';
+      if (panel.style.getPropertyValue(name) !== text) panel.style.setProperty(name, text);
+    };
+    setPixel('--index-height', Math.max(160,
+      ((stage?.clientHeight || innerHeight) - (stage ? 48 : offset + 24)) / scale));
+    const scrollPinned = editorScrollTimeline && !mobile && bounds.width > 0;
+    panel.toggleAttribute('data-scroll-pinned', scrollPinned);
+    if (scrollPinned) {
+      // These are fixed scroll-range endpoints, not per-frame translations.
+      // Adding scrollTop cancels viewport movement; scale converts canvas px.
+      const start = bounds.top + stage.scrollTop - offset;
+      const travel = Math.max(0, (contentBottom - bounds.top - 16) / scale - panel.offsetHeight);
+      setPixel('--index-scroll-start', start);
+      setPixel('--index-scroll-end', start + Math.max(1, travel * scale));
+      setPixel('--index-scroll-travel', travel);
+    }
+    const pinned = !nativeSticky && !scrollPinned && !mobile && bounds.top < offset && bounds.width > 0;
     panel.toggleAttribute('data-pinned', pinned);
+    if (nativeSticky) {
+      const top = (offset - (stage?.getBoundingClientRect().top || 0)) / scale + 'px';
+      if (panel.style.getPropertyValue('--index-top') !== top)
+        panel.style.setProperty('--index-top', top);
+    }
     if (pinned) {
       // The canvas uses contain:paint, which changes the containing block of
       // position:fixed. Translate in normal flow instead of escaping the canvas.
@@ -262,7 +306,7 @@ export function startPageIndex(root) {
         '--index-shift',
         Math.max(
           0,
-          Math.min(offset, mainBox.bottom - panel.offsetHeight * scale - 16) -
+          Math.min(offset, contentBottom - panel.offsetHeight * scale - 16) -
             bounds.top,
         ) /
           scale +
@@ -271,14 +315,6 @@ export function startPageIndex(root) {
     } else {
       panel.style.removeProperty('--index-shift');
     }
-    panel.style.setProperty(
-      '--index-height',
-      Math.max(
-        160,
-        ((stage?.clientHeight || innerHeight) - (stage ? 48 : offset + 24)) /
-          scale,
-      ) + 'px',
-    );
     const positions = entries
       .map((e, index) => ({
         index,
@@ -305,10 +341,15 @@ export function startPageIndex(root) {
             : record.target.parentElement;
         if (el?.closest('[data-page-index-host],svg,.modern-pdf-reader'))
           return false;
-        if (record.type === 'attributes')
-          return (
-            record.attributeName !== 'class' || el?.matches('.canvas-section')
-          );
+        if (record.type === 'attributes') {
+          if (record.attributeName !== 'class') return true;
+          if (!el?.matches('.canvas-section')) return false;
+          // Selection/hover/drag chrome does not change the page's headings.
+          // Rebuilding for those classes resets the index during editing.
+          const contentClasses = (value) => (value || '').split(/\s+/)
+            .filter(name => name && !name.startsWith('studio-')).sort().join(' ');
+          return contentClasses(record.oldValue) !== contentClasses(el.getAttribute('class'));
+        }
         if (record.type === 'characterData')
           return !!el?.closest('h1,h2,h3,[data-section-index]');
         return [...record.addedNodes, ...record.removedNodes].some(
@@ -329,6 +370,7 @@ export function startPageIndex(root) {
     subtree: true,
     childList: true,
     characterData: true,
+    attributeOldValue: true,
     attributeFilter: [
       'hidden',
       'class',
@@ -347,6 +389,7 @@ export function startPageIndex(root) {
   return () => {
     disposed = true;
     changes.disconnect();
+    zoomChanges.disconnect();
     size.disconnect();
     cancelAnimationFrame(frame);
     window.removeEventListener('scroll', onScroll);

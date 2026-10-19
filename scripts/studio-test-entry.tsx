@@ -5,7 +5,12 @@ import { CanvasContext, PageCanvas } from '../app/page-canvas';
 import { defaultBlocks } from '../app/content';
 import { emptyLayout, type CanvasLayout } from '../app/canvas-schema';
 export * from '../app/studio-engine';
+export * from '../app/studio-view';
 export * from '../app/canvas-schema';
+export * from '../app/html-document';
+export * from '../app/html-image';
+export * from '../app/site-header-layer';
+export * from '../app/studio-layer-tree';
 export * from '../app/custom-css';
 export * from '../app/drag-session';
 const builtins = [
@@ -37,13 +42,15 @@ export function renderStudio() {
     />,
   );
 }
-export function renderCanvas(layout: CanvasLayout, editing = false) {
+export function renderCanvas(layout: CanvasLayout, editing = false, interactingHtmlId?: string, selected: string[] = []) {
   return renderToStaticMarkup(
     <CanvasSurface
       layout={layout}
       builtins={builtins}
       editing={editing}
       publication={!editing}
+      interactingHtmlId={interactingHtmlId}
+      selected={selected}
     />,
   );
 }
@@ -266,3 +273,5 @@ export { renderEquation, splitMathText } from '../app/equation-block';
 
 export { referenceIndex, citationToken } from '../app/references';
 export { startReferenceNavigation } from '../app/reference-navigation';
+
+export * from '../app/html-navigation';

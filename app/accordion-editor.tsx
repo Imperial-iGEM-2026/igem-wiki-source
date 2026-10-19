@@ -1,6 +1,8 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
-import type { AccordionItem } from './canvas-schema';
+import type { AccordionItem, BlockKind } from './canvas-schema';
+import { StudioInsertMenu } from './studio-insert-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -15,11 +17,33 @@ export function AccordionEditor({
   items,
   onChange,
   onEnd,
+  onAdd,
+  focusItem,
+  onInsert,
+  canRemove,
 }: {
   items: AccordionItem[];
   onChange: (items: AccordionItem[], group?: string) => void;
   onEnd: () => void;
+  onAdd?: () => void;
+  focusItem?: { id: string };
+  onInsert?: (itemId: string, kind: BlockKind) => void;
+  canRemove?: (itemId: string) => boolean;
 }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusItem) return;
+    const editor = editorRef.current;
+    const title = editor?.querySelector<HTMLInputElement>(
+      `#accordion-title-${CSS.escape(focusItem.id)}`,
+    );
+    if (!title) return;
+    const group = editor?.closest('details');
+    if (group) group.open = true;
+    title.focus({ preventScroll: true });
+    title.select();
+    title.closest('fieldset')?.scrollIntoView({ block: 'nearest' });
+  }, [focusItem]);
   const update = (
     id: string,
     changes: Partial<AccordionItem>,
@@ -36,10 +60,25 @@ export function AccordionEditor({
     onChange(next);
   };
   return (
-    <div className="studio-accordion-editor">
+    <div className="studio-accordion-editor" ref={editorRef}>
+      <button
+        type="button"
+        className="studio-accordion-add"
+        disabled={items.length >= 30}
+        onClick={() =>
+          onAdd
+            ? onAdd()
+            : onChange([
+                ...items,
+                newAccordionItem('New subsection', 'Add text here.'),
+              ])
+        }
+      >
+        <Plus size={14} /> Add subsection
+      </button>
       {items.map((item, index) => (
         <fieldset key={item.id} className="studio-accordion-item">
-          <legend>Section {index + 1}</legend>
+          <legend>Subsection {index + 1}</legend>
           <label
             className="studio-field"
             htmlFor={'accordion-title-' + item.id}
@@ -76,6 +115,20 @@ export function AccordionEditor({
               onBlur={onEnd}
             />
           </label>
+          {onInsert && (
+            <div className="studio-accordion-add-content">
+              <span>Add image or element</span>
+              <StudioInsertMenu
+                compact
+                container={item.title || 'Untitled subsection'}
+                locked={false}
+                disabled={false}
+                inside
+                onInside={() => {}}
+                onInsert={(kind) => onInsert(item.id, kind)}
+              />
+            </div>
+          )}
           <div className="studio-accordion-actions">
             <label>
               <input
@@ -90,7 +143,7 @@ export function AccordionEditor({
             <span>
               <button
                 type="button"
-                aria-label={'Move section ' + (index + 1) + ' up'}
+                aria-label={'Move subsection ' + (index + 1) + ' up'}
                 disabled={index === 0}
                 onClick={() => move(index, -1)}
               >
@@ -98,7 +151,7 @@ export function AccordionEditor({
               </button>
               <button
                 type="button"
-                aria-label={'Move section ' + (index + 1) + ' down'}
+                aria-label={'Move subsection ' + (index + 1) + ' down'}
                 disabled={index === items.length - 1}
                 onClick={() => move(index, 1)}
               >
@@ -106,7 +159,13 @@ export function AccordionEditor({
               </button>
               <button
                 type="button"
-                aria-label={'Delete section ' + (index + 1)}
+                aria-label={'Delete subsection ' + (index + 1)}
+                disabled={canRemove && !canRemove(item.id)}
+                title={
+                  canRemove && !canRemove(item.id)
+                    ? 'Unlock nested elements before deleting this subsection'
+                    : 'Delete subsection and its elements'
+                }
                 onClick={() => onChange(items.filter((i) => i.id !== item.id))}
               >
                 <Trash2 size={14} />
@@ -115,22 +174,10 @@ export function AccordionEditor({
           </div>
         </fieldset>
       ))}
-      <button
-        type="button"
-        className="studio-accordion-add"
-        disabled={items.length >= 30}
-        onClick={() =>
-          onChange([
-            ...items,
-            newAccordionItem('New section', 'Add text here.'),
-          ])
-        }
-      >
-        <Plus size={14} /> Add section
-      </button>
       <p className="studio-help">
-        Readers can open several sections at once. Opening one never changes the
-        page address or scroll position.
+        Add a subsection above or in Layers. Select its title in Layers to edit
+        it here. Use its + button to insert images or other elements inside.
+        Readers can open several subsections at once.
       </p>
     </div>
   );

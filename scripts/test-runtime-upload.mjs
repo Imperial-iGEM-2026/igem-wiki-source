@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { verifyRuntimeAsset } from '../upload-helper/files.mjs';
+const root = await mkdtemp(path.resolve('work/runtime-upload-'));
+const file = path.join(root, 'worker.js');
+const source = 'export const WorkerMessageHandler = {};';
+await writeFile(file, source);
+const row = { kind: 'runtime', localFile: file, url: 'https://static.igem.wiki/teams/test/worker.js' };
+const headers = { 'content-type': 'text/javascript; charset=utf-8', 'access-control-allow-origin': '*' };
+await verifyRuntimeAsset(row, async (url, options) => {
+  assert.equal(url, row.url);
+  assert.equal(options.redirect, 'error');
+  assert.equal(options.credentials, 'omit');
+  return new Response(source, { headers });
+});
+await assert.rejects(verifyRuntimeAsset(row, async () => new Response(source, { headers: { ...headers, 'content-type': 'application/octet-stream' } })), /not serving.*JavaScript/);
+await assert.rejects(verifyRuntimeAsset(row, async () => new Response(source, { headers: { 'content-type': 'text/javascript' } })), /CORS/);
+await assert.rejects(verifyRuntimeAsset(row, async () => new Response('wrong version', { headers })), /does not match/);
+await assert.rejects(verifyRuntimeAsset({ ...row, url: 'https://example.com/worker.js' }), /uploaded iGEM URL/);
+console.log('PASS: hosted runtime checks MIME, CORS, exact bytes and destination before publication.');

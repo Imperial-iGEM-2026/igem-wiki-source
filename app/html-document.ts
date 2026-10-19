@@ -14,11 +14,51 @@ export const htmlExample = {
     "document.querySelector('.orbit').addEventListener('click', event => {\n  event.currentTarget.classList.toggle('fast');\n});",
 };
 
+// The parent handles only validated navigation requests from this exact frame.
+// Keep navigation out of the sandbox permissions: custom scripts stay isolated.
+const linkBridge = `document.addEventListener('click',function(e){
+ if(!e.isTrusted||e.defaultPrevented||e.button!==0)return;
+ var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;
+ var href=a.getAttribute('href');if(!href)return;
+ if(href.charAt(0)==='#'){
+  var id;try{id=decodeURIComponent(href.slice(1))}catch{return}
+  var local=document.getElementById(id)||document.getElementsByName(id)[0];
+  if(local){e.preventDefault();local.scrollIntoView();return}
+ }
+ if(!/^(https?:|mailto:|tel:)/i.test(href)&&/^[a-z][a-z0-9+.-]*:/i.test(href)){e.preventDefault();return}
+ e.preventDefault();parent.postMessage({type:'custom-html-link',href:href,newTab:a.target==='_blank'||e.ctrlKey||e.metaKey||e.shiftKey},'*');
+});`;
+
 /** This document is only mounted in an opaque-origin sandbox, never in the page DOM. */
 export function htmlDocument(
   node: Pick<CanvasNode, 'html' | 'css' | 'javascript'>,
 ) {
   const css = (node.css || '').replace(/<\/style/gi, '<\\/style');
   const js = (node.javascript || '').replace(/<\/script/gi, '<\\/script');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: data:; media-src https: data:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;min-height:100%;}html{height:100%;}body{box-sizing:border-box;min-height:100vh;}*,*::before,*::after{box-sizing:border-box;}img,svg{max-width:100%;}${css}</style><script>addEventListener('error',function(e){parent.postMessage({type:'custom-html-error',message:String(e.message).slice(0,500)},'*')});addEventListener('unhandledrejection',function(e){parent.postMessage({type:'custom-html-error',message:String(e.reason).slice(0,500)},'*')});</script></head><body>${node.html || ''}<script>${js}</script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: data:; media-src https: data:; font-src data:; connect-src 'none'; frame-src https://video.igem.org/videos/embed/ https://www.youtube.com/embed/ https://www.youtube-nocookie.com/embed/ https://player.vimeo.com/video/; object-src 'none'; base-uri https: http:; form-action 'none'"><style>html,body{margin:0;min-height:100%;}html{height:100%;}body{box-sizing:border-box;min-height:100vh;}*,*::before,*::after{box-sizing:border-box;}img,svg{max-width:100%;}${css}</style><script>${linkBridge}addEventListener('error',function(e){parent.postMessage({type:'custom-html-error',message:String(e.message).slice(0,500)},'*')});addEventListener('unhandledrejection',function(e){parent.postMessage({type:'custom-html-error',message:String(e.reason).slice(0,500)},'*')});</script></head><body>${node.html || ''}<script>${js}</script></body></html>`;
+}
+
+/** A data document keeps its unique opaque origin even with allow-same-origin.
+ * This lets nested HTTPS players retain their own origins without granting
+ * custom code access to the editor. Never substitute srcdoc or a blob URL.
+ */
+export function htmlFrameURL(source: string, pageURL: string) {
+  const url = new URL(pageURL);
+  // Relative assets need the path, never private preview keys or credentials.
+  url.search = url.hash = url.username = url.password = '';
+  const base = ['https:', 'http:'].includes(url.protocol)
+    ? `<base href="${url.href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}">`
+    : '';
+  // Local development can load same-origin uploads without permitting arbitrary HTTP images.
+  const content =
+    url.protocol === 'http:'
+      ? source.replace(
+          'img-src https: data:;',
+          `img-src https: data: ${url.origin};`,
+        )
+      : source;
+  return (
+    'data:text/html;charset=utf-8,' +
+    encodeURIComponent(content.replace('<style>', base + '<style>'))
+  );
 }

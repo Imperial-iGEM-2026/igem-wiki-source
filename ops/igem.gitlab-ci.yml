@@ -2,6 +2,12 @@
 deploy-wiki:
   image: node:24.16.0-bookworm-slim
   stage: deploy
+  variables:
+    FF_USE_FASTZIP: "true"
+    ARTIFACT_COMPRESSION_LEVEL: "slowest"
+    TRANSFER_METER_FREQUENCY: "2s"
+    # Conservative archive budget, not a published iGEM server limit.
+    IGEM_ARTIFACT_BUDGET_BYTES: "4800000"
   script:
     - npm ci --include=dev --no-audit --no-fund
     - node scripts/build-igem.mjs

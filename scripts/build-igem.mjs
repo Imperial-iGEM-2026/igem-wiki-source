@@ -2,6 +2,7 @@ import { readFile, access } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { logArtifactSize } from './artifact-size.mjs';
 
 // All build inputs are committed source. Nothing is fetched from the editor,
 // its API, private media store, environment files or live database.
@@ -85,3 +86,17 @@ const result = spawnSync(process.execPath, command, {
 });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
+if (result.status === 0) {
+  const budget = Number(process.env.IGEM_ARTIFACT_BUDGET_BYTES || 0);
+  if (!Number.isSafeInteger(budget) || budget < 0) throw Error('IGEM_ARTIFACT_BUDGET_BYTES must be a non-negative integer.');
+  try {
+    const size = await logArtifactSize(local(arg('out', 'igem-build')));
+    if (budget && size.compressedEstimate > budget) {
+      console.error(`Pages archive estimate exceeds the configured ${budget}-byte budget. Prepare a fresh export, upload its PDF worker from assets/runtime and include the helper's media mapping. This budget is configurable and is not a verified iGEM server limit.`);
+      process.exitCode = 2;
+    }
+  } catch (error) {
+    console.error('Artifact size check unavailable:', error.message);
+    if (budget) process.exitCode = 2;
+  }
+}

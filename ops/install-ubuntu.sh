@@ -19,6 +19,8 @@ if ! /usr/local/bin/node --version 2>/dev/null | grep -q '^v24\.'; then
   install -m 755 "$node_stage/${node_archive%.tar.xz}/bin/node" /usr/local/bin/node
   echo "Node download retained in $node_stage"
 fi
+# Validate the bundled native decoder for this CPU before stopping the service.
+/usr/local/bin/node "$release_dir/server/image-native.mjs"
 id prion >/dev/null 2>&1 || useradd --system --home /var/lib/prion --shell /usr/sbin/nologin prion
 install -d -o prion -g prion -m 700 /var/lib/prion
 systemctl stop prion 2>/dev/null || true

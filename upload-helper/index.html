@@ -37,7 +37,7 @@
               <div>
                 <h2>Import your export</h2>
                 <p>
-                  Select the three ZIPs together. No extracting or editing JSON.
+                  Select the two ZIPs together. No extracting or editing JSON.
                 </p>
               </div>
             </div>
@@ -45,7 +45,7 @@
               >iGEM team ID
               <input id="teamId" value="6377" inputmode="numeric" /></label
             ><label class="file-drop"
-              >Choose the three export ZIPs<input
+              >Choose the two export ZIPs<input
                 id="zips"
                 type="file"
                 accept=".zip"
@@ -69,6 +69,7 @@
                 </p>
               </div>
             </div>
+            <p class="note" id="recordingTodoNotice" hidden role="status"></p>
             <div class="destinations">
               <article class="destination">
                 <div class="site-icon" aria-hidden="true">▧</div>
@@ -80,7 +81,7 @@
                   Open & sign in ↗
                 </button>
               </article>
-              <article class="destination">
+              <article class="destination" id="recordingDestination" hidden>
                 <div class="site-icon" aria-hidden="true">▷</div>
                 <p class="eyebrow">VIDEO & AUDIO</p>
                 <h3>Video Universe</h3>
@@ -100,9 +101,9 @@
               ><button id="pause" class="secondary">Pause</button>
             </div>
             <p class="note">
-              Static files: batches of 5, then one refresh to collect links.
-              Recordings: one per pass, so you can finish its details in Video
-              Universe.
+              Static files: batches of 5, then one refresh to collect links. New
+              exports exclude recordings. Add Video Universe embeds in the
+              editor and re-export to replace recording TODOs.
             </p>
             <details id="fileDetails">
               <summary id="fileSummary">Files & upload status</summary>
@@ -239,7 +240,7 @@
           </div>
           <div id="statusPanel" aria-live="polite">
             <h3 id="statusTitle">Start with your export</h3>
-            <p id="statusMessage">Choose the three ZIPs in step 1.</p>
+            <p id="statusMessage">Choose the two ZIPs in step 1.</p>
           </div>
           <div class="progress-head">
             <strong id="progressCount">0 / 0</strong
@@ -296,9 +297,9 @@
         <li>
           <strong>Video & audio → Video Universe</strong>
           <p>
-            Only needed for recordings. Sign in there, run an upload pass, then
-            finish that recording’s details and captions. Repeat for the next
-            recording. Check moderation before publishing.
+            Upload recordings manually, then add their HTML iframe embeds in the
+            editor before exporting. Raw recordings become TODO frames. Existing
+            player settings are preserved.
           </p>
         </li>
         <li>

@@ -9,6 +9,7 @@ const root = path.resolve(arg('dir', './wiki-export'), 'public'),
   base = arg('base', '/'),
   port = Number(arg('port', '4173'));
 const types = {
+  '.json': 'application/json; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css',
   '.js': 'text/javascript',
@@ -20,6 +21,7 @@ const types = {
   '.ttf': 'font/ttf',
   '.otf': 'font/otf',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',

@@ -148,6 +148,9 @@ export function customSelectors(node: CanvasNode) {
         }
       : {}),
     ...(node.kind === 'text' ? { body: `${block} > div:nth-of-type(1)` } : {}),
+    ...(node.kind === 'image'
+      ? { image: `${block} > div:nth-of-type(1) > img:nth-of-type(1)` }
+      : {}),
     // media-block.tsx: the accordion is the block's first div.
     ...(node.kind === 'accordion'
       ? {

@@ -7,13 +7,21 @@ export {
   patchNodes,
   removeNodes,
   moveBefore,
+  insertNode,
 } from '../app/studio-engine';
 export { parseAccessConfig, verifyAccessToken } from '../app/access-token';
 export { mediaTypes, matchesMedia } from '../app/media-format';
 
-export { cssError, outsideTargetCss } from '../app/custom-css';
+export {
+  cssError,
+  outsideTargetCss,
+  compileCustomCss,
+} from '../app/custom-css';
 
 export {
+  copyDefinition,
+  copyFieldDefaults,
+  copyFieldId,
   parseCustomPages,
   customDefaults,
   customWikiPage,
@@ -28,7 +36,10 @@ export { validHeader } from '../app/header-schema';
 export { pageLayers } from '../app/template-transform';
 export { extractChrome, applyChrome, sameChrome } from '../app/chrome-sync';
 export { outlineLayer, customSelectors } from '../app/template-outline';
-export { applySelectionStyle } from '../app/selection-style';
+export {
+  applySelectionStyle,
+  normalizePdfPlacementCss,
+} from '../app/selection-style';
 export {
   validMenu,
   parseMenu,
@@ -40,6 +51,7 @@ export {
 export { nodeLocked } from '../app/canvas-schema';
 
 export { templates, templateList, templateDefaults } from '../app/templates';
+export { templateCss } from '../app/template-css';
 
 export { safeLink, linkAllowed } from '../app/link-url';
 

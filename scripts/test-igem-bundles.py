@@ -29,7 +29,7 @@ out = work / 'bundles'
 command = [sys.executable, str(root / 'scripts/package-igem.py'), '--snapshot', str(source), '--out', str(out)]
 run = subprocess.run(command, cwd=root, capture_output=True, text=True)
 assert run.returncode == 0, run.stdout + run.stderr
-assert sorted(p.name for p in out.iterdir()) == ['01-website-source.zip', '02-static-assets.zip', '03-video-audio.zip']
+assert sorted(p.name for p in out.iterdir()) == ['01-website-source.zip', '02-static-assets.zip']
 checkout = work / 'checkout'
 with zipfile.ZipFile(out / '01-website-source.zip') as archive:
     assert archive.testzip() is None
@@ -45,16 +45,11 @@ with zipfile.ZipFile(out / '01-website-source.zip') as archive:
     assert json.loads(archive.read('package.json'))['scripts']['build'] == 'node scripts/build-igem.mjs'
     archive.extractall(checkout)
 with zipfile.ZipFile(out / '02-static-assets.zip') as archive:
-    assert len([n for n in archive.namelist() if n.startswith('assets/')]) == 28
-    assert all(n.startswith(('assets/logos/', 'assets/fonts/')) for n in archive.namelist() if n.startswith('assets/'))
+    assert len([n for n in archive.namelist() if n.startswith('assets/')]) == 29
+    assert all(n.startswith(('assets/logos/', 'assets/fonts/', 'assets/icons/')) for n in archive.namelist() if n.startswith('assets/'))
     assert not any(n.endswith(('.mp4', '.mp3')) for n in archive.namelist())
-with zipfile.ZipFile(out / '03-video-audio.zip') as archive:
-    entries = [n for n in archive.namelist() if n.startswith('media/')]
-    assert len(entries) == 2
-    assert any(n.startswith('media/videos/') for n in entries)
-    assert any(n.startswith('media/audio/') for n in entries)
-    for data in fixtures.values():
-        assert any(archive.read(n) == data for n in entries)
+with zipfile.ZipFile(out / '01-website-source.zip') as archive:
+    assert len(json.loads(archive.read('publication/recording-todos.json'))) == 2
 second = subprocess.run(command, cwd=root, capture_output=True, text=True)
 assert second.returncode != 0 and 'not overwritten' in second.stderr
 
@@ -79,4 +74,4 @@ build = subprocess.run(['node', 'scripts/build-igem.mjs'], cwd=checkout, capture
 assert build.returncode == 0, build.stdout + build.stderr
 report = json.loads((checkout/'igem-build/publication-report.json').read_text(encoding='utf-8'))
 assert report['pageCount'] == 20 and report['issues'] == []
-print('PASS: exactly three valid ZIPs; image/recording separation; binary integrity; private metadata, AI brief and unknown values omitted; overwrite refused; extracted source builds all 20 pages with test mappings. No real uploads or publication performed.')
+print('PASS: exactly two valid ZIPs; recordings excluded with TODOs; private metadata, AI brief and unknown values omitted; overwrite refused; extracted source builds all 20 pages with test mappings. No real uploads or publication performed.')

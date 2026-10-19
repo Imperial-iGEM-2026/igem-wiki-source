@@ -390,11 +390,18 @@ export default function Home({
         },
         deletePage: (slug) => pageAction('delete', slug),
         restorePage: (slug) => pageAction('restore', slug),
-        createPage: async (title, slug) => {
+        createPage: async (title, slug, source) => {
           const response = await projectFetch('/api/pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, slug }),
+            body: JSON.stringify({
+              title,
+              slug,
+              source,
+              ...(source
+                ? { sourceVersion: data['layout:' + source]?.version || 0 }
+                : {}),
+            }),
           });
           const result = (await response.json()) as {
             page: WikiPage;

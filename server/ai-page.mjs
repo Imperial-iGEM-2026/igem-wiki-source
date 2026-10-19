@@ -85,6 +85,7 @@ export function callCodex(socketPath, route, body, signal, onProgress) {
 }
 export function allowedPageField(page, id) {
   if (
+    id.startsWith('copy:' + page + ':') ||
     id.startsWith('template:' + page + ':') ||
     /^template:(header|footer):text[0-9]+$/.test(id)
   )
@@ -117,7 +118,7 @@ export function validatePageProposal(proposal, context) {
   if (
     !validateLayout(layout) ||
     cssError(layout.customCss || '') ||
-    JSON.stringify({ ...layout, customCss: '' }).length > 200000 ||
+    JSON.stringify({ ...layout, customCss: '' }).length > 1024 * 1024 ||
     !Array.isArray(proposal.fields) ||
     proposal.fields.length > 100 ||
     typeof proposal.explanation !== 'string' ||
@@ -163,6 +164,21 @@ export function validatePageProposal(proposal, context) {
       throw fail(422, 'Proposal changed a locked or unselected layer');
     if (old.kind === 'template' && (!next || next.kind !== 'template'))
       throw fail(422, 'Template sections must be preserved; hide them instead');
+    if (
+      old.layoutMode !== 'free' &&
+      next?.layoutMode === 'free' &&
+      layout.nodes.some(
+        (child) =>
+          child.parentId === old.id &&
+          (child.x === undefined ||
+            child.y === undefined ||
+            child.freeWidth === undefined),
+      )
+    )
+      throw fail(
+        422,
+        'The proposal would switch a section to free positioning without placing its children. Keep the existing flow layout when inserting content. Nothing has been applied.',
+      );
   }
   if (
     context.target &&

@@ -9,7 +9,13 @@ import {
   CUSTOM_HEADING,
   type TemplateAst,
 } from './templates';
-import { parseRemovedPages, REMOVED_PAGES, pageCatalog } from './custom-pages';
+import {
+  copyDefinition,
+  copiedPage,
+  parseRemovedPages,
+  REMOVED_PAGES,
+  pageCatalog,
+} from './custom-pages';
 import { resolveMenu } from './site-menu';
 
 export type AstNode = Extract<TemplateAst, { t: string }>;
@@ -179,7 +185,10 @@ export function pageLayers(
   const context: RenderContext = { removed: new Set() };
   if (!template) return { context, layers: [] };
   const siteMenu = resolveMenu(data);
-  const definition = template.pages.find((p) => p.slug === page);
+  const copy = copiedPage(data, page);
+  const definition =
+    template.pages.find((p) => p.slug === page) ||
+    (copy && copyDefinition(copy));
   const custom = !definition && page !== 'home';
   const group = siteMenu.groups.find((g) =>
     g.pages.some((p) => p.slug === page),

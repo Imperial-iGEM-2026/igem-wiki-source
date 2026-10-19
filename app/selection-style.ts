@@ -20,6 +20,11 @@ const properties = [
   'display',
   'rotate',
   'translate',
+  'width',
+  'max-width',
+  'height',
+  'max-height',
+  'box-sizing',
 ];
 const queries = { tablet: '(max-width: 1000px)', mobile: '(max-width: 760px)' };
 /** Older drag gestures translated the PDF's contents instead of its layer. */

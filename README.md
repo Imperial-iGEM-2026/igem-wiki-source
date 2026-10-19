@@ -1,5 +1,11 @@
 # Website Studio
 
+## Latest update — 19 October 2026
+
+This release includes Luca templates, editor selection/resizing and layout fixes, stronger scoped MCP editing, low-memory image validation, and smaller static exports. Upload helper **1.0.23** shares one folder allowlist across import and browser upload, including `assets/runtime/`. PDF partitions omit export-time timestamps so unchanged PDFs produce stable hashes and reuse uploaded parts. Install the updated server for repeatable PDF exports; replace the local helper while preserving its `jobs` folder.
+
+Static exports deduplicate CSS/component resources and can upload the PDF reader worker to iGEM static hosting. The helper verifies the hosted worker's MIME type, CORS and exact bytes. CI reports the archive estimate and applies a configurable budget; actual iGEM upload limits remain server-controlled. See [UPDATE-SERVER.md](UPDATE-SERVER.md) for installation and [STATIC-EXPORT.md](STATIC-EXPORT.md) for the export workflow.
+
 Collaborative wiki editor and self-hosted Node server, with reusable templates and an iGEM static export/upload workflow.
 
 Start with [GITHUB-HANDOFF.md](GITHUB-HANDOFF.md) for development, deployment and transfer instructions.

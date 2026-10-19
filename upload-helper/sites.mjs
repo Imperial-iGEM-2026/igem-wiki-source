@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import path from 'node:path';
 import { copyFile, mkdir, stat, readFile } from 'node:fs/promises';
-import { hostedURL, mergeChanges, uploadFolder } from './files.mjs';
+import { hostedURL, mergeChanges, uploadFolder, isStaticMediaFolder } from './files.mjs';
 
 export function svgUpload(buffer, name) {
   let text = buffer
@@ -97,15 +97,7 @@ export class OfficialSites {
     if (!folder) return; // Legacy imports retain their current upload location.
     if (
       !/^\d{1,8}$/.test(teamId) ||
-      ![
-        'banners',
-        'logos',
-        'icons',
-        'images',
-        'documents',
-        'models',
-        'fonts',
-      ].includes(folder)
+      !isStaticMediaFolder(folder)
     )
       throw Error('Invalid upload folder');
     const page = this.tabs.assets;

@@ -1,4 +1,7 @@
+import { copyFieldDefaults, copyFieldId } from './shared.mjs';
+import { createExportJobs } from './export-jobs.mjs';
 import { createBundleExports } from './export-bundles.mjs';
+import { createProjectSource } from './project-source.mjs';
 import { createProjects } from './projects.mjs';
 import { createTemplateChanges } from './template-changes.mjs';
 import { createChatHistory } from './chat-history.mjs';
@@ -79,7 +82,16 @@ export async function createAppServer({
   const projects = createProjects(db);
   const templateChanges = createTemplateChanges(db, projects);
   const chatHistory = createChatHistory(db);
-  const bundleExports = createBundleExports({ dataDir, clientDir });
+  const projectSource = createProjectSource({ db });
+  const bundleExports = createBundleExports({
+    dataDir,
+    clientDir,
+    projectSource,
+    assetOrigins: [config.origin, environment.MEDIA_ORIGIN],
+  });
+  const exportJobs = createExportJobs({
+    prepare: (args) => bundleExports.prepare(args),
+  });
   const json = (res, status, body) => {
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -95,7 +107,7 @@ export async function createAppServer({
     const chunks = [];
     for await (const chunk of req) {
       total += chunk.length;
-      if (total > 1024 * 1024) throw fail(413, 'Request too large');
+      if (total > 4 * 1024 * 1024) throw fail(413, 'Request too large');
       chunks.push(chunk);
     }
     try {
@@ -247,11 +259,70 @@ export async function createAppServer({
         throw fail(400, 'This workspace supports 50 custom pages.');
       if ([...project.allCorePages, ...list].some((p) => p.slug === body.slug))
         throw fail(409, 'A page already uses this address.');
-      const page = { slug: body.slug, title: body.title.trim() };
+      const source = body.source;
+      let copiedLayout, sourceCopy;
+      if (source !== undefined) {
+        if (
+          typeof source !== 'string' ||
+          !Object.hasOwn(project.defaults(), 'layout:' + source) ||
+          parseRemovedPages(select.get(REMOVED_PAGES)?.value || '[]').includes(
+            source,
+          )
+        )
+          throw fail(404, 'The page to duplicate does not exist.');
+        const sourceRow = select.get('layout:' + source);
+        if (
+          body.sourceVersion !== undefined &&
+          body.sourceVersion !== (sourceRow?.version || 0)
+        )
+          throw fail(409, 'This page changed. Reload it before duplicating.');
+        copiedLayout = parseLayout(
+          sourceRow?.value ?? project.defaults()['layout:' + source],
+        );
+        if (!copiedLayout)
+          throw fail(
+            422,
+            'The source layout could not be read. No copy was created.',
+          );
+        sourceCopy = list.find((p) => p.slug === source);
+      }
+      const sourcePage =
+        sourceCopy?.sourcePage ||
+        (source &&
+        templates[project.templateId]?.pages.some((p) => p.slug === source)
+          ? source
+          : undefined);
+      const page = {
+        slug: body.slug,
+        title: body.title.trim(),
+        ...(sourcePage
+          ? {
+              sourcePage,
+              sourceTemplate: sourceCopy?.sourceTemplate || project.templateId,
+            }
+          : {}),
+      };
       const value = JSON.stringify([...list, page]);
       if (previous) update.run(value, author, CUSTOM_PAGES, previous.version);
       else insert.run(CUSTOM_PAGES, value, author);
       const fields = customDefaults(JSON.stringify([page]));
+      if (copiedLayout) {
+        fields['layout:' + page.slug] = JSON.stringify(copiedLayout);
+        const defaults = project.defaults();
+        for (const [key, value] of Object.entries(defaults)) {
+          if (key.startsWith(source + ':') && key !== source + ':title')
+            fields[page.slug + key.slice(source.length)] =
+              select.get(key)?.value ?? value;
+        }
+        for (const key of Object.keys(copyFieldDefaults(page))) {
+          const original = key.slice(('copy:' + page.slug + ':').length);
+          const from = sourceCopy?.sourcePage
+            ? copyFieldId(source, original)
+            : original;
+          fields[key] =
+            select.get(from)?.value ?? defaults[from] ?? fields[key];
+        }
+      }
       // A page recreated at a deleted address starts fresh.
       for (const [id, value] of Object.entries(fields)) {
         project.erase.run(id);
@@ -470,6 +541,7 @@ export async function createAppServer({
   const live = createLiveHub();
   const mcp = createMcp({
     db,
+    projectSource,
     projects,
     projectContext,
     checkLayout,
@@ -486,7 +558,9 @@ export async function createAppServer({
     clientDir,
     file,
     mediaReadURL: media ? (key, user) => media.readURL(key, user) : null,
-    mediaUploadURL: media ? (body, user) => media.issueUpload(body, user) : null,
+    mediaUploadURL: media
+      ? (body, user) => media.issueUpload(body, user)
+      : null,
     mediaUploadOrigin: config.origin,
     environment,
     dataDir,
@@ -748,6 +822,8 @@ export async function createAppServer({
         if (req.method !== 'POST')
           return json(res, 405, { error: 'Method not allowed' });
         const body = await readJSON(req);
+        if (body?.action === 'prepare-developer')
+          return json(res, 200, mcp.links.prepareDeveloper(projectId, user));
         if (body?.action === 'revoke') {
           mcp.links.revoke(projectId, body.id);
           return json(res, 200, { links: mcp.links.list(projectId, user) });
@@ -801,7 +877,8 @@ export async function createAppServer({
         if (
           !knownPages.includes(page) ||
           !validateLayout(body.layout) ||
-          JSON.stringify({ ...body.layout, customCss: '' }).length > 200000 ||
+          JSON.stringify({ ...body.layout, customCss: '' }).length >
+            1024 * 1024 ||
           !body.fields ||
           typeof body.fields !== 'object' ||
           Array.isArray(body.fields) ||
@@ -1018,21 +1095,37 @@ export async function createAppServer({
         const values = defaults();
         for (const row of rows.all())
           if (Object.hasOwn(values, row.id)) values[row.id] = row.value;
+        const args = {
+          userId: user.userId,
+          project: projects
+            .list()
+            .projects.find((entry) => entry.id === projectId),
+          values,
+          template: templates[values['site:template']],
+          team: body.team,
+          requiredPages: body.requiredPages,
+        };
+        if (req.headers.prefer?.includes('respond-async')) {
+          res.setHeader('Preference-Applied', 'respond-async');
+          return json(res, 202, exportJobs.start(args, body.requestId));
+        }
+        // Compatibility for older editor tabs; new editors always poll jobs.
+        return json(res, 200, await bundleExports.prepare(args));
+      }
+      const exportJobRoute = /^\/api\/export\/jobs\/([a-f0-9-]{36})$/.exec(
+        pathname,
+      );
+      if (exportJobRoute && req.method === 'GET')
         return json(
           res,
           200,
-          await bundleExports.prepare({
+          exportJobs.get({
+            id: exportJobRoute[1],
             userId: user.userId,
-            project: projects
-              .list()
-              .projects.find((entry) => entry.id === projectId),
-            values,
-            template: templates[values['site:template']],
-            team: body.team,
-            requiredPages: body.requiredPages,
+            projectId,
           }),
         );
-      }
+
       const bundleRoute =
         /^\/api\/export\/bundles\/([a-f0-9-]{36})\/(source|assets|media)$/.exec(
           pathname,
@@ -1107,7 +1200,7 @@ export async function createAppServer({
               : id === 'ai:brief'
                 ? 8000
                 : id.startsWith('layout:')
-                  ? 200000
+                  ? 1024 * 1024
                   : id.startsWith('wiki:')
                     ? 12000
                     : 2000) ||
@@ -1302,6 +1395,9 @@ export async function createAppServer({
       if (!res.headersSent)
         json(res, error.status || 500, {
           error: error.status ? error.message : 'Server error. Please retry.',
+          ...(error.status === 422 && Array.isArray(error.mediaIssues)
+            ? { mediaIssues: error.mediaIssues }
+            : {}),
         });
       else res.destroy();
     }
@@ -1311,6 +1407,7 @@ export async function createAppServer({
     : 60000;
   server.headersTimeout = 15000;
   server.on('close', () => {
+    exportJobs.close();
     bundleExports.close();
     db.close();
   });

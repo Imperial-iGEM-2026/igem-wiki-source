@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, createElement } from 'react';
+import type { ReactNode } from 'react';
 import { ReferenceList } from './references';
 import { EquationBlock, MathText } from './equation-block';
 import { CustomHtmlBlock } from './custom-html-block';
@@ -66,9 +67,17 @@ function Model({ src, alt }: { src: string; alt: string }) {
 export function MediaBlock({
   node,
   publication = false,
+  editing = false,
+  htmlInteracting = false,
+  renderItem,
+  openItems = [],
 }: {
   node: CanvasNode;
   publication?: boolean;
+  editing?: boolean;
+  htmlInteracting?: boolean;
+  renderItem?: (id: string) => ReactNode;
+  openItems?: string[];
 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [node.src]);
@@ -96,7 +105,7 @@ export function MediaBlock({
               key={item.id}
               className="accordion-item"
               data-item-id={item.id}
-              open={item.open || undefined}
+              open={item.open || openItems.includes(item.id) || undefined}
             >
               {/* Plain text: templates style summary spans as icons. */}
               <summary>
@@ -104,12 +113,62 @@ export function MediaBlock({
               </summary>
               <div className="accordion-body">
                 <MathText text={item.body} />
+                {renderItem?.(item.id)}
               </div>
             </details>
           ))}
         </div>
+      ) : node.kind === 'shape' ? (
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- An inline vector image needs SVG semantics.
+          role="img"
+          aria-label={node.alt || node.shape || 'Shape'}
+          style={{
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            overflow: 'visible',
+          }}
+        >
+          <g
+            fill={node.background || '#3478f6'}
+            stroke={node.borderColor || node.background || '#3478f6'}
+            strokeWidth={node.borderWidth ?? 0}
+          >
+            {node.shape === 'ellipse' ? (
+              <ellipse cx="50" cy="50" rx="49" ry="49" />
+            ) : node.shape === 'triangle' ? (
+              <polygon points="50,1 99,99 1,99" />
+            ) : node.shape === 'diamond' ? (
+              <polygon points="50,1 99,50 50,99 1,50" />
+            ) : node.shape === 'line' ? (
+              <path
+                d="M 1 50 H 99"
+                fill="none"
+                strokeWidth={node.borderWidth || 3}
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : node.shape === 'arrow' ? (
+              <polygon points="1,35 65,35 65,5 99,50 65,95 65,65 1,65" />
+            ) : (
+              <rect
+                x="1"
+                y="1"
+                width="98"
+                height="98"
+                rx={Math.min(49, node.radius || 0)}
+              />
+            )}
+          </g>
+        </svg>
       ) : node.kind === 'html' ? (
-        <CustomHtmlBlock node={node} />
+        <CustomHtmlBlock
+          node={node}
+          editing={editing}
+          interacting={htmlInteracting}
+        />
       ) : node.kind === 'references' ? (
         <ReferenceList nodeId={node.id} entries={node.references || []} />
       ) : node.kind === 'equation' ? (
@@ -132,6 +191,15 @@ export function MediaBlock({
           {node.kind === 'image' && (
             <div className="media-image-frame">
               <img
+                style={
+                  node.minHeight
+                    ? {
+                        height: node.minHeight,
+                        maxHeight: 'none',
+                        objectFit: node.objectFit || 'contain',
+                      }
+                    : undefined
+                }
                 src={node.src}
                 alt={node.alt || node.title}
                 loading="lazy"
@@ -192,7 +260,7 @@ export function MediaBlock({
               src={embedURL(node.src)!}
               className="video-embed"
               loading="lazy"
-              allow="fullscreen; picture-in-picture"
+              allow="autoplay; fullscreen; picture-in-picture"
               sandbox="allow-scripts allow-same-origin allow-presentation"
               allowFullScreen
             />

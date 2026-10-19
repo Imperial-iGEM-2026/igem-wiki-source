@@ -1,4 +1,6 @@
-// Shared by the offline compiler and the server's three-ZIP handoff.
+// Shared by the offline compiler and the server's two-ZIP handoff.
+// This version must match the pinned pdfjs-dist dependency.
+export const PDF_WORKER_SOURCE = '/templates/runtime/pdfjs-6.4.299-worker.js';
 // Tab icons use the same source in the editor, preview and published HTML.
 export function siteIcon(values) {
   let logo;
@@ -20,10 +22,51 @@ export function exportMedia(
   values,
   template,
   expandLayers = (layers) => layers,
+  locations = new Map(),
 ) {
-  const refs = new Map(template ? [] : [['/prion-hero.png', 'image']]);
-  refs.set(siteIcon(values), 'image');
-  for (const font of templateFonts(values)) refs.set(font.source, 'font');
+  const refs = new Map();
+  const pageTitles = new Map(
+    [
+      ...(template?.pages || []),
+      ...JSON.parse(values['pages:custom'] || '[]'),
+    ].map((page) => [page.slug, page.title || page.slug]),
+  );
+  const add = (source, kind, location) => {
+    refs.set(source, kind);
+    const entries = locations.get(source) || [];
+    if (
+      !entries.some(
+        (entry) => JSON.stringify(entry) === JSON.stringify(location),
+      )
+    )
+      entries.push(location);
+    locations.set(source, entries);
+  };
+  const at = (page, node, field) => ({
+    page,
+    pageTitle: pageTitles.get(page) || (page === 'home' ? 'Home' : page),
+    layerId: node?.id,
+    layerName:
+      node?.name ||
+      node?.title ||
+      node?.label ||
+      node?.kind ||
+      'Template element',
+    field,
+  });
+  if (!template)
+    add('/prion-hero.png', 'image', at('home', { name: 'Hero' }, 'Image'));
+  add(siteIcon(values), 'image', {
+    pageTitle: 'Site settings',
+    layerName: 'Tab icon',
+    field: 'Image',
+  });
+  for (const font of templateFonts(values))
+    add(font.source, 'font', {
+      pageTitle: 'Template styles',
+      layerName: font.family,
+      field: 'Font',
+    });
   const removed = new Set(JSON.parse(values['pages:removed'] || '[]'));
   const visible = (node, nodes) => {
     const visited = new Set();
@@ -34,7 +77,16 @@ export function exportMedia(
     }
     return true;
   };
-  for (const page of template?.pages || []) {
+  const copies = JSON.parse(values['pages:custom'] || '[]').flatMap((copy) => {
+    const original =
+      template &&
+      copy.sourceTemplate === template.id &&
+      template.pages.find((page) => page.slug === copy.sourcePage);
+    return original
+      ? [{ ...original, slug: copy.slug, title: copy.title }]
+      : [];
+  });
+  for (const page of [...(template?.pages || []), ...copies]) {
     if (removed.has(page.slug)) continue;
     const nodes = JSON.parse(
       values['layout:' + page.slug] || '{"nodes":[]}',
@@ -44,22 +96,32 @@ export function exportMedia(
       if (!visible(saved || { id: layer.id, ...layer.defaults }, nodes))
         continue;
       if (layer.sponsorSlot && saved?.src) {
-        refs.set(saved.src, 'image');
+        add(
+          saved.src,
+          'image',
+          at(page.slug, { ...layer, ...saved }, 'Image source'),
+        );
         continue;
       }
       const collect = (node) => {
         if (!node || typeof node === 'string') return;
         const src = node.a?.src;
         if (src)
-          refs.set(
+          add(
             src,
             ['audio', 'video', 'iframe'].includes(node.t)
               ? node.t === 'iframe'
                 ? 'embed'
                 : node.t
               : 'image',
+            at(page.slug, { ...layer, ...saved }, node.t + ' source'),
           );
-        if (node.a?.poster) refs.set(node.a.poster, 'image');
+        if (node.a?.poster)
+          add(
+            node.a.poster,
+            'image',
+            at(page.slug, { ...layer, ...saved }, 'Video poster'),
+          );
         node.c?.forEach(collect);
       };
       collect(layer.ast);
@@ -70,7 +132,8 @@ export function exportMedia(
     const { nodes } = JSON.parse(value);
     for (const node of nodes) {
       if (!visible(node, nodes)) continue;
-      if (node.src) refs.set(node.src, node.kind);
+      if (node.src)
+        add(node.src, node.kind, at(key.slice(7), node, 'Media source'));
       if (node.kind === 'html') {
         const code = [node.html, node.css, node.javascript]
           .filter(Boolean)
@@ -80,25 +143,33 @@ export function exportMedia(
           /\/api\/media\/[a-f0-9-]+\.[a-z0-9]+|\/templates\/[a-zA-Z0-9_./-]+/g,
         )) {
           if (source.includes('..')) continue;
-          refs.set(
+          add(
             source,
-            /\.(mp4|webm)$/i.test(source)
+            /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(source)
               ? 'video'
-              : /\.(mp3|wav|ogg)$/i.test(source)
+              : /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(source)
                 ? 'audio'
                 : 'image',
+            at(key.slice(7), node, 'Custom HTML / CSS / JavaScript'),
           );
         }
       }
     }
   }
   const logo = JSON.parse(values['site:header'] || '{}').logo;
-  if (logo) refs.set(logo, 'image');
+  if (logo)
+    add(logo, 'image', {
+      pageTitle: 'Site settings',
+      layerName: 'Header logo',
+      field: 'Image source',
+    });
   return refs;
 }
 
 // Fixed folder names keep live and offline handoffs consistent and path-safe.
 export function mediaFolder(source, kind, values = {}) {
+  if (kind === 'runtime') return 'runtime';
+  if (kind === 'font') return 'fonts';
   if (kind === 'audio') return 'audio';
   if (kind === 'video' || kind === 'embed') return 'videos';
   let pathname;

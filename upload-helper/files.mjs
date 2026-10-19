@@ -144,6 +144,31 @@ export async function digest(file) {
   for await (const chunk of createReadStream(file)) h.update(chunk);
   return h.digest('hex');
 }
+
+export async function verifyRuntimeAsset(row, fetcher = fetch) {
+  if (row.kind !== 'runtime') return;
+  if (!hostedURL(row.url, row.kind) || !row.localFile)
+    throw Error('The PDF reader JavaScript needs its bundled original and an uploaded iGEM URL.');
+  const response = await fetcher(row.url, {
+    headers: { Origin: 'https://2026.igem.wiki' },
+    credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw Error('The uploaded PDF reader JavaScript is not accessible; check its processing card.');
+  const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!['application/javascript', 'text/javascript', 'application/ecmascript', 'text/ecmascript'].includes(mime))
+    throw Error('iGEM is not serving the PDF reader upload as JavaScript. Do not publish this URL; check file-type support with iGEM.');
+  if (!['*', 'https://2026.igem.wiki'].includes(response.headers.get('access-control-allow-origin')))
+    throw Error('The PDF reader JavaScript upload does not allow the wiki to load modules (CORS). Check hosting with iGEM before publishing.');
+  const hash = createHash('sha256');
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size >= 10_000_000) throw Error('Unexpectedly large PDF reader JavaScript upload.');
+    hash.update(chunk);
+  }
+  if (hash.digest('hex') !== await digest(row.localFile))
+    throw Error('The uploaded PDF reader JavaScript does not match this export. Upload the bundled runtime file unchanged.');
+}
 export const jsonFile = async (file) =>
   JSON.parse(await readFile(file, 'utf8'));
 export const putJSON = async (file, data) =>
@@ -165,15 +190,21 @@ export function repositoryFile(name) {
     ].includes(name) ||
     (/^(app|components|hooks|lib)\/.*\.(ts|tsx|js|css|json)$/.test(name) &&
       !name.startsWith('app/api/')) ||
-    /^scripts\/(build-igem|export-static|export-media|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
+    /^scripts\/(build-igem|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
       name,
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||
-    /^publication\/(content|config|media-map|pdf-parts)\.json$/.test(name) ||
-    /^publication\/font-licenses\/(dmsans|caveat|librecaslondisplay)-OFL\.txt$/.test(
+    /^publication\/(content|config|media-map|pdf-parts|google-fonts)\.json$/.test(
       name,
     ) ||
-    ['publication/fonts.css', 'publication/katex-LICENSE.txt', 'publication/pdf-processing-LICENSES.txt'].includes(name)
+    /^publication\/font-licenses\/[a-z0-9]+-(OFL|LICENSE|UFL)\.txt$/.test(
+      name,
+    ) ||
+    [
+      'publication/fonts.css',
+      'publication/katex-LICENSE.txt',
+      'publication/pdf-processing-LICENSES.txt',
+    ].includes(name)
   );
 }
 export async function sourceFiles(root) {
@@ -199,14 +230,27 @@ export async function sourceFiles(root) {
 // Upgrade the compiler and publishing pipeline together in earlier exports.
 export async function publicationSources(sourceRoot) {
   const files = await sourceFiles(sourceRoot);
-  const pkg = JSON.parse(files.find(file => file.path === 'package.json')?.content || '{}');
-  const lock = JSON.parse(files.find(file => file.path === 'package-lock.json')?.content || '{}');
+  const pkg = JSON.parse(
+    files.find((file) => file.path === 'package.json')?.content || '{}',
+  );
+  const lock = JSON.parse(
+    files.find((file) => file.path === 'package-lock.json')?.content || '{}',
+  );
   const requiredDependencies = ['pdf-lib', 'jpeg-js', 'pngjs', 'pdfjs-dist'];
-  if (requiredDependencies.some(name => !pkg.dependencies?.[name] || !lock.packages?.['node_modules/' + name]) ||
-      !files.some(file => file.path === 'app/pdf-parts-viewer.ts') ||
-      !files.some(file => file.path === 'publication/katex-LICENSE.txt') ||
-      !files.some(file => file.path === 'publication/pdf-processing-LICENSES.txt'))
-    throw Error('This export predates the current PDF/image compiler. Update the editor server, prepare fresh three ZIPs, and open them in this helper before sending to GitLab. Existing uploads remain available.');
+  if (
+    requiredDependencies.some(
+      (name) =>
+        !pkg.dependencies?.[name] || !lock.packages?.['node_modules/' + name],
+    ) ||
+    !files.some((file) => file.path === 'app/pdf-parts-viewer.ts') ||
+    !files.some((file) => file.path === 'publication/katex-LICENSE.txt') ||
+    !files.some(
+      (file) => file.path === 'publication/pdf-processing-LICENSES.txt',
+    )
+  )
+    throw Error(
+      'This export predates the current PDF/image compiler. Update the editor server, prepare fresh two ZIPs, and open them in this helper before sending to GitLab. Existing uploads remain available.',
+    );
   let pipeline;
   try {
     pipeline = await readFile(
@@ -243,8 +287,13 @@ export async function publicationSources(sourceRoot) {
   else files.push({ path: 'LICENSE', content: license });
   for (const name of [
     'build-igem.mjs',
+    'artifact-size.mjs',
+    'share-publication-assets.mjs',
+    'static-runtime.ts',
     'export-static.mjs',
     'export-media.mjs',
+    'export-recordings.mjs',
+    'google-fonts.mjs',
     'pdf-parts.mjs',
     'image-export.mjs',
   ]) {
@@ -372,20 +421,14 @@ export function mergeChanges(local, remote) {
   });
 }
 
+const staticMediaFolders = new Set([
+  'banners', 'logos', 'icons', 'images', 'documents', 'models', 'fonts', 'runtime',
+]);
+export const isStaticMediaFolder = (folder) => staticMediaFolders.has(folder);
+
 export function uploadFolder(row) {
   if (row.folder !== undefined) {
-    if (
-      ![
-        '',
-        'banners',
-        'logos',
-        'icons',
-        'images',
-        'documents',
-        'models',
-        'fonts',
-      ].includes(row.folder)
-    )
+    if (row.folder !== '' && !isStaticMediaFolder(row.folder))
       throw Error('Unsupported upload folder');
     return row.folder;
   }
@@ -394,15 +437,7 @@ export function uploadFolder(row) {
   if (
     parts.length !== 3 ||
     parts[0] !== 'assets' ||
-    ![
-      'banners',
-      'logos',
-      'icons',
-      'images',
-      'documents',
-      'models',
-      'fonts',
-    ].includes(parts[1])
+    !isStaticMediaFolder(parts[1])
   )
     throw Error('Unsupported static-media folder');
   return parts[1];

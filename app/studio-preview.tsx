@@ -10,11 +10,15 @@ export function StudioPreview({
   active,
   page,
   onClose,
+  dirty = false,
+  anchor,
 }: {
   data: Blocks;
   active: boolean;
   page: string;
   onClose: () => void;
+  dirty?: boolean;
+  anchor?: { id: string; visit: number } | null;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
@@ -33,10 +37,10 @@ export function StudioPreview({
   useEffect(() => {
     if (ready && active)
       frameRef.current?.contentWindow?.postMessage(
-        { type: 'prion-preview-data', data, page },
+        { type: 'prion-preview-data', data, page, anchor },
         window.location.origin,
       );
-  }, [ready, active, data, page]);
+  }, [ready, active, data, page, anchor]);
   useEffect(() => {
     if (!active)
       frameRef.current?.contentDocument
@@ -55,7 +59,10 @@ export function StudioPreview({
           <ArrowLeft size={15} /> Back to editor
         </button>
         <span>
-          Website preview <small>Includes unsaved edits</small>
+          Website preview{' '}
+          <small>
+            {dirty ? 'Includes unsaved edits' : 'All changes saved'}
+          </small>
         </span>
         <div>
           {(

@@ -679,194 +679,194 @@ footer
   flex-shrink: 0;
 }
 @media (min-width: 1600px) {
-  .header:not(:where([data-template-theme], [data-template-theme] *)),
-  footer:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)),
+  footer:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding-left: calc((100vw - 1350px) /2);
     padding-right: calc((100vw - 1350px) /2);
   }
 }
 @media (max-width: 1000px) {
-  .header:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 18px;
   }
-  .header nav:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 18px;
   }
-  .brand:not(:where([data-template-theme], [data-template-theme] *)) {
+  .brand:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 19px;
   }
-  .account:not(:where([data-template-theme], [data-template-theme] *)) {
+  .account:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 12px;
   }
-  .intro-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .intro-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 6%;
   }
-  h1:not(:where([data-template-theme], [data-template-theme] *)) {
+  h1:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     letter-spacing: -3px;
   }
-  .feature > img:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature > img:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     right: -12%;
     width: 85%;
   }
-  .live-status:not(:where([data-template-theme], [data-template-theme] *)) {
+  .live-status:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
 }
 @media (max-width: 760px) {
-  .header:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     height: auto;
     min-height: 78px;
     flex-wrap: wrap;
     padding: 20px 5% 0;
     gap: 20px;
   }
-  .header nav:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     order: 3;
     width: 100%;
     height: 42px;
     justify-content: center;
   }
-  .account:not(:where([data-template-theme], [data-template-theme] *)) {
+  .account:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin-left: auto;
   }
   .account
-    .dark-button:not(:where([data-template-theme], [data-template-theme] *)) {
+    .dark-button:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 12px;
     padding: 10px;
   }
-  .brand-icon:not(:where([data-template-theme], [data-template-theme] *)) {
+  .brand-icon:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .account-name:not(:where([data-template-theme], [data-template-theme] *)) {
+  .account-name:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 0;
   }
-  .intro:not(:where([data-template-theme], [data-template-theme] *)) {
+  .intro:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 34px 0 30px;
   }
-  .intro-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .intro-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr;
     gap: 24px;
   }
-  h1:not(:where([data-template-theme], [data-template-theme] *)) {
+  h1:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 56px;
     letter-spacing: -3px;
   }
-  .intro-right:not(:where([data-template-theme], [data-template-theme] *)) {
+  .intro-right:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     max-width: 100%;
   }
-  .intro-right p:not(:where([data-template-theme], [data-template-theme] *)) {
+  .intro-right p:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin-bottom: 15px;
   }
-  .feature:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 23px;
     min-height: 510px;
   }
-  .feature-top:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature-top:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 9px;
     letter-spacing: 1px;
   }
-  .feature > img:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature > img:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 115%;
     height: 80%;
     top: 16%;
     right: -33%;
     opacity: 0.68;
   }
-  .feature:not(:where([data-template-theme], [data-template-theme] *)):after {
+  .feature:not(:where([data-template-theme], [data-template-theme] *)):after:not(:where(.studio-artboard, .studio-artboard *)) {
     background: linear-gradient(90deg, #111611f5, #11161180 70%, transparent);
   }
-  .feature-copy:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature-copy:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding-top: 60px;
     max-width: 100%;
   }
-  .feature h2:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature h2:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 43px;
   }
-  .feature-bottom:not(:where([data-template-theme], [data-template-theme] *)) {
+  .feature-bottom:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 10px;
   }
   .feature-bottom
     > span:last-child:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .image-note:not(:where([data-template-theme], [data-template-theme] *)) {
+  .image-note:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     right: 22px;
     bottom: 68px;
     font-size: 8px;
     opacity: 0.8;
   }
-  .collab-strip:not(:where([data-template-theme], [data-template-theme] *)) {
+  .collab-strip:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     padding: 22px 0;
     gap: 10px;
   }
   .collab-strip
-    button:not(:where([data-template-theme], [data-template-theme] *)) {
+    button:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin: 6px 0 0 50px;
   }
-  .section-heading:not(:where([data-template-theme], [data-template-theme] *)) {
+  .section-heading:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     align-items: start;
   }
-  .section-note:not(:where([data-template-theme], [data-template-theme] *)) {
+  .section-note:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
   .section-heading
-    h2:not(:where([data-template-theme], [data-template-theme] *)) {
+    h2:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 29px;
   }
-  .topic-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .topic-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr;
   }
-  .topic:not(:where([data-template-theme], [data-template-theme] *)) {
+  .topic:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     min-height: 255px;
   }
-  .topic-top:not(:where([data-template-theme], [data-template-theme] *)) {
+  .topic-top:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin-bottom: 22px;
   }
-  .topic p:not(:where([data-template-theme], [data-template-theme] *)) {
+  .topic p:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     max-width: 100%;
   }
-  .knowledge:not(:where([data-template-theme], [data-template-theme] *)) {
+  .knowledge:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 34px 0;
   }
-  .invitation:not(:where([data-template-theme], [data-template-theme] *)) {
+  .invitation:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     align-items: start;
     flex-direction: column;
     gap: 23px;
   }
-  .invitation h2:not(:where([data-template-theme], [data-template-theme] *)) {
+  .invitation h2:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 32px;
   }
-  footer:not(:where([data-template-theme], [data-template-theme] *)) {
+  footer:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     gap: 18px;
   }
-  footer > span:not(:where([data-template-theme], [data-template-theme] *)) {
+  footer > span:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .editing-bar:not(:where([data-template-theme], [data-template-theme] *)) {
+  .editing-bar:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     gap: 6px;
   }
   .editing-bar
     > div:first-child:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
   }
   .editing-bar
     > div:first-child
     > span:last-child:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 100%;
   }
-  .site-dialog:not(:where([data-template-theme], [data-template-theme] *)) {
+  .site-dialog:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 25px;
   }
-  .eyebrow:not(:where([data-template-theme], [data-template-theme] *)) {
+  .eyebrow:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 11px;
   }
 }
@@ -1435,85 +1435,85 @@ footer
   padding: 11px 13px;
 }
 @media (max-width: 1170px) {
-  .header:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     padding-top: 20px;
     height: auto;
     gap: 15px;
   }
-  .header nav:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     order: 3;
     height: 43px;
     width: 100%;
     justify-content: center;
     gap: 32px;
   }
-  .header .account:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header .account:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin-left: auto;
   }
-  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr 1fr;
     gap: 35px;
   }
-  .article-layout:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-layout:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 35px;
     grid-template-columns: 200px minmax(0, 1fr);
   }
 }
 @media (max-width: 760px) {
-  .header nav:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: clamp(12px, 3vw, 22px);
   }
   .header
     nav
-    button:not(:where([data-template-theme], [data-template-theme] *)),
-  .header nav a:not(:where([data-template-theme], [data-template-theme] *)) {
+    button:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)),
+  .header nav a:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 12px;
   }
-  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 30px 22px;
   }
-  .wiki-directory:not(:where([data-template-theme], [data-template-theme] *)) {
+  .wiki-directory:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 35px 0;
   }
   .wiki-directory
     .section-heading:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 15px;
     align-items: start;
     flex-direction: column;
   }
   .directory-card
-    > a:not(:where([data-template-theme], [data-template-theme] *)) {
+    > a:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 13px;
   }
   .directory-heading
-    h3:not(:where([data-template-theme], [data-template-theme] *)) {
+    h3:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 19px;
   }
-  .wiki-title-line:not(:where([data-template-theme], [data-template-theme] *)) {
+  .wiki-title-line:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     align-items: start;
     flex-direction: column;
     gap: 14px;
   }
-  .wiki-hero h1:not(:where([data-template-theme], [data-template-theme] *)) {
+  .wiki-hero h1:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 44px;
     letter-spacing: -1.8px;
   }
-  .wiki-hero > p:not(:where([data-template-theme], [data-template-theme] *)) {
+  .wiki-hero > p:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 16px;
   }
-  .draft-note:not(:where([data-template-theme], [data-template-theme] *)) {
+  .draft-note:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     line-height: 1.5;
   }
-  .article-layout:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-layout:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr;
     padding-top: 25px;
     gap: 30px;
   }
-  .article-toc:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-toc:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     position: static;
     display: flex;
     flex-wrap: wrap;
@@ -1522,111 +1522,111 @@ footer
     padding-bottom: 22px;
   }
   .article-toc
-    > .eyebrow:not(:where([data-template-theme], [data-template-theme] *)) {
+    > .eyebrow:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 100%;
     margin-bottom: 6px;
   }
-  .article-toc > a:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-toc > a:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 5px 0;
     font-size: 12px;
     border: 0;
   }
   .article-toc
-    .toc-back:not(:where([data-template-theme], [data-template-theme] *)) {
+    .toc-back:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin: 0;
   }
   .article-section
-    h2:not(:where([data-template-theme], [data-template-theme] *)),
-  .judging-map h2:not(:where([data-template-theme], [data-template-theme] *)) {
+    h2:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)),
+  .judging-map h2:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 27px;
   }
-  .article-content:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-content:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 16px;
     line-height: 1.8;
   }
   .article-content.prompt-content:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 18px;
   }
-  .article-kicker:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-kicker:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 9px;
   }
   .article-kicker
     > span:last-child:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 11px;
   }
   .requirements-table
-    th:not(:where([data-template-theme], [data-template-theme] *)),
+    th:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)),
   .requirements-table
-    td:not(:where([data-template-theme], [data-template-theme] *)) {
+    td:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 12px 9px;
     font-size: 12px;
   }
-  .award-links:not(:where([data-template-theme], [data-template-theme] *)) {
+  .award-links:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr;
   }
   .engineering-cycle:not(
     :where([data-template-theme], [data-template-theme] *)
-  ) {
+  ):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 9px;
     padding: 19px;
     font-size: 12px;
   }
   .engineering-cycle
-    svg:not(:where([data-template-theme], [data-template-theme] *)) {
+    svg:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 14px;
   }
-  .footer-main:not(:where([data-template-theme], [data-template-theme] *)) {
+  .footer-main:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     gap: 18px;
   }
   .footer-main
-    > span:not(:where([data-template-theme], [data-template-theme] *)) {
+    > span:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .footer-meta:not(:where([data-template-theme], [data-template-theme] *)) {
+  .footer-meta:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-direction: column;
     gap: 10px;
   }
-  .footer-meta a:not(:where([data-template-theme], [data-template-theme] *)) {
+  .footer-meta a:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin: 0;
   }
   .next-page
-    > span:not(:where([data-template-theme], [data-template-theme] *)) {
+    > span:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 22px;
   }
-  .form-pending:not(:where([data-template-theme], [data-template-theme] *)) {
+  .form-pending:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 20px;
     gap: 13px;
   }
 }
 @media (max-width: 420px) {
-  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)) {
+  .directory-grid:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: 1fr;
   }
-  .header .account:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header .account:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 8px;
   }
-  .header .brand:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header .brand:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 17px;
   }
   .header
     .account
-    .dark-button:not(:where([data-template-theme], [data-template-theme] *)) {
+    .dark-button:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 11px;
     padding: 10px;
   }
-  .article-kicker:not(:where([data-template-theme], [data-template-theme] *)) {
+  .article-kicker:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
     gap: 6px;
   }
-  .draft-divider:not(:where([data-template-theme], [data-template-theme] *)) {
+  .draft-divider:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .wiki-menu:not(:where([data-template-theme], [data-template-theme] *)) {
+  .wiki-menu:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 265px !important;
   }
 }
@@ -2053,58 +2053,58 @@ footer
   opacity: 0.35;
 }
 @media (max-width: 900px) {
-  .canvas-toolbar > div > span {
+  .canvas-toolbar > div > span:not(:where(.studio-artboard, .studio-artboard *)) {
     display: none;
   }
-  .canvas-toolbar > div {
+  .canvas-toolbar > div:not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 7px;
   }
-  .section-tools:not(:where([data-template-theme], [data-template-theme] *)) {
+  .section-tools:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     gap: 4px;
   }
   .section-tools
-    .section-label:not(:where([data-template-theme], [data-template-theme] *)) {
+    .section-label:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     max-width: 35%;
   }
-  .page-canvas[data-width='reading'] {
+  .page-canvas[data-width='reading']:not(:where(.studio-artboard, .studio-artboard *)) {
     max-width: 100%;
   }
 }
 @media (max-width: 760px) {
-  .page-canvas {
+  .page-canvas:not(:where(.studio-artboard, .studio-artboard *)) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .canvas-section {
+  .canvas-section:not(:where(.studio-artboard, .studio-artboard *)) {
     grid-column: 1 !important;
   }
-  .canvas-toolbar {
+  .canvas-toolbar:not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 12px;
   }
-  .canvas-toolbar > div {
+  .canvas-toolbar > div:not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
   }
-  .canvas-toolbar button {
+  .canvas-toolbar button:not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 11px;
   }
-  .canvas-section {
+  .canvas-section:not(:where(.studio-artboard, .studio-artboard *)) {
     padding-left: min(20px, 5vw) !important;
     padding-right: min(20px, 5vw) !important;
   }
-  .canvas-section[style*='padding: 0'],
-  .canvas-section:not([style*='padding']) {
+  .canvas-section[style*='padding: 0']:not(:where(.studio-artboard, .studio-artboard *)),
+  .canvas-section:not([style*='padding']):not(:where(.studio-artboard, .studio-artboard *)) {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
-  .builder-sheet:not(:where([data-template-theme], [data-template-theme] *)) {
+  .builder-sheet:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     padding: 26px 20px !important;
   }
-  .custom-text:not(:where([data-template-theme], [data-template-theme] *)) {
+  .custom-text:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     font-size: 16px;
   }
-  .section-tools:not(:where([data-template-theme], [data-template-theme] *)) {
+  .section-tools:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     margin-top: 8px;
   }
-  .builder-save:not(:where([data-template-theme], [data-template-theme] *)) {
+  .builder-save:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     bottom: -26px;
   }
 }
@@ -2192,18 +2192,18 @@ footer
 @media (max-width: 650px) {
   .publication
     .header
-    nav:not(:where([data-template-theme], [data-template-theme] *)) {
+    nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 100%;
     gap: 14px;
   }
-  .static-menu:not(:where([data-template-theme], [data-template-theme] *)) {
+  .static-menu:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     position: fixed;
     top: 170px;
     left: 5%;
     right: 5%;
     max-height: 60vh;
   }
-  .header .account:not(:where([data-template-theme], [data-template-theme] *)) {
+  .header .account:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     flex-wrap: wrap;
   }
 }
@@ -2356,13 +2356,13 @@ footer
   .header
     .site-header-navigation:not(
       :where([data-template-theme], [data-template-theme] *)
-    ) {
+    ):not(:where(.studio-artboard, .studio-artboard *)) {
     width: 100%;
     order: 3;
   }
   .header
     .site-header-navigation
-    nav:not(:where([data-template-theme], [data-template-theme] *)) {
+    nav:not(:where([data-template-theme], [data-template-theme] *)):not(:where(.studio-artboard, .studio-artboard *)) {
     justify-content: center;
   }
 }
@@ -2682,3 +2682,8 @@ footer
 .custom-html-block { position:relative; display:flex; flex:1 1 0; width:100%; height:100%; min-width:0; min-height:0; overflow:hidden; }
 .custom-html-frame { display:block; flex:1 1 0; width:100%; height:100%; min-width:0; min-height:0; border:0; }
 .custom-html-error { position:absolute; inset:auto 8px 8px; background:#fff4e5; color:#744b0b; border:1px solid #e8c685; border-radius:6px; padding:8px 10px; font:12px/1.5 system-ui,sans-serif; overflow-wrap:anywhere; }
+
+.canvas-section > .media-shape { height:100%; min-height:20px; }
+
+/* Keep negative stacking levels inside their canvas, above page backgrounds. */
+.page-canvas, .canvas-children { isolation: isolate; }

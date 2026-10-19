@@ -78,7 +78,7 @@ for (const [id, value] of Object.entries(snapshot.values)) {
       (id === 'site:header'
         ? 24000
         : id.startsWith('layout:')
-          ? 200000
+          ? (1024 * 1024)
           : id.startsWith('wiki:') || id === CUSTOM_PAGES
             ? 12000
             : 2000)

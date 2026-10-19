@@ -27,6 +27,7 @@ const theme=params.get('theme')||'notebook-white';
 const page=params.get('page')||'reading-demo';
 const pages=JSON.stringify([{slug:'reading-demo',title:'A material that can mend itself'}]);
 const values={...templateDefaults(theme),...customDefaults(pages),[CUSTOM_PAGES]:pages};
+if(params.has('appearance'))values['site:appearance']=params.get('appearance');
 const layout=JSON.parse(values['layout:reading-demo']);
 const titles=['The question','Designing the network','How we tested it','What we learned','Where we go next','References'];
 const paragraphs=[
@@ -41,6 +42,13 @@ layout.nodes=layout.nodes.filter(n=>n.id!=='custom-intro');
 layout.order=layout.order.filter(id=>id!=='custom-intro');
 titles.forEach((title,i)=>{const id='chapter-'+i;layout.nodes.push({...newNode(id,'text',title),parentId:CUSTOM_CONTENT,body:paragraphs[i]+'\\n\\n'+paragraphs[(i+1)%paragraphs.length],minHeight:400,...(i===1?{indexLabel:'Our design'}:{}),...(i===3?{headingLevel:3}:{})});layout.order.push(id)});
 layout.nodes.push({...newNode('hidden-heading','text','Hidden draft'),parentId:CUSTOM_CONTENT,indexHidden:true});layout.order.push('hidden-heading');
+if(params.has('layers')){
+ const frame={...newNode('experiment-frame','section','Experiment notes'),parentId:CUSTOM_CONTENT,layoutMode:'flow'};
+ const accordion={...newNode('experiment-accordion','accordion','Experimental details'),parentId:frame.id,items:[{id:'method-item',title:'Method',body:'Existing method text.'},{id:'result-item',title:'Observations',body:'Existing observations.'}]};
+ layout.nodes.push(frame,accordion);layout.order.push(frame.id,accordion.id);
+}
+if(params.has('flat')){layout.nodes=layout.nodes.filter(n=>!['custom-content','custom-heading'].includes(n.id)).map(({parentId,...n})=>n);layout.order=layout.order.filter(id=>layout.nodes.some(n=>n.id===id));}
+if(params.has('no-sidebar'))layout.sidebar=false;
 values['layout:reading-demo']=JSON.stringify(layout);
 const initial=Object.fromEntries(Object.entries(values).map(([id,value])=>[id,{value,version:1,author:'Test'}]));
 function Test(){const[data,setData]=useState(initial);return <CanvasContext.Provider value={{data,editing:params.has('editor'),busy:false,locked:false,dirty:()=>{},save:async(id,value,version)=>{setData(prev=>({...prev,[id]:{value,version:version+1,author:'Test'}}));return true;}}}><ImportedPage data={data} page={page} field={id=>data[id]?.value||''}/></CanvasContext.Provider>}
@@ -52,7 +60,7 @@ await build({
   ...common,
   build: {
     outDir: dist,
-    rollupOptions: { input: path.join(folder, 'index.html') },
+    rollupOptions: { input: [path.join(folder, 'index.html'), path.resolve('server/preview.html')] },
   },
 });
 const server = createServer(async (req, res) => {
@@ -69,7 +77,7 @@ const server = createServer(async (req, res) => {
     }
     const file = path.join(
       requestPath.startsWith('/templates/') ? path.resolve('public') : dist,
-      requestPath,
+      requestPath === '/studio-preview' ? 'server/preview.html' : requestPath,
     );
     res.setHeader(
       'Content-Type',
@@ -187,6 +195,47 @@ try {
       assert.ok(Math.abs(await prose.evaluate(el => el.getBoundingClientRect().width) - expandedWidth) < 2,
         theme + ': expanding index restores original reading width');
     }
+  }
+  // The appearance may be Luca while the saved content is still Blank.
+  for (const flat of [false, true]) {
+    await page.goto(url + '?theme=blank&appearance=luca&editor=1' + (flat ? '&flat=1' : ''));
+    await nav.waitFor();
+    const show = nav.getByRole('button', { name: 'Show page index', exact: true });
+    if (await show.isVisible()) await show.click();
+    assert.equal(await nav.getByRole('link').count(), 6);
+    assert.equal(await page.locator('[data-page-index-host]').count(), 1);
+    const alignment = await page.evaluate(() => ({
+      index: document.querySelector('.wiki-page-index').getBoundingClientRect().top,
+      heading: document.querySelector('#page-section-1').getBoundingClientRect().top,
+    }));
+    assert.ok(Math.abs(alignment.index - alignment.heading) < 2, 'index aligns with article');
+    const zoom = page.getByRole('spinbutton', { name: 'Canvas zoom percent', exact: true });
+    await zoom.fill('30'); await zoom.press('Enter');
+    await page.locator('.studio-stage').evaluate(el => { el.scrollTop = 250; });
+    const pinnedInStage = () => Math.abs(
+      document.querySelector('.wiki-page-index').getBoundingClientRect().top -
+      document.querySelector('.studio-stage').getBoundingClientRect().top - 24
+    ) < 2;
+    await page.waitForFunction(pinnedInStage);
+    assert.equal(await nav.getAttribute('data-scroll-pinned'), '');
+    assert.equal(await nav.getAttribute('data-pinned'), null);
+    const scrollRange = await nav.getAttribute('style');
+    await page.locator('.studio-stage').evaluate(el => { el.scrollTop += 80; });
+    await page.waitForFunction(pinnedInStage);
+    assert.equal(await nav.getAttribute('style'), scrollRange, 'scrolling does not rewrite pinning transforms or range endpoints');
+    await zoom.fill('60'); await zoom.press('Enter');
+    await page.waitForFunction(pinnedInStage);
+    const toggle = page.getByRole('switch', { name: 'Left contents sidebar', exact: true });
+    await toggle.click();
+    await page.locator('[data-page-index-host]').waitFor({ state: 'detached' });
+    await toggle.click();
+    await nav.waitFor();
+    assert.equal(await nav.getByRole('link').count(), 6);
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
+    const preview = page.frameLocator('iframe[title="Complete website preview"]');
+    await preview.getByRole('heading', { name: 'The question', exact: true }).waitFor();
+    assert.equal(await preview.getByRole('navigation', { name: 'Page section index', exact: true }).getByRole('link').count(), 6);
+    await page.getByRole('button', { name: 'Back to editor', exact: true }).click();
   }
   assert.deepEqual(errors, []);
   console.log(

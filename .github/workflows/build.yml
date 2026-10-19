@@ -16,6 +16,13 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/test-studio.mjs
+      - run: npm ci --prefix upload-helper --no-audit --no-fund
+      - run: npm test --prefix upload-helper
+      - run: node scripts/test-pdf-repeatability.mjs --built
+      - run: node scripts/test-runtime-upload.mjs
+      - run: node scripts/test-share-publication-assets.mjs
+      - run: node scripts/test-artifact-size.mjs
+      - run: node scripts/test-helper-closure.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: server-build

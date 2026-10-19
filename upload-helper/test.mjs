@@ -472,6 +472,7 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
     ],
     ['publication/content.json', '{"format":"prion-wiki-source","version":1}'],
     ['publication/media-map.json', '{}'],
+    ['publication/recording-todos.json', '[{"kind":"video","source":"missing.mp4"}]'],
     [
       'upload-manifest.csv',
       'source,file,kind\n/templates/logo.png,assets/icons/logo.png,image\n',
@@ -485,7 +486,6 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
   for (const [kind, data] of [
     ['source', source],
     ['assets', Buffer.concat(chunks)],
-    ['media', zip([['UPLOAD-FIRST.txt', 'guide']])],
   ]) {
     const response = await fetch(base + '/api/import?kind=' + kind, {
       method: 'POST',
@@ -497,6 +497,7 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
   assert.equal((await call('prepare', {})).status, 200);
   const state = (await call('state')).data;
   assert.equal(state.job.rows.length, 1);
+  assert.equal(state.job.recordingTodoCount, 1);
   assert.equal(uploadFolder(state.job.rows[0]), 'icons');
   assert.equal((await call('scan-storage', {})).status, 202);
   let scanState;
@@ -864,6 +865,7 @@ await test('Export media categories use safe folders and preserve original URL i
     ['/api/media/uuid.pdf', 'image', 'documents'],
     ['/api/media/uuid.glb', 'model', 'models'],
     ['https://cdn.example/test.woff2?x=1', 'font', 'fonts'],
+    ['/templates/runtime/pdfjs-6.4.299-worker.js', 'runtime', 'runtime'],
     ['/api/media/uuid.mp4', 'video', 'videos'],
     ['/api/media/uuid.mp3', 'audio', 'audio'],
     ['https://video.igem.org/videos/embed/id', 'embed', 'videos'],
@@ -885,7 +887,29 @@ await test('Export media categories use safe folders and preserve original URL i
   assert.throws(() => uploadFolder({ folder: '../private' }));
 });
 
+await test('Helper accepts every exported static folder, including the PDF runtime', async () => {
+  const { mediaFolder, PDF_WORKER_SOURCE } = await import('../scripts/export-media.mjs');
+  for (const [source, kind] of [
+    ['/templates/a/hero.png', 'image'],
+    ['/sponsor-logos/logo.svg', 'image'],
+    ['/a/favicon.svg', 'image'],
+    ['/api/media/photo.jpg', 'image'],
+    ['/api/media/notebook.pdf', 'pdf'],
+    ['/api/media/model.glb', 'model'],
+    ['/templates/fonts/font.ttf', 'font'],
+    [PDF_WORKER_SOURCE, 'runtime'],
+  ]) {
+    const folder = mediaFolder(source, kind);
+    const row = { source, kind, file: `assets/${folder}/${path.basename(source)}` };
+    assert.equal(uploadFolder(row), folder);
+    assert.equal(uploadFolder({ ...row, folder }), folder);
+  }
+  assert.throws(() => uploadFolder({ file: 'assets/private/worker.js' }), /Unsupported static-media folder/);
+  assert.throws(() => uploadFolder({ folder: 'runtime/../private' }), /Unsupported upload folder/);
+});
+
 function folderFixture({
+  folder = 'logos',
   existing = false,
   open = false,
   failFill = false,
@@ -906,7 +930,7 @@ function folderFixture({
       assert.ok(exists);
       assert.equal(open, false);
       counts.entered++;
-      url += '?path=logos';
+      url += '?path=' + folder;
     },
   };
   const dialog = {
@@ -948,13 +972,13 @@ function folderFixture({
             return;
           }
           assert.equal(options.name, 'Create');
-          assert.equal(inputValue, 'logos');
+          assert.equal(inputValue, folder);
           assert.equal(blurred, true);
           counts.created++;
           if (!failConfirm) {
             // iGEM navigates directly; the empty folder has no parent link.
             assert.equal(exists, false);
-            url += '?path=logos';
+            url += '?path=' + folder;
             counts.entered++;
             open = false;
           }
@@ -1010,6 +1034,27 @@ await test('Folder creation never submits when typed text is lost', async () => 
   const { sites, counts } = folderFixture({ lostInput: true });
   await assert.rejects(sites.assetFolder('6377', 'logos'), /Could not enter/);
   assert.equal(counts.created, 0);
+});
+
+await test('Every static export category opens and reuses its browser upload folder', async () => {
+  const { mediaFolder, PDF_WORKER_SOURCE } = await import('../scripts/export-media.mjs');
+  for (const [source, kind] of [
+    ['/hero.png', 'image'], ['/sponsor-logos/logo.svg', 'image'],
+    ['/favicon.svg', 'image'], ['/photo.jpg', 'image'], ['/book.pdf', 'pdf'],
+    ['/model.glb', 'model'], ['/font.ttf', 'font'], [PDF_WORKER_SOURCE, 'runtime'],
+  ]) {
+    const folder = uploadFolder({ file: `assets/${mediaFolder(source, kind)}/file` });
+    for (const existing of [false, true]) {
+      const { sites, counts } = folderFixture({ folder, existing });
+      await sites.assetFolder('6377', folder);
+      await sites.assetFolder('6377', folder);
+      assert.equal(counts.created, existing ? 0 : 1);
+      assert.equal(counts.entered, 1);
+    }
+  }
+  const { sites } = folderFixture();
+  await assert.rejects(sites.assetFolder('6377', 'private'), /Invalid upload folder/);
+  await assert.rejects(sites.assetFolder('bad-id', 'runtime'), /Invalid upload folder/);
 });
 await test('Existing folders are reused without submission, including with a leftover dialog', async () => {
   for (const open of [false, true]) {
@@ -1137,7 +1182,7 @@ await test('Older exports receive the current compiler without publishing review
     '{"sourceReviewed":false}',
   );
   await writeFile(path.join(root, 'README.md'), 'guide');
-  await assert.rejects(publicationSources(root), /prepare fresh three ZIPs/);
+  await assert.rejects(publicationSources(root), /prepare fresh two ZIPs/);
   await seedCurrentCompilerRequirements(root);
   const files = await publicationSources(root);
   assert.deepEqual(
@@ -1151,11 +1196,15 @@ await test('Older exports receive the current compiler without publishing review
       'package.json',
       'publication/katex-LICENSE.txt',
       'publication/pdf-processing-LICENSES.txt',
+      'scripts/artifact-size.mjs',
       'scripts/build-igem.mjs',
-      'scripts/export-media.mjs',
+      'scripts/export-media.mjs', 'scripts/export-recordings.mjs',
       'scripts/export-static.mjs',
+      'scripts/google-fonts.mjs',
       'scripts/image-export.mjs',
       'scripts/pdf-parts.mjs',
+      'scripts/share-publication-assets.mjs',
+      'scripts/static-runtime.ts',
     ],
   );
   assert.equal(

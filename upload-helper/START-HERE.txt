@@ -1,10 +1,13 @@
-reGELerate Upload Helper 1.0.14
+reGELerate Upload Helper 1.0.23
+
+This version fixes both "Invalid upload folder" and "Unsupported static-media folder" for the PDF reader's
+assets/runtime JavaScript upload. Existing export ZIPs and saved jobs can be reused.
 
 Where your files go
-- iGEM Uploads: images, logos, documents, fonts and 3D files.
-- Video Universe: video and audio; skip it if the helper says Not needed.
+- iGEM Uploads: images, logos, documents, fonts, 3D files and PDF reader JavaScript.
+- Video Universe: upload video/audio manually, then add HTML embeds in the editor before export. The helper does not process recordings in new exports.
 - iGEM GitLab: website source, after the media URLs are saved.
-The three export ZIPs are imported here, not uploaded as ZIPs to those sites.
+The two export ZIPs are imported here, not uploaded as ZIPs to those sites.
 Use How it works for a short guide. Current status shows the current operation,
 errors and your next step. The progress bar counts saved media URLs, not bytes
 transferred or a guarantee that a video has finished moderation.
@@ -27,13 +30,13 @@ files. Completed uploads are recovered without uploading them twice.
 2. Extract this ZIP. On Windows, double-click Start-helper.cmd.
    On macOS/Linux, open a terminal here and run: sh start-helper.sh
    The first start installs the helper's two dependencies from npm.
-3. Keep the terminal open. In the local helper page, select all three
+3. Keep the terminal open. In the local helper page, select both
    editor export ZIPs together. Check your numeric iGEM team ID.
 4. Click the official-site buttons. Sign in in the separate browser
    opened by the helper. It uses installed Edge or Chrome.
 5. Click Upload / check remaining files. New exports use category folders:
    assets/banners, logos, icons, images, documents, models and fonts;
-   media/videos and media/audio. Only nonempty folders are included.
+   only nonempty folders are included.
    The helper creates/reuses matching folders in iGEM Uploads. Video
    folders organize local files; recordings go to Video Universe.
    Existing flat imports retain their original locations. Static files are processed in
@@ -42,9 +45,9 @@ files. Completed uploads are recovered without uploading them twice.
    image/svg+xml MIME type with their XML preamble removed.
    If an older helper left an XML-rejected file pending, click Retry
    rejected file for that item, then check remaining files again.
-6. Review video metadata and captions in Video Universe. The helper
-   transfers one recording per pass so you can finish its form first.
-   iGEM moderation is still required. Never re-upload a pending video.
+6. If the exported page shows recording TODOs, replace those players with
+   Video Universe HTML embeds in the editor and export again. Existing
+   embed settings are preserved. Older three-ZIP jobs remain supported.
 7. Choose licensed font files, or opt for system fonts. Complete the
    source review, check the file list, then Upload source for review.
 8. Open the resulting GitLab merge request. Review its diff and merge

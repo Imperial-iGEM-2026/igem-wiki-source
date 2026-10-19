@@ -1,4 +1,6 @@
 'use client';
+
+import { isSiteHeader, normalizeHeaderCss } from './site-header-layer';
 import { ReferenceContext, referenceIndex } from './references';
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 
@@ -34,6 +36,18 @@ export type Builtin = {
   region?: string;
   node: ReactElement;
 };
+function hasPageIndexHost(element: ReactNode): boolean {
+  return Children.toArray(element).some((child) => {
+    if (!isValidElement(child)) return false;
+    const props = child.props as Record<string, unknown> & {
+      children?: ReactNode;
+    };
+    return (
+      props['data-page-index-host'] !== undefined ||
+      hasPageIndexHost(props.children)
+    );
+  });
+}
 function replaceImage(
   element: ReactElement,
   src: string,
@@ -79,22 +93,25 @@ export function nodeStyle(n: CanvasNode): CSSProperties {
   return {
     gridColumn: 'span ' + n.span,
     textAlign: n.align,
-    background: n.background || undefined,
+    background: n.kind === 'shape' ? undefined : n.background || undefined,
     paddingInline: n.paddingX ?? (n.padding || undefined),
     paddingBlock: n.paddingY ?? (n.padding || undefined),
     marginTop: n.marginTop,
     marginBottom: n.marginBottom,
     minHeight: n.minHeight,
-    height: ['pdf', 'html'].includes(n.kind)
+    height: ['pdf', 'html', 'shape'].includes(n.kind)
       ? n.minHeight || (n.kind === 'pdf' ? 600 : 360)
       : undefined,
-    boxSizing: ['pdf', 'html'].includes(n.kind) ? 'border-box' : undefined,
+    boxSizing: ['pdf', 'html', 'shape'].includes(n.kind)
+      ? 'border-box'
+      : undefined,
     borderRadius: n.radius,
     border:
-      n.borderWidth !== undefined
+      n.kind !== 'shape' && n.borderWidth !== undefined
         ? `${n.borderWidth}px solid ${n.borderColor || '#d3d9d5'}`
         : undefined,
     opacity: n.opacity !== undefined ? n.opacity / 100 : undefined,
+    zIndex: n.zIndex,
     boxShadow:
       n.shadow === 'soft'
         ? '0 4px 18px #18292114'
@@ -111,6 +128,7 @@ export function nodeStyle(n: CanvasNode): CSSProperties {
           : n.fontFamily === 'sans'
             ? 'Arial, Helvetica, sans-serif'
             : undefined,
+    '--node-desktop-span': n.span,
     '--node-tablet-span': n.tabletSpan ?? n.span,
     '--node-mobile-span': n.mobileSpan ?? 12,
     '--node-color': n.textColor,
@@ -127,11 +145,14 @@ export function nodeStyle(n: CanvasNode): CSSProperties {
 export function CanvasSurface({
   layout,
   templateId,
+  sourcePage,
   appearanceId,
   builtins,
   publication = false,
   editing = false,
   selected = [],
+  interactingHtmlId,
+  selectedItem,
   onSelect,
   onLayerPointerDown,
   onElementSelect,
@@ -146,12 +167,15 @@ export function CanvasSurface({
   onFreeMove,
 }: {
   layout: CanvasLayout;
+  sourcePage?: string;
   templateId?: string;
   appearanceId?: string;
   builtins: Builtin[];
   publication?: boolean;
   editing?: boolean;
   selected?: string[];
+  interactingHtmlId?: string;
+  selectedItem?: { layerId: string; itemId: string } | null;
   onTextEdit?: (element: Element) => void;
   onSelect?: (id: string, multiple: boolean) => void;
   onElementSelect?: (element: Element, multiple: boolean) => void;
@@ -178,6 +202,45 @@ export function CanvasSurface({
     () => new Map(builtins.map((item) => [item.id, item])),
     [builtins],
   );
+  // Appearance changes keep the original content template. Native content
+  // therefore needs an index host even when it started as a Blank project.
+  const builtinIndex = builtins.some((item) => {
+    const n = nodeMap.get(item.id);
+    return (
+      !n?.deleted && (!n?.hidden || editing) && hasPageIndexHost(item.node)
+    );
+  });
+  const contentNode = nodeMap.get('custom-content');
+  const nativeIndex =
+    value.sidebar &&
+    !builtinIndex &&
+    contentNode &&
+    !contentNode.deleted &&
+    (!contentNode.hidden || editing) &&
+    !builtinMap.has('custom-content');
+  const outerIndex =
+    value.sidebar &&
+    !builtinIndex &&
+    !nativeIndex &&
+    !builtins.some((item) => item.region === 'main');
+  const indexHost = (
+    <aside
+      className="wiki-sidebar"
+      data-page-index-sidebar=""
+      aria-label="Page sections"
+    >
+      <div data-page-index-host="" />
+    </aside>
+  );
+  const withPageIndex = (children: ReactNode) =>
+    outerIndex ? (
+      <div className="page-index-layout" data-page-index-grid="outer">
+        {indexHost}
+        {children}
+      </div>
+    ) : (
+      children
+    );
   const childrenMap = useMemo(() => {
     const groups = new Map<string, string[]>();
     for (const id of value.order) {
@@ -220,6 +283,14 @@ export function CanvasSurface({
   );
   const scope = '[data-page-css="' + page.replace(/[^a-z0-9-]/gi, '') + '"]';
   const cssSource = cssOverride ?? layout.customCss ?? '';
+  const headerIds = new Set(
+    value.nodes
+      .filter((n) => isSiteHeader(n, value.nodes, builtinMap.get(n.id)?.region))
+      .map((n) => n.id),
+  );
+  const nativeHeader = value.nodes.some(
+    (n) => n.kind === 'section' && headerIds.has(n.id),
+  );
   const pdfIds = value.nodes
     .filter((node) => node.kind === 'pdf')
     .map((node) => node.id)
@@ -228,14 +299,17 @@ export function CanvasSurface({
     if (disableCss) return '';
     try {
       return compileCustomCss(
-        normalizePdfPlacementCss(cssSource, pdfIds ? pdfIds.split(',') : []),
+        normalizePdfPlacementCss(
+          nativeHeader ? normalizeHeaderCss(cssSource) : cssSource,
+          pdfIds ? pdfIds.split(',') : [],
+        ),
         scope,
         editorViewport,
       );
     } catch {
       return '';
     }
-  }, [cssSource, scope, editorViewport, disableCss, pdfIds]);
+  }, [cssSource, scope, editorViewport, disableCss, pdfIds, nativeHeader]);
   const renderNode = (id: string): ReactNode => {
     const n = nodeMap.get(id)!;
     const locked = nodeLocked(value, id);
@@ -253,6 +327,7 @@ export function CanvasSurface({
       !sponsor &&
       parent &&
       parent.layoutMode === 'free' &&
+      parent.kind !== 'accordion' &&
       (!editorViewport || viewport > 760),
     );
     const builtin = builtinMap.get(id);
@@ -329,6 +404,10 @@ export function CanvasSurface({
         key={id}
         data-layer-id={id}
         data-layer-kind={n.kind}
+        data-page-index-grid={
+          nativeIndex && id === 'custom-content' ? 'native' : undefined
+        }
+        data-site-header={headerIds.has(id) || undefined}
         className={
           'canvas-section node-styled' +
           (n.hidden ? ' canvas-hidden' : '') +
@@ -341,7 +420,7 @@ export function CanvasSurface({
         data-index-hidden={n.indexHidden || undefined}
         style={{
           ...nodeStyle(n),
-          ...(['pdf', 'html'].includes(n.kind) && parent?.layoutMode === 'free'
+          ...(['pdf', 'html', 'shape'].includes(n.kind) && free
             ? { height: n.freeHeight ?? 80, minHeight: n.freeHeight ?? 80 }
             : {}),
           ...(sponsor
@@ -359,7 +438,7 @@ export function CanvasSurface({
                 top: n.y ?? 20,
                 width: (n.freeWidth ?? 40) + '%',
                 minHeight: n.freeHeight ?? 80,
-                ...(['pdf', 'html'].includes(n.kind)
+                ...(['pdf', 'html', 'shape'].includes(n.kind)
                   ? { height: n.freeHeight ?? 80 }
                   : {}),
               }
@@ -407,7 +486,7 @@ export function CanvasSurface({
                 const target = e.target as HTMLElement;
                 if (
                   target.closest(
-                    '[data-citation-link],.modern-pdf-reader,[data-page-index-host]',
+                    '[data-citation-link],.modern-pdf-reader,[data-page-index-host],[data-html-interaction-control]',
                   )
                 )
                   return;
@@ -479,9 +558,51 @@ export function CanvasSurface({
         ) : builtin ? (
           fillSlots(templateNodes.get(id)!)
         ) : n.kind !== 'template' ? (
-          <MediaBlock node={n} publication={publication} />
+          <MediaBlock
+            node={n}
+            editing={editing}
+            htmlInteracting={
+              editing && selected.includes(n.id) && interactingHtmlId === n.id
+            }
+            publication={publication}
+            openItems={
+              editing
+                ? (n.items || [])
+                    .filter(
+                      (item) =>
+                        (selectedItem?.layerId === n.id &&
+                          selectedItem.itemId === item.id) ||
+                        selected.some((selectedId) => {
+                          let child = nodeMap.get(selectedId);
+                          while (child?.parentId && child.parentId !== n.id)
+                            child = nodeMap.get(child.parentId);
+                          return (
+                            child?.parentId === n.id &&
+                            child.parentItemId === item.id
+                          );
+                        }),
+                    )
+                    .map((item) => item.id)
+                : []
+            }
+            renderItem={
+              n.kind === 'accordion'
+                ? (itemId) => {
+                    const itemKids = kids.filter(
+                      (child) => nodeMap.get(child)?.parentItemId === itemId,
+                    );
+                    return itemKids.length ? (
+                      <div className="canvas-children canvas-children-flow">
+                        {itemKids.map(renderNode)}
+                      </div>
+                    ) : null;
+                  }
+                : undefined
+            }
+          />
         ) : null}
-        {kids.length > 0 && (
+        {nativeIndex && id === 'custom-content' && indexHost}
+        {n.kind !== 'accordion' && kids.length > 0 && (
           <div
             className={
               'canvas-children ' +
@@ -536,29 +657,31 @@ export function CanvasSurface({
             <i className="studio-corner ne" />
             <i className="studio-corner sw" />
             <i className="studio-corner se" />
-            <button
-              className="studio-resize"
-              aria-label={
-                n.kind === 'pdf'
-                  ? 'Resize PDF width and height'
-                  : n.kind === 'html'
-                    ? 'Resize Custom HTML width and height'
-                    : 'Resize section width'
-              }
-              title={
-                ['pdf', 'html'].includes(n.kind)
-                  ? 'Drag to resize width and height; Left/Right changes columns'
-                  : 'Drag to resize; Left/Right changes columns'
-              }
-              onPointerDown={(e) => onResize?.(e, id)}
-              onKeyDown={(e) => {
-                if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onResizeKey?.(id, e.key === 'ArrowRight' ? 1 : -1);
+            {(['width', 'height', 'both'] as const).map((axis) => (
+              <button
+                key={axis}
+                type="button"
+                className={'studio-resize studio-resize-' + axis}
+                data-resize-axis={axis}
+                aria-label={'Resize ' + (n.name || n.kind) + ' ' + axis}
+                title={
+                  axis === 'both'
+                    ? 'Drag to resize width and height'
+                    : 'Drag to resize ' + axis
                 }
-              }}
-            />
+                onPointerDown={(e) => onResize?.(e, id)}
+                onKeyDown={(e) => {
+                  if (
+                    ['ArrowLeft', 'ArrowRight'].includes(e.key) &&
+                    axis !== 'height'
+                  ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onResizeKey?.(id, e.key === 'ArrowRight' ? 1 : -1);
+                  }
+                }}
+              />
+            ))}
           </>
         )}
       </LayerTag>
@@ -571,6 +694,15 @@ export function CanvasSurface({
         data-template-theme={templateId}
         data-page-css={page.replace(/[^a-z0-9-]/gi, '')}
         data-editor-viewport={editorViewport || undefined}
+        data-editor-breakpoint={
+          editorViewport
+            ? viewport <= 760
+              ? 'mobile'
+              : viewport <= 1000
+                ? 'tablet'
+                : 'desktop'
+            : undefined
+        }
         data-mobile-preview={(editorViewport && viewport <= 760) || undefined}
       >
         {templateId && (
@@ -591,23 +723,25 @@ export function CanvasSurface({
                   builtinMap.get(id)?.region === 'header',
               )
               .map(renderNode)}
-            <main className={pageMainClass(templateId, page)}>
-              <div
-                className={'page-canvas' + (editing ? ' studio-canvas' : '')}
-                data-width={value.width}
-                data-sidebar={String(value.sidebar)}
-                style={{ gap: value.gap }}
-              >
-                {value.order
-                  .filter(
-                    (id) =>
-                      !nodeMap.get(id)?.parentId &&
-                      !['header', 'footer'].includes(
-                        builtinMap.get(id)?.region || '',
-                      ),
-                  )
-                  .map(renderNode)}
-              </div>
+            <main className={pageMainClass(templateId, sourcePage || page)}>
+              {withPageIndex(
+                <div
+                  className={'page-canvas' + (editing ? ' studio-canvas' : '')}
+                  data-width={value.width}
+                  data-sidebar={String(value.sidebar)}
+                  style={{ gap: value.gap }}
+                >
+                  {value.order
+                    .filter(
+                      (id) =>
+                        !nodeMap.get(id)?.parentId &&
+                        !['header', 'footer'].includes(
+                          builtinMap.get(id)?.region || '',
+                        ),
+                    )
+                    .map(renderNode)}
+                </div>,
+              )}
             </main>
             {value.order
               .filter(

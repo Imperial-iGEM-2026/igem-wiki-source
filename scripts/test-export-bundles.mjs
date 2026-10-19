@@ -1,4 +1,31 @@
 import assert from 'node:assert/strict';
+import { request as httpRequest } from 'node:http';
+// Send the fixture's public Host explicitly while connecting over localhost.
+// Node's Fetch implementation can replace Host with the socket destination.
+function fetch(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      url,
+      {
+        method: options.method || 'GET',
+        headers: {
+          host: 'editor.example.com',
+          ...options.headers,
+        },
+      },
+      (res) => {
+        resolve(
+          new Response(Readable.toWeb(res), {
+            status: res.statusCode,
+            headers: res.headers,
+          }),
+        );
+      },
+    );
+    req.on('error', reject);
+    req.end(options.body);
+  });
+}
 import { mkdtemp, open, writeFile, readFile, symlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
@@ -16,6 +43,7 @@ const environment = {
   CF_ACCESS_TEAM_DOMAIN: 'https://example.cloudflareaccess.com',
   CF_ACCESS_AUD: 'export-test',
   CF_ACCESS_ORIGIN: 'https://editor.example.com',
+  MEDIA_ORIGIN: 'https://media.example.com',
 };
 const token = async (sub) =>
   new SignJWT({ email: sub + '@example.com' })
@@ -41,9 +69,11 @@ const request = (url, body, project, extra = {}) =>
   fetch(origin + url, {
     method: body ? 'POST' : 'GET',
     headers: {
+      host: new URL(environment.CF_ACCESS_ORIGIN).host,
       origin: environment.CF_ACCESS_ORIGIN,
       'cf-access-jwt-assertion': jwt,
       'Content-Type': 'application/json',
+      'X-Prion-Layout-Protocol': '2',
       ...(project ? { 'X-Prion-Project': project } : {}),
       ...extra,
     },
@@ -84,7 +114,14 @@ const download = async (plan, key, project) => {
   );
 };
 try {
-  assert.equal((await fetch(origin + '/api/export/bundles')).status, 401);
+  assert.equal(
+    (
+      await fetch(origin + '/api/export/bundles', {
+        headers: { host: new URL(environment.CF_ACCESS_ORIGIN).host },
+      })
+    ).status,
+    401,
+  );
   const helper = await request('/upload-helper.zip');
   assert.equal(helper.status, 200);
   assert.equal(helper.headers.get('content-type'), 'application/zip');
@@ -98,6 +135,44 @@ try {
   );
   const project = await create('Export test', 'notebook-purple');
   const second = await create('Other project', 'notebook-purple');
+  const requestId = 'aaaaaaaa-bbbb-cccc-dddd-123456789012';
+  const asyncResponse = await request(
+    '/api/export/bundles',
+    { team: 'imperial-college', requiredPages: ['hardware'], requestId },
+    project,
+    { Prefer: 'respond-async' },
+  );
+  assert.equal(asyncResponse.status, 202);
+  const job = await asyncResponse.json();
+  assert.match(job.statusURL, /^\/api\/export\/jobs\//);
+  assert.equal((await request(job.statusURL, null, second)).status, 404);
+  assert.equal(
+    (
+      await request(job.statusURL, null, project, {
+        'cf-access-jwt-assertion': otherJwt,
+      })
+    ).status,
+    404,
+  );
+  let jobState;
+  for (let i = 0; i < 100; i++) {
+    jobState = await (await request(job.statusURL, null, project)).json();
+    if (jobState.state === 'failed') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(jobState.state, 'failed');
+  assert.equal(jobState.errorStatus, 422);
+  assert.match(jobState.error, /Missing required pages/);
+  const duplicate = await (
+    await request(
+      '/api/export/bundles',
+      { team: 'imperial-college', requiredPages: ['hardware'], requestId },
+      project,
+      { Prefer: 'respond-async' },
+    )
+  ).json();
+  assert.equal(duplicate.id, job.id);
+
   assert.equal(
     (
       await request(
@@ -136,15 +211,115 @@ try {
   );
   await save(project, 'brand', 'Frozen export brand');
   await save(project, 'ai:brief', 'PRIVATE_AI_BRIEF');
+  const savedHome = (
+    await (await request('/api/content', null, project)).json()
+  ).rows.find((row) => row.id === 'layout:home');
+  const nestedHome = JSON.parse(savedHome.value);
+  const accordion = {
+    ...newNode('export-accordion', 'accordion', 'Nested export'),
+    items: [
+      {
+        id: 'export-item',
+        title: 'Export subsection',
+        body: 'Original subsection text.',
+      },
+    ],
+  };
+  const nestedImage = {
+    ...newNode('export-image', 'image'),
+    parentId: accordion.id,
+    parentItemId: 'export-item',
+    src: '/templates/notebook-purple/favicon.svg',
+    alt: 'Nested export image',
+  };
+  const largeComponent = {
+    ...newNode('export-large-code', 'html'),
+    javascript: '/*' + 'é'.repeat(65534) + '*/',
+    html: '<p>Large component preserved</p>',
+  };
+  const absoluteLogos = [
+    'https://editor.example.com/templates/regelerate/sponsor-logos/benchling.svg',
+    'https://media.example.com/templates/regelerate/sponsor-logos/atlassian.svg',
+    'https://media.example.com/templates/regelerate/sponsor-logos/neb.jpg?v=2#logo',
+    'https://unrelated.example.com/templates/regelerate/sponsor-logos/benchling.svg',
+  ].map((src, i) => ({ ...newNode('absolute-logo-' + i, 'image'), src }));
+  nestedHome.nodes.push(
+    accordion,
+    nestedImage,
+    largeComponent,
+    ...absoluteLogos,
+  );
+  nestedHome.order.push(
+    accordion.id,
+    nestedImage.id,
+    largeComponent.id,
+    ...absoluteLogos.map((n) => n.id),
+  );
+  await save(project, 'layout:home', JSON.stringify(nestedHome));
+  const grant = await (
+    await request('/api/mcp-links', { action: 'prepare-developer' }, project)
+  ).json();
+  const developer = await (
+    await request(
+      '/api/mcp-links',
+      {
+        name: 'Export source test',
+        days: 1,
+        mode: 'developer',
+        confirmation: grant.confirmation,
+        confirmDeveloper: true,
+      },
+      project,
+    )
+  ).json();
+  const devKey = new URL(developer.url).searchParams.get('key');
+  const sourceCall = async (name, args) => {
+    const response = await fetch(origin + '/mcp?key=' + devKey, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        host: new URL(environment.CF_ACCESS_ORIGIN).host,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+    const result = (await response.json()).result;
+    assert.ok(!result.isError, result.content[0].text);
+    return JSON.parse(result.content[0].text);
+  };
+  const newSource = await sourceCall('read_source_file', {
+    path: 'app/project-components/ExportTest.tsx',
+  });
+  const sourceLease = await sourceCall('acquire_source_lock', {
+    path: newSource.path,
+  });
+  await sourceCall('write_source_file', {
+    path: newSource.path,
+    lockToken: sourceLease.lockToken,
+    ifVersion: newSource.version,
+    ifBaseHash: newSource.baseHash,
+    content: 'export default function Example() { return null; }',
+  });
+  await sourceCall('release_source_lock', {
+    path: newSource.path,
+    lockToken: sourceLease.lockToken,
+  });
   const res = await prepare(project);
   assert.equal(res.status, 200, res.status === 200 ? '' : await res.text());
   const plan = await res.json();
-  assert.equal(plan.downloads.length, 3);
+  assert.deepEqual(plan.sourceChanges, [
+    'app/project-components/ExportTest.tsx',
+  ]);
+  assert.equal(plan.downloads.length, 2);
   assert.equal(
     plan.downloads.find((entry) => entry.key === 'assets').files,
-    28,
+    32,
   );
-  assert.equal(plan.downloads.find((entry) => entry.key === 'media').files, 0);
+  assert.deepEqual(plan.recordingTodos, []);
   await save(project, 'brand', 'Newer unsnapshotted brand', 1);
   const sourceURL = plan.downloads[0].url;
   assert.equal(
@@ -156,14 +331,17 @@ try {
     404,
   );
   assert.equal((await request(sourceURL, null, second)).status, 404);
-  for (const key of ['source', 'assets', 'media'])
-    await download(plan, key, project);
-  const validate = `import zipfile,json,sys,pathlib
+  for (const key of ['source', 'assets']) await download(plan, key, project);
+  const validate = `import zipfile,json,sys,pathlib,csv,io
 root=pathlib.Path(sys.argv[1])
 for p in root.glob('*.zip'):
  with zipfile.ZipFile(p) as z: assert z.testzip() is None
 with zipfile.ZipFile(root/'01-website-source.zip') as z:
+ assert z.read('app/project-components/ExportTest.tsx')==b'export default function Example() { return null; }'
+ assert json.loads(z.read('bundle-info.json'))['sourceChanges']==['app/project-components/ExportTest.tsx']
  values=json.loads(z.read('publication/content.json'))['values']
+ large=next(n for n in json.loads(values['layout:home'])['nodes'] if n['id']=='export-large-code')
+ assert len(large['javascript'].encode('utf-8'))==131072
  assert values['brand']=='Frozen export brand'
  assert json.loads(z.read('publication/config.json'))['requiredPages']==['safety-and-security','education']
  assert all(p['present'] for p in json.loads(z.read('publication/url-check.json'))['standardPages'])
@@ -174,11 +352,20 @@ with zipfile.ZipFile(root/'01-website-source.zip') as z:
  assert b'SPDX-License-Identifier: CC-BY-4.0' in z.read('LICENSE')
  z.extractall(root/'source')
 with zipfile.ZipFile(root/'02-static-assets.zip') as z:
- assert all(n.startswith(('assets/logos/', 'assets/fonts/')) for n in z.namelist() if n.startswith('assets/'))
+ assert all(n.startswith(('assets/logos/', 'assets/fonts/', 'assets/icons/')) for n in z.namelist() if n.startswith('assets/'))
  assert sum(n.endswith('.ttf') for n in z.namelist()) == 4
  assert sum(n.endswith('-OFL.txt') for n in z.namelist()) == 3
-with zipfile.ZipFile(root/'03-video-audio.zip') as z:
- assert 'No local recordings' in z.read('UPLOAD-FIRST.txt').decode()
+ rows=list(csv.DictReader(io.StringIO(z.read('upload-manifest.csv').decode())))
+ for host,filename,suffix in [('editor.example.com','benchling.svg',''),('media.example.com','atlassian.svg',''),('media.example.com','neb.jpg','?v=2#logo')]:
+  source='https://'+host+'/templates/regelerate/sponsor-logos/'+filename+suffix
+  row=next(r for r in rows if r['source']==source)
+  assert row['file'].startswith('assets/logos/'),row
+  assert z.read(row['file'])==(pathlib.Path('public/templates/regelerate/sponsor-logos')/filename).read_bytes()
+ external=next(r for r in rows if r['source'].startswith('https://unrelated.example.com/'))
+ assert external['file']=='',external
+assert not (root/'03-video-audio.zip').exists()
+with zipfile.ZipFile(root/'01-website-source.zip') as z:
+ assert 'scripts/export-recordings.mjs' in z.namelist()
 print('ZIP64 CRC, source isolation and frozen snapshot passed')`;
   console.log(
     execFileSync(process.env.PYTHON || 'python', ['-c', validate, dataDir], {
@@ -248,57 +435,89 @@ print('ZIP64 CRC, source isolation and frozen snapshot passed')`;
   );
   assert.equal(report.pageCount, 20);
   assert.deepEqual(report.issues, []);
+  const exportedHome = await readFile(
+    path.join(checkout, 'igem-build/public/index.html'),
+    'utf8',
+  );
+  const exportedSubsection = exportedHome.match(
+    /<details[^>]*data-item-id="export-item"[\s\S]*?<\/details>/,
+  )?.[0];
+  assert.ok(exportedSubsection, 'Export preserves the collapsible subsection');
+  assert.match(exportedSubsection, /Nested export image/);
+  assert.match(exportedSubsection, /Original subsection text/);
   console.log(
     'Downloaded website source builds all 20 pages with the configured iGEM URL prefix.',
   );
   const video = newNode('recording', 'video');
   video.src = '/api/media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4';
+  video.name = 'Lab recording';
   const layout = { ...emptyLayout, order: ['recording'], nodes: [video] };
-  await save(second, 'layout:home', JSON.stringify(layout));
+  const invalid = newNode('bad-image', 'image');
+  invalid.name = 'Lab photo';
+  invalid.src = '/templates/notebook-purple//logo.png';
+  await save(
+    second,
+    'layout:home',
+    JSON.stringify({
+      ...layout,
+      order: ['recording', 'bad-image'],
+      nodes: [video, invalid],
+    }),
+  );
+  const failedExport = await prepare(second);
+  assert.equal(failedExport.status, 422);
+  const diagnostic = await failedExport.json();
   assert.equal(
-    (await prepare(second)).status,
-    422,
-    'Missing media must fail before any download',
+    diagnostic.mediaIssues.length,
+    1,
+    'Excluded recordings must not block static media validation',
   );
-  const file = await open(
-    path.join(dataDir, 'media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4'),
-    'w',
+  const invalidIssue = diagnostic.mediaIssues.find(
+    (issue) => issue.source === invalid.src,
   );
-  await file.truncate(151 * 1024 * 1024);
-  await file.close();
-  const large = await (await prepare(second)).json();
-  assert.equal(large.downloads.find((item) => item.key === 'media').files, 1);
-  await download(large, 'media', second);
+  assert.match(invalidIssue.reason, /Invalid media path/);
+  assert.equal(invalidIssue.locations[0].page, 'home');
+  assert.equal(invalidIssue.locations[0].layerId, 'bad-image');
+  assert.equal(invalidIssue.locations[0].layerName, 'Lab photo');
+  assert.ok(
+    !diagnostic.mediaIssues.some((issue) => issue.source === video.src),
+  );
+  assert.ok(
+    !JSON.stringify(diagnostic).includes(dataDir),
+    'Do not expose filesystem paths',
+  );
+  await save(second, 'layout:home', JSON.stringify(layout));
+  const missingRecording = await prepare(second);
+  assert.equal(
+    missingRecording.status,
+    200,
+    'Excluded recordings do not need local files',
+  );
+  const recordingPlan = await missingRecording.json();
+  assert.equal(recordingPlan.downloads.length, 2);
+  assert.equal(recordingPlan.recordingTodos[0].source, video.src);
+  assert.equal(
+    recordingPlan.recordingTodos[0].locations[0].layerName,
+    'Lab recording',
+  );
+  await download(recordingPlan, 'source', second);
   console.log(
     execFileSync(
       process.env.PYTHON || 'python',
       [
         '-c',
-        `import zipfile,sys
+        `import zipfile,json,sys
 with zipfile.ZipFile(sys.argv[1]) as z:
- assert z.testzip() is None
- media=[n for n in z.namelist() if n.startswith('media/')]
- assert all(n.startswith('media/videos/') for n in media)
- assert len(media)==1 and z.getinfo(media[0]).file_size==151*1024*1024
-print('151 MiB recording streamed successfully with valid ZIP64 CRC')`,
-        path.join(dataDir, '03-video-audio.zip'),
+ assert json.loads(z.read('publication/media-map.json')).get('/api/media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4') is None
+ assert 'mp4' not in z.read('upload-manifest.csv').decode()
+ assert json.loads(z.read('publication/recording-todos.json'))[0]['kind']=='video'
+ node=json.loads(json.loads(z.read('publication/content.json'))['values']['layout:home'])['nodes'][0]
+ assert node['kind']=='video' and node['src'].endswith('.mp4')
+print('Recording excluded; saved source retained; TODO report present')`,
+        path.join(dataDir, '01-website-source.zip'),
       ],
       { encoding: 'utf8' },
     ),
-  );
-  await writeFile(
-    path.join(dataDir, 'media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4'),
-    'changed',
-  );
-  assert.equal(
-    (
-      await request(
-        large.downloads.find((item) => item.key === 'media').url,
-        null,
-        second,
-      )
-    ).status,
-    409,
   );
   const hidden = { ...newNode('parent', 'section'), hidden: true };
   assert.equal(
@@ -310,8 +529,8 @@ print('151 MiB recording streamed successfully with valid ZIP64 CRC')`,
         }),
       },
       { pages: [] },
-    ).size,
-    0,
+    ).has(video.src),
+    false,
   );
   assert.equal(
     exportMedia(
@@ -320,8 +539,8 @@ print('151 MiB recording streamed successfully with valid ZIP64 CRC')`,
         'layout:removed': JSON.stringify(layout),
       },
       { pages: [] },
-    ).size,
-    0,
+    ).has(video.src),
+    false,
   );
   const expiring = createBundleExports({
     dataDir,
@@ -372,7 +591,7 @@ print('151 MiB recording streamed successfully with valid ZIP64 CRC')`,
   );
   expiring.close();
   console.log(
-    'PASS: authenticated exports, origin/project/user isolation, frozen source, missing/changed media, large recording, hidden/removed assets, and expiry.',
+    'PASS: authenticated exports, origin/project/user isolation, frozen source, invalid static media, excluded missing recordings, hidden/removed assets, and expiry.',
   );
   console.log('Extracted source:', path.join(dataDir, 'source'));
 } finally {

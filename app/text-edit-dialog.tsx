@@ -1,11 +1,11 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Check, Type } from 'lucide-react';
+import { Check, Type, Maximize2, Minimize2 } from 'lucide-react';
 
 export function TextEditDialog({
   open,
@@ -28,6 +28,7 @@ export function TextEditDialog({
   maxLength?: number;
   conflict?: { latest: string; onRebase: () => void };
 }) {
+  const [expanded, setExpanded] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   return (
     <Dialog
@@ -37,7 +38,10 @@ export function TextEditDialog({
       }}
     >
       <DialogContent
-        className="studio-dialog studio-text-dialog"
+        className={
+          'studio-dialog studio-text-dialog' +
+          (expanded ? ' studio-text-expanded' : '')
+        }
         initialFocus={input}
         showCloseButton={!busy}
       >
@@ -47,6 +51,16 @@ export function TextEditDialog({
         <DialogDescription>
           Change this text without changing its link or styling.
         </DialogDescription>
+        <button
+          className="studio-text-expand"
+          aria-label={
+            expanded ? 'Restore text editor size' : 'Expand text editor'
+          }
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}{' '}
+          {expanded ? 'Restore size' : 'Expand editor'}
+        </button>
         <textarea
           ref={input}
           aria-label="Text content"

@@ -359,3 +359,113 @@
     grid-template-columns: 1fr;
   }
 }
+.wiki-export-error > p {
+  margin: 4px 0 10px;
+}
+.wiki-export-issues {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.wiki-export-issues > li {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #edcdd1;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.wiki-export-issues code {
+  display: block;
+  color: #253047;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.wiki-export-issues p {
+  margin: 6px 0;
+}
+.wiki-export-issues ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #44516a;
+}
+.wiki-export-issues ul li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin-top: 8px;
+}
+.wiki-export-issues small {
+  color: #657087;
+}
+.wiki-export-issues a {
+  color: #215dc3;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.wiki-export-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #d3dae5;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: white;
+  color: #253047;
+  cursor: pointer;
+}
+
+.wiki-export-recordings {
+  padding: 16px;
+  border: 1px solid #e5c994;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #58411c;
+  font:
+    13px/1.5 Arial,
+    sans-serif;
+}
+.wiki-export-recordings p {
+  margin: 8px 0;
+}
+.wiki-export-recordings a {
+  color: #245a9b;
+  text-decoration: underline;
+}
+.wiki-export-recordings summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.wiki-export-recordings ul {
+  padding-left: 18px;
+  max-height: 180px;
+  overflow: auto;
+}
+.wiki-export-recordings li {
+  margin: 10px 0;
+}
+.wiki-export-recordings li a,
+.wiki-export-recordings small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.wiki-export-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #eef4fb;
+  color: #254c7d;
+  font:
+    13px/1.5 Arial,
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+.wiki-export-progress svg {
+  flex-shrink: 0;
+}

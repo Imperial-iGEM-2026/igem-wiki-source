@@ -15,6 +15,99 @@ export type BuiltinInfo = {
   defaults?: Partial<CanvasNode>;
   linkPath?: string;
 };
+// Inserting a child must never convert its parent to free positioning: existing
+// flow children have no coordinates and would all land at the same default spot.
+export function insertNode(
+  layout: CanvasLayout,
+  node: CanvasNode,
+  options: {
+    inside?: string;
+    insideItem?: string;
+    after?: string;
+    renderedHeights?: Record<string, number>;
+  } = {},
+): CanvasLayout {
+  const parentId =
+    options.inside ??
+    (layout.nodes.some((n) => n.id === CUSTOM_CONTENT)
+      ? CUSTOM_CONTENT
+      : undefined);
+  const parent = layout.nodes.find((n) => n.id === parentId);
+  if (
+    parentId &&
+    (!parent ||
+      !['section', 'template', 'accordion', 'text'].includes(parent.kind))
+  )
+    throw Error('Choose a section to insert into.');
+  if (parent?.kind === 'accordion' || options.insideItem !== undefined) {
+    if (
+      parent?.kind !== 'accordion' ||
+      !parent.items?.some((item) => item.id === options.insideItem)
+    )
+      throw Error('Choose a subsection inside this collapsible element.');
+  }
+  if (parentId && nodeLocked(layout, parentId))
+    throw Error('Unlock the section before adding content.');
+  if (layout.nodes.some((n) => n.id === node.id))
+    throw Error('That element already exists.');
+  const inserted = { ...node, parentId, parentItemId: options.insideItem };
+  if (parent?.layoutMode === 'free' && parent.kind !== 'accordion') {
+    const height = (n: CanvasNode): number =>
+      Math.max(
+        n.freeHeight ?? 80,
+        n.minHeight ?? 0,
+        options.renderedHeights?.[n.id] ?? 0,
+        n.layoutMode === 'free'
+          ? Math.max(
+              320,
+              ...layout.nodes
+                .filter((c) => c.parentId === n.id)
+                .map((c) => (c.y ?? 20) + height(c) + 30),
+            ) +
+              2 * (n.paddingY ?? n.padding)
+          : 0,
+      );
+    Object.assign(inserted, {
+      x: 5,
+      y: Math.max(
+        20,
+        ...layout.nodes
+          .filter((n) => n.parentId === parentId)
+          .map((n) => (n.y ?? 20) + height(n) + (n.marginBottom ?? 0) + 24),
+      ),
+      freeWidth: node.freeWidth ?? 60,
+      freeHeight:
+        node.freeHeight ??
+        Math.max(
+          node.minHeight ?? 0,
+          node.kind === 'button'
+            ? 44
+            : node.kind === 'pdf'
+              ? 600
+              : ['section', 'html', 'video', 'model', 'embed'].includes(
+                    node.kind,
+                  )
+                ? 360
+                : node.kind === 'image'
+                  ? 240
+                  : 120,
+        ),
+    });
+  }
+  // Resolve a nested selection to a sibling in the destination container.
+  let anchor = layout.nodes.find((n) => n.id === options.after);
+  while (anchor?.parentId && anchor.parentId !== parentId)
+    anchor = layout.nodes.find((n) => n.id === anchor!.parentId);
+  const index =
+    anchor &&
+    anchor.parentId === parentId &&
+    anchor.parentItemId === options.insideItem
+      ? layout.order.indexOf(anchor.id)
+      : -1;
+  const order = [...layout.order];
+  order.splice(index < 0 ? order.length : index + 1, 0, node.id);
+  return { ...layout, nodes: [...layout.nodes, inserted], order };
+}
 export function materialize(
   layout: CanvasLayout,
   builtins: BuiltinInfo[],
@@ -95,13 +188,33 @@ export function patchNodes(
   changes: Partial<CanvasNode>,
   allowLocked = false,
 ): CanvasLayout {
+  // Removing a subsection also removes its nested elements as one undoable edit.
+  const removed = new Set(
+    descendants(
+      layout,
+      layout.nodes
+        .filter(
+          (n) =>
+            n.parentItemId &&
+            ids.includes(n.parentId || '') &&
+            !nodeLocked(layout, n.parentId!) &&
+            changes.items !== undefined &&
+            !changes.items.some((item) => item.id === n.parentItemId),
+        )
+        .map((n) => n.id),
+    ),
+  );
+  if ([...removed].some((id) => nodeLocked(layout, id))) return layout;
   return {
     ...layout,
-    nodes: layout.nodes.map((n) =>
-      ids.includes(n.id) && (!nodeLocked(layout, n.id) || allowLocked)
-        ? { ...n, ...changes }
-        : n,
-    ),
+    order: layout.order.filter((id) => !removed.has(id)),
+    nodes: layout.nodes
+      .filter((n) => !removed.has(n.id))
+      .map((n) =>
+        ids.includes(n.id) && (!nodeLocked(layout, n.id) || allowLocked)
+          ? { ...n, ...changes }
+          : n,
+      ),
   };
 }
 export function moveBefore(
@@ -116,7 +229,9 @@ export function moveBefore(
     movable.some(
       (id) =>
         layout.nodes.find((n) => n.id === id)?.parentId !==
-        layout.nodes.find((n) => n.id === target)?.parentId,
+          layout.nodes.find((n) => n.id === target)?.parentId ||
+        layout.nodes.find((n) => n.id === id)?.parentItemId !==
+          layout.nodes.find((n) => n.id === target)?.parentItemId,
     )
   )
     return layout;
@@ -386,6 +501,29 @@ export function freePlacement(
             (node.x ?? 5) + dx,
           ),
         ),
-        y: Math.max(0, Math.min(2000, (node.y ?? 20) + dy)),
+        y: Math.max(0, (node.y ?? 20) + dy),
       };
+}
+
+/** Stack overlapping siblings without changing their reading order or positions. */
+export function stackNode(
+  layout: CanvasLayout,
+  id: string,
+  direction: 'front' | 'back',
+): CanvasLayout {
+  const node = layout.nodes.find((n) => n.id === id);
+  if (!node || nodeLocked(layout, id)) return layout;
+  const siblings = layout.nodes.filter(
+    (n) =>
+      n.id !== id &&
+      n.parentId === node.parentId &&
+      n.parentItemId === node.parentItemId,
+  );
+  if (!siblings.length) return layout;
+  const levels = siblings.map((n) => n.zIndex ?? 0);
+  const zIndex =
+    direction === 'front' ? Math.max(...levels) + 1 : Math.min(...levels) - 1;
+  if (Math.abs(zIndex) > 1000000)
+    throw Error('Layer order is out of range. Reset layer order in Layout.');
+  return patchNodes(layout, [id], { zIndex });
 }

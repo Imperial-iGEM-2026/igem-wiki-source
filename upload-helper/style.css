@@ -661,3 +661,7 @@ select {
     gap: 8px;
   }
 }
+
+.destination[hidden] {
+  display: none;
+}

@@ -15,6 +15,46 @@ await build({
 const E = await import(
   pathToFileURL(path.join(root, 'work/studio-unit/test.mjs'))
 );
+// Inserting must not silently reposition or reparent any existing content.
+for (const mode of [undefined, 'flow', 'free']) {
+  const frame = { ...E.newNode(E.CUSTOM_CONTENT, 'section'), layoutMode: mode };
+  const first = { ...E.newNode('first', 'image'), parentId: frame.id, y: 40, freeHeight: 350 };
+  const last = { ...E.newNode('last', 'text'), parentId: frame.id, y: 500, freeHeight: 120 };
+  const source = { ...E.emptyLayout, customCss: '.test { color: red; }', nodes: [frame, first, last], order: [frame.id, first.id, last.id] };
+  const snapshot = structuredClone(source);
+  const result = E.insertNode(source, E.newNode('inserted', 'image'), { after: first.id, renderedHeights: { last: 300 } });
+  assert.deepEqual(source, snapshot);
+  assert.deepEqual(result.nodes.slice(0, 3), source.nodes);
+  assert.deepEqual(result.order.filter(id => id !== 'inserted'), source.order);
+  assert.deepEqual(result.order, [frame.id, first.id, 'inserted', last.id]);
+  assert.equal(result.customCss, source.customCss);
+  assert.equal(result.nodes.at(-1).parentId, frame.id);
+  if (mode === 'free') assert.equal(result.nodes.at(-1).y, 824);
+  else assert.equal(result.nodes.at(-1).y, undefined);
+  assert.equal(E.validateLayout(result), true);
+}
+const rootFrame = E.newNode('root-frame', 'section');
+const nestedFrame = { ...E.newNode('nested-frame', 'section'), parentId: rootFrame.id };
+const nestedText = { ...E.newNode('nested-text', 'text'), parentId: nestedFrame.id };
+const sibling = { ...E.newNode('sibling', 'text'), parentId: rootFrame.id };
+const tree = { ...E.emptyLayout, nodes: [rootFrame, nestedFrame, nestedText, sibling], order: [rootFrame.id, nestedFrame.id, nestedText.id, sibling.id] };
+const nestedInsertion = E.insertNode(tree, E.newNode('new-child', 'text'), { inside: rootFrame.id, after: nestedText.id });
+assert.equal(nestedInsertion.nodes.at(-1).parentId, rootFrame.id);
+assert.equal(nestedInsertion.order.indexOf('new-child'), nestedInsertion.order.indexOf(nestedFrame.id) + 1);
+const topInsertion = E.insertNode(tree, E.newNode('new-root', 'text'), { after: nestedText.id });
+assert.equal(topInsertion.nodes.at(-1).parentId, undefined);
+assert.equal(topInsertion.order[1], 'new-root');
+assert.equal(E.validateLayout(E.insertNode(tree, E.newNode('inside-text', 'image'), { inside: nestedText.id })), true);
+assert.throws(() => E.insertNode({ ...tree, nodes: [{ ...rootFrame, locked: true }, nestedFrame, nestedText, sibling] }, E.newNode('locked-child', 'text'), { inside: nestedFrame.id }), /Unlock/);
+let tallFrame = { ...E.emptyLayout, nodes: [{ ...rootFrame, layoutMode: 'free' }], order: [rootFrame.id] };
+for (let i = 0; i < 12; i++) {
+  const before = tallFrame;
+  tallFrame = E.insertNode(tallFrame, E.newNode('pdf-' + i, 'pdf'), { inside: rootFrame.id });
+  assert.deepEqual(tallFrame.nodes.slice(0, -1), before.nodes);
+  if (i) assert.ok(tallFrame.nodes.at(-1).y >= before.nodes.at(-1).y + before.nodes.at(-1).freeHeight + 24);
+  assert.equal(E.validateLayout(tallFrame), true);
+}
+assert.ok(tallFrame.nodes.at(-1).y > 2000, 'free inserts must not stop working when a frame grows');
 for (const editing of [true, false]) {
   const missing = E.renderSavedPage(undefined, editing);
   assert.match(missing, /Page layout was not received/);
@@ -400,6 +440,10 @@ const largeCss = '.feature { color: #123456; }\n'.repeat(9000);
 assert.equal(E.cssError(largeCss), '');
 assert.ok(E.validateLayout({ ...base, customCss: largeCss }));
 const scoped = E.compileCustomCss(css, '[data-page-css="home"]');
+  const viewportCss = '.header{width:100vw;margin-left:calc(50% - 50vw)} h2{font-size:clamp(56px,8.2vw,112px)}';
+  assert.match(E.compileCustomCss(viewportCss, '[data-page-css="home"]', true), /100cqw/);
+  assert.match(E.compileCustomCss(viewportCss, '[data-page-css="home"]', true), /8\.2cqw/);
+  assert.match(E.compileCustomCss(viewportCss, '[data-page-css="home"]'), /100vw/);
 assert.ok(scoped.includes('[data-page-css="home"] .feature h2'));
 assert.ok(scoped.includes('[data-page-css="home"] .custom-text'));
 assert.ok(scoped.includes('@media'));
@@ -545,6 +589,14 @@ inline.classes = '';
 assert.equal(E.pickDesignTarget(inline).selector, target.selector);
 assert.equal(E.pickDesignTarget(heading).fieldId, 'heading-text');
 assert.equal(E.pickDesignTarget(new ElementFixture('p')), null);
+const htmlFrameTarget = new ElementFixture('iframe');
+const htmlInteract = new ElementFixture('button', '', { 'data-html-interaction-control': '' });
+const htmlWrapper = new ElementFixture('div', 'custom-html-block', {}, [htmlFrameTarget, htmlInteract]);
+new ElementFixture('div', '', { 'data-layer-id': 'html-position', 'data-layer-kind': 'html' }, [htmlWrapper]);
+assert.equal(E.pickDesignTarget(htmlFrameTarget).selector, '[data-layer-id="html-position"]');
+assert.equal(E.pickDesignTarget(htmlWrapper).selector, '[data-layer-id="html-position"]');
+assert.equal(E.pickDesignTarget(htmlInteract), null);
+
 assert.equal(E.cssError(`${target.selector} { color: #123456; }`), '');
 const footerText = new ElementFixture(
   'span',
@@ -644,6 +696,9 @@ const compiledDock = E.compileCustomCss(
 assert.ok(compiledDock.includes('@container studioPage (max-width: 760px)'));
 assert.ok(compiledDock.includes('!important'));
 assert.ok(!compiledDock.includes('prion-selection-controls'));
+assert.match(compiledDock, /@layer studio-selection/);
+assert.ok(compiledDock.indexOf('52px') < compiledDock.indexOf('36px'));
+assert.ok(compiledDock.indexOf('36px') < compiledDock.indexOf('24px'));
 assert.ok(
   E.renderCanvas({ ...base, customCss: dockCss }).includes(dockSelector),
 );
@@ -1967,15 +2022,42 @@ assert.equal(
   }),
   false,
 );
+const configuredEmbed = 'https://video.igem.org/videos/embed/example-id?title=0&warningTitle=0&start=3s&loop=1#t=3';
+assert.equal(E.embedURL(configuredEmbed), configuredEmbed);
+assert.equal(E.embedURL('https://www.youtube.com/embed/abc?controls=0&start=4'), 'https://www.youtube-nocookie.com/embed/abc?controls=0&start=4');
+assert.equal(E.embedURL('https://player.vimeo.com/video/123?h=abc&title=0'), 'https://player.vimeo.com/video/123?h=abc&title=0');
+for (const invalid of ['https://video.igem.org.evil.test/videos/embed/id', 'https://user:password@video.igem.org/videos/embed/id', 'https://video.igem.org:444/videos/embed/id', 'javascript:alert(1)', 'https://video.igem.org/videos/watch/id']) assert.equal(E.embedURL(invalid), null);
+for (const editing of [true, false]) {
+ const markup = E.renderCanvas({ ...E.emptyLayout, nodes: [{...E.newNode('embed-options','embed'), src:configuredEmbed}], order:['embed-options'] }, editing);
+ assert.ok(markup.includes(configuredEmbed.replaceAll('&', '&amp;')));
+}
+const htmlVideo = E.htmlDocument({ html: '<iframe src="'+configuredEmbed+'" allow="autoplay; fullscreen; picture-in-picture"></iframe><video src="https://static.igem.wiki/test/movie.webm" controls muted loop></video>' });
+assert.ok(htmlVideo.includes('src="'+configuredEmbed+'"'));
+assert.ok(htmlVideo.includes('frame-src https://video.igem.org/videos/embed/'));
+assert.ok(htmlVideo.includes("connect-src 'none'"));
+assert.ok(htmlVideo.includes("script-src 'unsafe-inline'"));
+assert.ok(htmlVideo.includes('controls muted loop'));
 const customMarkup = E.renderCanvas(customLayout);
-assert.match(customMarkup, /sandbox="allow-scripts"/);
-assert.doesNotMatch(customMarkup, /allow-same-origin/);
-assert.match(customMarkup, /srcDoc=/i);
+assert.match(customMarkup, /sandbox="allow-scripts allow-same-origin allow-presentation"/);
+assert.doesNotMatch(customMarkup, /srcDoc=/i);
+assert.ok(E.htmlFrameURL(htmlVideo, 'https://wiki.example/team/').startsWith('data:text/html;charset=utf-8,'));
+assert.ok(!decodeURIComponent(E.htmlFrameURL(htmlVideo, 'https://wiki.example/mcp/preview?key=PRIVATE_KEY#SECRET')).includes('PRIVATE_KEY'));
+assert.ok(!decodeURIComponent(E.htmlFrameURL(htmlVideo, 'https://wiki.example/mcp/preview?key=PRIVATE_KEY#SECRET')).includes('SECRET'));
+assert.ok(decodeURIComponent(E.htmlFrameURL(htmlVideo, 'https://wiki.example/team/').split(',').slice(1).join(',')).includes('<base href="https://wiki.example/team/">'));
+assert.match(customMarkup, /data-html-document=/);
 assert.ok(
   !customMarkup.includes('<button id="play">'),
   'User markup must stay escaped inside srcdoc',
 );
 assert.match(customMarkup, /height:360px/);
+assert.doesNotMatch(customMarkup, /data-html-interaction-control|data-html-editing/);
+const editingHtmlMarkup = E.renderCanvas(customLayout, true);
+assert.doesNotMatch(editingHtmlMarkup, /studio-html-interact|Done interacting|data-html-interaction-control/);
+const interactiveHtmlMarkup = E.renderCanvas(customLayout, true, customHtml.id, [customHtml.id]);
+assert.doesNotMatch(interactiveHtmlMarkup, /data-html-editing|tabIndex="-1"|data-html-interaction-control/i);
+assert.match(E.renderCanvas(customLayout, true, customHtml.id, []), /data-html-editing="true"/);
+assert.match(editingHtmlMarkup, /data-html-editing="true"/);
+assert.match(editingHtmlMarkup, /tabIndex="-1"/i);
 console.log(
   'PASS: Custom HTML schema, opaque sandbox, escaped source and editor sizing.',
 );
@@ -2006,3 +2088,194 @@ assert.ok(
     }),
   }).has('/templates/../../private.png'),
 );
+
+// Subsection elements remain ordinary canvas nodes scoped to a stable item id.
+const collapsible = { ...E.newNode('faq-content','accordion'), items: [{id:'first-item',title:'First',body:'Legacy text'}, {id:'second-item',title:'Second',body:''}] };
+const initialAccordion = { ...E.emptyLayout, nodes:[collapsible], order:[collapsible.id] };
+let nestedAccordion = E.insertNode(initialAccordion,{...E.newNode('faq-image','image'),src:'https://example.org/photo.png'}, {inside:collapsible.id,insideItem:'first-item'});
+nestedAccordion = E.insertNode(nestedAccordion,{...E.newNode('faq-equation','equation'),body:'x^2'}, {inside:collapsible.id,insideItem:'second-item'});
+nestedAccordion = E.insertNode(nestedAccordion,{...E.newNode('faq-frame','section'),layoutMode:'flow'}, {inside:collapsible.id,insideItem:'first-item'});
+nestedAccordion = E.insertNode(nestedAccordion,{...E.newNode('faq-text','text'),body:'Nested frame text'}, {inside:'faq-frame'});
+assert.equal(E.validateLayout(nestedAccordion),true);
+assert.deepEqual(initialAccordion.nodes,[collapsible]);
+assert.throws(()=>E.insertNode(initialAccordion,E.newNode('bad','image'),{inside:collapsible.id}),/Choose a subsection/);
+assert.throws(()=>E.insertNode(initialAccordion,E.newNode('bad','image'),{inside:collapsible.id,insideItem:'missing'}),/Choose a subsection/);
+assert.equal(E.validateLayout({...nestedAccordion,nodes:nestedAccordion.nodes.map(n=>n.id==='faq-image'?{...n,parentItemId:'missing'}:n)}),false);
+assert.equal(E.validateLayout({...nestedAccordion,nodes:nestedAccordion.nodes.map(n=>n.id==='faq-image'?{...n,parentItemId:undefined}:n)}),false);
+assert.equal(E.validateLayout({...nestedAccordion,nodes:nestedAccordion.nodes.map(n=>n.id==='faq-text'?{...n,parentItemId:'first-item'}:n)}),false);
+assert.equal(E.validateLayout({...E.emptyLayout,nodes:[null]}),false);
+for(const editing of [false,true]) {
+ const html = E.renderCanvas(nestedAccordion,editing);
+ const first = html.slice(html.indexOf('data-item-id="first-item"'),html.indexOf('data-item-id="second-item"'));
+ assert.match(first,/data-layer-id="faq-image"/);
+ assert.match(first,/data-layer-id="faq-text"/);
+ assert.match(first,/Legacy text/);
+ assert.doesNotMatch(first,/data-layer-id="faq-equation"/);
+ assert.equal(html.split('data-layer-id="faq-image"').length-1,1);
+}
+const switchedItems = E.patchNodes(nestedAccordion,[collapsible.id],{items:[...collapsible.items].reverse()});
+assert.equal(E.validateLayout(switchedItems),true);
+assert.equal(switchedItems.nodes.find(n=>n.id==='faq-image').parentItemId,'first-item');
+assert.deepEqual(E.layerTreeRows(switchedItems,[]).filter(r=>r.type==='layer').map(r=>r.id),E.hierarchyOrder(switchedItems));
+const rows=E.layerTreeRows(switchedItems,[]);
+assert.equal(rows.findIndex(r=>r.id==='faq-equation'),rows.findIndex(r=>r.type==='item' && r.item.id==='second-item')+1);
+assert.deepEqual(E.layerTreeRows(switchedItems,[collapsible.id]),[{id:collapsible.id,type:'layer',depth:0}]);
+const removedItem = E.patchNodes(nestedAccordion,[collapsible.id],{items:[collapsible.items[1]]});
+assert.equal(E.validateLayout(removedItem),true);
+assert.deepEqual(removedItem.nodes.map(n=>n.id),[collapsible.id,'faq-equation']);
+const lockedNested = E.patchNodes(nestedAccordion,['faq-text'],{locked:true});
+assert.equal(E.patchNodes(lockedNested,[collapsible.id],{items:[]}),lockedNested);
+assert.throws(()=>E.insertNode(E.patchNodes(initialAccordion,[collapsible.id],{locked:true}),E.newNode('blocked','image'),{inside:collapsible.id,insideItem:'first-item'}),/Unlock/);
+let copyNumber=0;
+const copiedAccordion=E.duplicateNodes(nestedAccordion,[collapsible.id],()=> 'copy-'+(++copyNumber));
+assert.equal(E.validateLayout(copiedAccordion.layout),true);
+assert.equal(copiedAccordion.layout.nodes.find(n=>n.id==='copy-2').parentItemId,'first-item');
+assert.deepEqual(E.moveBefore(nestedAccordion,['faq-image'],'faq-equation'),nestedAccordion,'Cannot reorder across subsection boundaries');
+console.log('PASS: subsection insertion, nested rendering in editor/publication, stable item ordering, layer hierarchy, invalid slots, deletion, locks and deep duplication.');
+
+// Uploaded HTML images use permanent references, not encoded bytes or extra nodes.
+const imageSnippet = E.insertHtmlImage('<div></div>', '/api/media/abcdef-1234.png', 'A "quoted" <diagram> & detail', 5, 5);
+assert.ok(imageSnippet.html.startsWith('<div>\n<img'));
+assert.ok(imageSnippet.html.endsWith('\n</div>'));
+assert.ok(imageSnippet.html.includes('alt="A &quot;quoted&quot; &lt;diagram&gt; &amp; detail"'));
+assert.ok(!imageSnippet.html.includes('base64'));
+assert.ok(imageSnippet.html.length < 250);
+assert.throws(() => E.insertHtmlImage('', 'javascript:alert(1)', ''), /permanent image URL/);
+assert.throws(() => E.insertHtmlImage('', 'data:image/png;base64,AAAA', ''), /permanent image URL/);
+const localImageDocument = decodeURIComponent(E.htmlFrameURL(E.htmlDocument({html:imageSnippet.html}), 'http://127.0.0.1:4198/studio?private=secret').split(',').slice(1).join(','));
+assert.ok(localImageDocument.includes('img-src https: data: http://127.0.0.1:4198;'));
+assert.ok(!localImageDocument.includes('private=secret'));
+assert.ok(localImageDocument.includes("connect-src 'none'"));
+console.log('PASS: custom HTML image insertion, attribute escaping, URL validation and same-origin local preview.');
+
+const privateImages = E.localHtmlImages('<img src="/api/media/abcd.png"><img src="https://editor.example/api/media/abc1.jpg"><img src="https://other.example/api/media/abc2.jpg"><img src="https://static.igem.wiki/photo.jpg">', 'https://editor.example/page');
+assert.equal(privateImages.size, 2);
+assert.equal(privateImages.get('/api/media/abcd.png'), 'https://editor.example/api/media/abcd.png');
+assert.ok(!privateImages.has('https://other.example/api/media/abc2.jpg'));
+console.log('PASS: authenticated HTML image resolution is restricted to the current editor origin.');
+
+// Header identity must survive inline-style serialization and template changes.
+{
+const siteHeader = {...E.newNode('site-header', 'section'), name:'Site header', padding:3};
+assert.equal(E.isSiteHeader(siteHeader, [siteHeader]), true);
+assert.equal(E.isSiteHeader({...siteHeader, name:'Renamed', padding:24, siteRole:'header'}, []), true);
+assert.equal(E.isSiteHeader({...siteHeader, name:'Ordinary card'}, []), false);
+assert.equal(E.isSiteHeader({...siteHeader, name:'Legacy', paddingX:3}, [{...E.newNode('home-link','button'),parentId:'site-header',linkTo:'/'}]), true);
+const legacyHeaderCss = `[data-layer-kind="section"][style*="padding-inline: 3px"]{grid-column:1/-1!important}@media(max-width:700px){:is([style*='padding-inline:3px'],[style*="padding-inline: 3px"]){width:100%}}.other[style*="padding-inline:30px"]{content:'padding-inline: 3px'}`;
+const normalizedHeaderCss = E.normalizeHeaderCss(legacyHeaderCss);
+assert.ok(normalizedHeaderCss.includes('[data-site-header]'));
+assert.ok(!normalizedHeaderCss.includes('[style*="padding-inline: 3px"]'));
+assert.ok(normalizedHeaderCss.includes('[style*="padding-inline:30px"]'));
+assert.ok(normalizedHeaderCss.includes("content:'padding-inline: 3px'"));
+const headerLayout = {...E.emptyLayout,nodes:[siteHeader],order:[siteHeader.id],customCss:legacyHeaderCss};
+assert.equal(E.validateLayout(headerLayout), true);
+for(const editing of [false,true]) {
+ const markup=E.renderCanvas(headerLayout,editing);
+ assert.ok(markup.includes('data-site-header="true"'));
+ assert.ok(!markup.includes('[style*="padding-inline: 3px"]'));
+}
+const restyledHeaderMarkup=E.renderTemplateAppearance(headerLayout,'regelerate','luca');
+assert.ok(restyledHeaderMarkup.includes('data-site-header="true"'));
+assert.ok(!restyledHeaderMarkup.includes('[style*="padding-inline: 3px"]'));
+console.log('PASS: stable header markers and legacy CSS work in editor, export and restyled projects.');
+
+}
+
+{
+ const routes={'/':'/imperial-college/','/results':'/imperial-college/results/'};
+ assert.equal(E.htmlLinkDestination('/results#figure', 'https://2026.igem.wiki/imperial-college/',routes),'/imperial-college/results/#figure');
+ assert.equal(E.htmlLinkDestination('#references','https://wiki.example/results'),'/results#references');
+ assert.equal(E.htmlLinkDestination('https://example.com/paper','https://wiki.example/'),'https://example.com/paper');
+ assert.equal(E.htmlLinkDestination('mailto:team@example.com','https://wiki.example/'),'mailto:team@example.com');
+ for(const url of ['javascript:alert(1)','data:text/html,hello','file:///secret','https://user:password@example.com','blob:https://wiki.example/id',''])assert.equal(E.htmlLinkDestination(url,'https://wiki.example/'),null);
+ const doc=E.htmlDocument({html:'<a href="/results">Results</a>'});
+ assert.ok(doc.includes('custom-html-link'));
+ assert.ok(doc.includes('e.isTrusted'));
+ console.log('PASS: custom HTML links preserve page routes and reject executable/credential URLs without relaxing the iframe sandbox.');
+}
+
+{
+ const {runInNewContext}=await import('node:vm');
+ let click,scrolled=false;const messages=[];
+ const document={addEventListener:(type,fn)=>{if(type==='click')click=fn},getElementById:id=>id==='inside'?{scrollIntoView:()=>{scrolled=true}}:null,getElementsByName:()=>[]};
+ const source=E.htmlDocument({html:'<a href="/results">Results</a>'}).match(/<script>([\s\S]*?)<\/script>/)[1];
+ runInNewContext(source,{document,parent:{postMessage:m=>messages.push(m)},addEventListener:()=>{}});
+ const event=(href,extra={})=>({isTrusted:true,button:0,defaultPrevented:false,target:{closest:()=>({getAttribute:()=>href,target:''})},preventDefault(){this.defaultPrevented=true},...extra});
+ click(event('/results',{isTrusted:false}));assert.equal(messages.length,0);
+ click(event('/results',{defaultPrevented:true}));assert.equal(messages.length,0);
+ click(event('#inside'));assert.equal(scrolled,true);assert.equal(messages.length,0);
+ click(event('#outside'));assert.equal(messages.pop().href,'#outside');
+ click(event('/results'));assert.equal(messages.pop().href,'/results');
+ click(event('/results',{ctrlKey:true}));assert.equal(messages.pop().newTab,true);
+ click(event('javascript:alert(1)'));assert.equal(messages.length,0);
+ console.log('PASS: frame link clicks respect local anchors, parent anchors, modified clicks, cancelled events and trusted activation.');
+}
+
+// Exact text box widths survive publication and responsive CSS compilation.
+const textSelector = '[data-layer-id="text-width"] > div:nth-of-type(1) > div:nth-of-type(1)';
+let widthCss = '.unrelated { color: red; }';
+for (const [property, value] of Object.entries({width:'717px','max-width':'100%','box-sizing':'border-box'}))
+  widthCss = E.applySelectionStyle(widthCss, textSelector, property, value);
+assert.match(widthCss, /width: 717px/);
+assert.match(widthCss, /max-width: 100%/);
+assert.match(widthCss, /box-sizing: border-box/);
+assert.match(widthCss, /unrelated/);
+assert.doesNotMatch(widthCss, /font-size|grid-column/);
+const widthLayout={...E.emptyLayout,nodes:[{...E.newNode('text-width','text','Heading'),body:'Text wraps within its own box.'}],order:['text-width'],customCss:widthCss};
+for(const editing of [true,false]) {
+ const markup=E.renderCanvas(widthLayout,editing);
+ assert.match(markup,/width: 717px/);
+ assert.match(markup,/max-width: 100%/);
+ assert.match(markup,/Text wraps within its own box/);
+}
+const mobileWidth=E.applySelectionStyle(widthCss,textSelector,'width','240px','mobile');
+assert.match(mobileWidth,/@media \(max-width: 760px\)/);
+assert.match(mobileWidth,/width: 717px/);
+// Live Education regression: a more specific authored !important cap defeated
+// the saved resize while inline drag styles appeared to work. Manual rules
+// occupy a priority layer in both renderers, without changing authored CSS.
+const cappedCss = '[data-layer-id="parent"].canvas-section.canvas-section .media-text .custom-text {max-width:78ch !important}' + mobileWidth;
+for (const editing of [true, false]) {
+  const compiled = E.compileCustomCss(cappedCss, '[data-page-css="home"]', editing);
+  assert.match(compiled, /@layer studio-selection/);
+  assert.match(compiled, /max-width:78ch !important/);
+  assert.match(compiled, /max-width: 100% !important/);
+  assert.match(compiled, editing ? /@container studioPage/ : /@media/);
+}
+assert.doesNotMatch(E.compileCustomCss('.ordinary {color:red!important}'), /@layer/);
+console.log('PASS: exact text width preserves section geometry, other CSS and font settings in editor/publication, with responsive overrides.');
+
+// Separate pictures inside text survive validation, rendering, stacking and undo.
+const prose = {...E.newNode('prose','text','Research'), body:'Keep this writing.'};
+let pictures = {...E.emptyLayout, nodes:[prose], order:[prose.id]};
+for (const id of ['photo-one','photo-two']) pictures=E.insertNode(pictures,{...E.newNode(id,'image'),src:`https://example.org/${id}.png`,parentId:prose.id},{inside:prose.id});
+assert.equal(E.validateLayout(pictures),true);
+assert.deepEqual(pictures.nodes[0],prose);
+assert.equal(pictures.nodes.filter(n=>n.kind==='image').length,2);
+const front=E.stackNode(pictures,'photo-one','front');
+assert.equal(front.nodes[1].zIndex,1);
+assert.deepEqual(front.order,pictures.order);
+assert.deepEqual(front.nodes[2],pictures.nodes[2]);
+const back=E.stackNode(front,'photo-one','back');
+assert.equal(back.nodes[1].zIndex,-1);
+const lockedPictures=E.patchNodes(back,[prose.id],{locked:true});
+assert.equal(E.stackNode(lockedPictures,'photo-one','front'),lockedPictures);
+assert.throws(()=>E.insertNode(lockedPictures,E.newNode('extra','image'),{inside:prose.id}),/Unlock/);
+assert.equal(E.validateLayout({...back,nodes:back.nodes.map(n=>n.id==='photo-one'?{...n,zIndex:0.5}:n)}),false);
+for(const editing of [true,false]) {
+ const html=E.renderCanvas(back,editing);
+ assert.match(html,/Keep this writing/);
+ assert.match(html,/photo-one.png/);
+ assert.match(html,/photo-two.png/);
+ assert.match(html,/z-index:-1/);
+}
+console.log('PASS: independent images inside text preserve content and reading order; stacking renders in editor/publication and respects ancestor locks.');
+
+// Layer search retains ancestry, disambiguates titles and filters by kind.
+const searchLayout={...E.emptyLayout,nodes:[{...E.newNode('parent','section'),name:'Research'}, {...E.newNode('child','text','Hampton workshop'),name:'Hampton School',parentId:'parent'}, {...E.newNode('pic','image'),name:'Hampton photo',parentId:'parent'}, {...E.newNode('other','text'),name:'Other'}],order:['parent','child','pic','other']};
+assert.equal(E.filterLayerIds(searchLayout,'','all'),null);
+assert.deepEqual([...E.filterLayerIds(searchLayout,'hampton','text')],['parent','child']);
+assert.deepEqual([...E.filterLayerIds(searchLayout,'photo','all')],['parent','pic']);
+assert.equal(E.filterLayerIds(searchLayout,'missing','all').size,0);
+assert.deepEqual(E.layerBreadcrumb(searchLayout,'child').map(n=>n.id),['parent','child']);
+console.log('PASS: layer search and type filters retain parent context without unrelated siblings.');

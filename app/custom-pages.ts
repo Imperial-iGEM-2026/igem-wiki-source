@@ -1,4 +1,9 @@
-import { templateFor } from './templates';
+import {
+  templateFor,
+  templates,
+  type TemplateAst,
+  type TemplatePage,
+} from './templates';
 import { wikiPages, type WikiPage } from './wiki-data';
 import {
   emptyLayout,
@@ -22,7 +27,61 @@ export function parseRemovedPages(source = '[]'): string[] {
     return [];
   }
 }
-export type CustomPage = { slug: string; title: string };
+export type CustomPage = {
+  slug: string;
+  title: string;
+  sourcePage?: string;
+  sourceTemplate?: string;
+};
+export const copyFieldId = (slug: string, field: string) =>
+  `copy:${slug}:${field}`;
+export function copyDefinition(page: CustomPage): TemplatePage | undefined {
+  const original = templates[page.sourceTemplate || '']?.pages.find(
+    (p) => p.slug === page.sourcePage,
+  );
+  if (!original) return undefined;
+  const remap = (ast: TemplateAst): TemplateAst =>
+    typeof ast === 'string'
+      ? ast
+      : 'f' in ast
+        ? { f: copyFieldId(page.slug, ast.f) }
+        : { ...ast, c: ast.c.map(remap) };
+  return {
+    ...original,
+    slug: page.slug,
+    title: page.title,
+    layers: original.layers.map((l) =>
+      l.region === 'main' ? { ...l, ast: remap(l.ast) } : l,
+    ),
+  };
+}
+export function copiedPage(
+  data: Record<string, { value: string } | undefined>,
+  slug: string,
+) {
+  try {
+    return parseCustomPages(data[CUSTOM_PAGES]?.value).find(
+      (p) => p.slug === slug,
+    );
+  } catch {
+    return undefined;
+  }
+}
+export function copyFieldDefaults(page: CustomPage): Record<string, string> {
+  const original = templates[page.sourceTemplate || ''];
+  const definition = original?.pages.find((p) => p.slug === page.sourcePage);
+  const values: Record<string, string> = {};
+  const walk = (ast: TemplateAst) => {
+    if (typeof ast === 'string') return;
+    if ('f' in ast)
+      values[copyFieldId(page.slug, ast.f)] = original.fields[ast.f] || '';
+    else ast.c.forEach(walk);
+  };
+  definition?.layers
+    .filter((l) => l.region === 'main')
+    .forEach((l) => walk(l.ast));
+  return values;
+}
 const reserved = new Set([
   'home',
   'api',
@@ -46,7 +105,13 @@ export function validCustomPage(page: unknown): page is CustomPage {
     !reserved.has(p.slug) &&
     typeof p.title === 'string' &&
     p.title.trim().length > 0 &&
-    p.title.length <= 100
+    p.title.length <= 100 &&
+    ((p.sourcePage === undefined && p.sourceTemplate === undefined) ||
+      (typeof p.sourcePage === 'string' &&
+        typeof p.sourceTemplate === 'string' &&
+        !!templates[p.sourceTemplate]?.pages.some(
+          (page) => page.slug === p.sourcePage,
+        )))
   );
 }
 export function parseCustomPages(source = '[]'): CustomPage[] {
@@ -72,6 +137,7 @@ export function customWikiPage(page: CustomPage): WikiPage {
 export function customDefaults(source = '[]'): Record<string, string> {
   return Object.fromEntries(
     parseCustomPages(source).flatMap((p) => [
+      ...Object.entries(copyFieldDefaults(p)),
       [p.slug + ':title', p.title],
       [p.slug + ':summary', 'A page created by your team.'],
       [

@@ -51,9 +51,16 @@ $('import').onclick = run(async () => {
       '02-static-assets.zip': 'assets',
       '03-video-audio.zip': 'media',
     };
-  if (fs.length !== 3 || fs.some((f) => !kinds[f.name]))
+  if (
+    ![2, 3].includes(fs.length) ||
+    fs.some((f) => !kinds[f.name]) ||
+    new Set(fs.map((f) => f.name)).size !== fs.length ||
+    !['01-website-source.zip', '02-static-assets.zip'].every((name) =>
+      fs.some((f) => f.name === name),
+    )
+  )
     throw Error(
-      'Select 01-website-source.zip, 02-static-assets.zip and 03-video-audio.zip together.',
+      'Select 01-website-source.zip and 02-static-assets.zip together.',
     );
   await api('new', { teamId: $('teamId').value });
   for (const f of fs) await fileUpload('import?kind=' + kinds[f.name], f);
@@ -168,6 +175,11 @@ function renderStatus() {
       ? count(assets)
       : 'No files needed'
     : 'Import a project first';
+  $('recordingDestination').hidden = !recordings.length;
+  const todoCount = state.job?.recordingTodoCount || 0;
+  $('recordingTodoNotice').hidden = !todoCount;
+  $('recordingTodoNotice').textContent =
+    `${todoCount} recording TODO${todoCount === 1 ? '' : 's'} will appear in the exported website. Add Video Universe embeds in the editor, then export again to replace them. The helper does not upload these recordings.`;
   $('mediaCount').textContent = state.job?.team
     ? recordings.length
       ? count(recordings)
@@ -206,7 +218,7 @@ function renderStatus() {
             : 'Media links are ready';
   $('statusMessage').textContent = localWorking
     ? 'Processing your request. Keep this window open…'
-    : a.message || 'Choose the three ZIPs in step 1.';
+    : a.message || 'Choose the two ZIPs in step 1.';
   $('statusPanel').dataset.phase = phase;
   if (!state.busy && phase === 'complete') {
     const completedTitles = {
@@ -375,7 +387,9 @@ async function refresh() {
                   ? 'Processed — collecting URL after this batch'
                   : row.attempted
                     ? 'Upload pending — check official tab'
-                    : 'Ready to upload';
+                    : !row.file
+                      ? 'Missing file — choose the original or use an existing iGEM upload'
+                      : 'Ready to upload';
             div.append(title, status);
             if (row.url) {
               const a = document.createElement('a');

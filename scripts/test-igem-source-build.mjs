@@ -48,6 +48,8 @@ for (const file of [
   'scripts/build-igem.mjs',
   'scripts/export-static.mjs',
   'scripts/export-media.mjs',
+  'scripts/export-recordings.mjs',
+  'scripts/google-fonts.mjs',
   'scripts/pdf-parts.mjs',
   'scripts/image-export.mjs',
   'publication/katex-LICENSE.txt',
@@ -151,18 +153,20 @@ const report = JSON.parse(
 );
 assert.equal(report.pageCount, 20);
 assert.deepEqual(report.issues, []);
+assert.equal(report.submissionReady, false);
+assert.equal(report.recordingTodos.length, 1);
 const html = await readFile(
   path.join(checkout, 'igem-build/public/index.html'),
   'utf8',
 );
-assert.match(html, /<iframe title="Project audio"/);
+assert.match(html, /data-recording-todo="audio"/);
 assert.ok(
   html.includes(
     '<link rel="icon" href="https://static.igem.wiki/teams/6377/icons/favicon.svg">',
   ),
 );
 assert.ok(!html.includes('fonts.googleapis.com'));
-assert.ok(!html.includes('/api/media/'));
+assert.ok(!/src="\/api\/media\//.test(html));
 assert.ok(!html.includes('<audio'));
 assert.match(html, /href="\/imperial-college\/engineering\//);
 await assert.rejects(access(path.join(checkout, 'public')));
@@ -187,6 +191,6 @@ result = run();
 assert.notEqual(result.status, 0);
 assert.match(result.stderr, /portable\/private snapshot/);
 console.log(
-  'PASS: clean source-only 20-page build with CC BY 4.0 LICENSE, mapped media and audio embeds; font replacement, resource checks, build without review checkboxes and private-snapshot rejection. No real uploads or credentials used.\n' +
+  'PASS: clean source-only 20-page build with CC BY 4.0 LICENSE, mapped static media and recording TODOs; font replacement, resource checks, build without review checkboxes and private-snapshot rejection. No real uploads or credentials used.\n' +
     checkout,
 );

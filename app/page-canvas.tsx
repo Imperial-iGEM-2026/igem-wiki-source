@@ -1,4 +1,5 @@
 'use client';
+import { copiedPage } from './custom-pages';
 import {
   Children,
   Fragment,
@@ -41,7 +42,7 @@ export type CanvasContextValue = {
   exit?: () => void;
   navigate?: (page: string, resolved?: boolean) => void;
   resolveText?: (save: boolean) => Promise<boolean>;
-  createPage?: (title: string, slug: string) => Promise<void>;
+  createPage?: (title: string, slug: string, source?: string) => Promise<void>;
   deletePage?: (slug: string) => Promise<void>;
   restorePage?: (slug: string) => Promise<void>;
   people?: { id: string; name: string }[];
@@ -145,6 +146,7 @@ export function PageCanvas({
   return (
     <div className="canvas-shell">
       <CanvasSurface
+        sourcePage={copiedPage(ctx.data, page)?.sourcePage}
         key={page}
         templateId={templateFor(ctx.data)?.id}
         appearanceId={ctx.data['site:appearance']?.value}

@@ -1,4 +1,4 @@
-"""Create three local handoff ZIPs. No upload, login or publication is performed."""
+"""Create two local handoff ZIPs. No upload, login or publication is performed."""
 import argparse
 import csv
 import hashlib
@@ -62,9 +62,10 @@ def main():
         raise RuntimeError('Missing required iGEM pages: ' + ', '.join(missing))
     values = {key: value for key, value in snapshot['values'].items() if key in report['sourceFields']}
     content = {'format': 'prion-wiki-source', 'version': 1, 'values': values}
-    rows, files = [], {'02-static-assets.zip': [], '03-video-audio.zip': []}
+    rows, files = [], {'02-static-assets.zip': []}
     for asset in report['assets']:
-        bundle = '03-video-audio.zip' if asset['kind'] in ['audio', 'video', 'embed'] else '02-static-assets.zip'
+        if asset['kind'] in ['audio', 'video', 'embed']: continue
+        bundle = '02-static-assets.zip'
         file_path, archive_path = None, ''
         if asset.get('file'):
             file_path = (export / asset['file']).resolve()
@@ -87,11 +88,11 @@ def main():
         'template': values.get('site:template', 'legacy'), 'pages': report['pageCount'],
         'snapshot': snapshot_path.name, 'snapshotExportedAt': snapshot.get('exportedAt'),
         'liveServerRead': False, 'submissionReady': False,
-        'staticFiles': len(files['02-static-assets.zip']), 'videoAudioFiles': len(files['03-video-audio.zip']),
+        'staticFiles': len(files['02-static-assets.zip']), 'recordingTodos': report['recordingTodos'],
         'fontsIncluded': any(row['kind'] == 'font' for row in rows),
         'note': 'Built from the supplied local snapshot only. No live edits or remote media were downloaded. Source values still require privacy/content review; review declarations are unset.',
     }
-    common = ('Keep the category subfolders inside assets/ and media/. The helper creates matching folders in iGEM Uploads. Video/audio folders organize the ZIP; recordings still go to Video Universe.\n'
+    common = ('Keep the category subfolders inside assets/. The helper creates matching folders in iGEM Uploads. Recordings are excluded; add Video Universe HTML embeds in the editor and re-export to replace TODO frames.\n'
               'These are handoff ZIPs, not automatic submissions. Extract before uploading; '
               'do not assume the destination imports ZIP files. Use upload-manifest.csv to match each file '
               'to its original source URL. Copy the returned public URLs into publication/media-map.json '
@@ -104,7 +105,7 @@ def main():
 1. Extract this ZIP locally. It contains editable source and content, not compiled HTML/CSS/JS.
 2. Review publication/content.json BEFORE committing: saved values can include hidden/unpublished text.
    Snapshot metadata, embedded binaries, unknown fields and AI briefs are omitted, but this is not a full privacy scrub.
-3. Upload the files from ZIPs 02 and 03, then fill publication/media-map.json with the actual returned URLs.
+3. Upload the files from ZIP 02, then fill publication/media-map.json with the actual returned URLs.
 4. Set the official attribution iframe, selected award slugs and hosted fonts in publication/config.json.
 5. Complete the real team reviews in publication/review.json. They are deliberately unset.
 6. Merge these files into https://gitlab.igem.org/2026/{args.team}.
@@ -122,11 +123,7 @@ Use the local upload helper for the guided workflow. A ZIP upload alone does not
             f'https://teams.igem.org/go/deliverables/wiki/uploads for team {args.team}. '
             'Do not upload this README or manifest as website assets. Keep source/licence credits next to each '
             'asset in the wiki. Company logos still require the applicable permission.\n\n' + common,
-        '03-video-audio.zip': '# 03 — Video and audio → iGEM Video Universe\n\nExtract media/ and upload recordings '
-            'through https://video.igem.org/. Wait for processing and copy each iframe embed URL, '
-            'not its watch-page URL, into the mapping in ZIP 01.\n\n' +
-            ('No local video/audio files exist in this snapshot. This ZIP contains instructions and a manifest only.\n\n'
-             if not files['03-video-audio.zip'] else '') + common,
+
     }
     source_zip = scratch / '01-website-source.zip'
     with zipfile.ZipFile(source_zip, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
@@ -139,7 +136,7 @@ Use the local upload helper for the guided workflow. A ZIP upload alone does not
                         archive.write(file, relative)
         for relative in ['package-lock.json', 'tsconfig.json',
                          'ops/igem.gitlab-ci.yml', 'scripts/build-igem.mjs', 'scripts/export-static.mjs',
-                         'scripts/export-media.mjs', 'scripts/igem-resources.mjs', 'scripts/build-options.mjs', 'scripts/static-renderer.tsx',
+                         'scripts/export-media.mjs', 'scripts/export-recordings.mjs', 'scripts/pdf-parts.mjs', 'scripts/image-export.mjs', 'publication/katex-LICENSE.txt', 'publication/pdf-processing-LICENSES.txt', 'scripts/igem-resources.mjs', 'scripts/build-options.mjs', 'scripts/static-renderer.tsx',
                          'scripts/static-runtime.ts', 'scripts/preview-static.mjs']:
             archive.write(ROOT / relative, relative)
         package = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))
@@ -149,6 +146,7 @@ Use the local upload helper for the guided workflow. A ZIP upload alone does not
         archive.write(ROOT / 'ops/igem.gitlab-ci.yml', '.gitlab-ci.yml')
         archive.writestr('.gitignore', '/node_modules/\n/.static-build/\n/igem-build/\n/work/\n/.env*\n/prion-snapshot*.json\n')
         archive.writestr('publication/content.json', as_json(content))
+        archive.writestr('publication/recording-todos.json', as_json(report['recordingTodos']))
         archive.writestr('publication/media-map.json', as_json(media_map))
         archive.writestr('publication/config.json', as_json(config))
         archive.writestr('publication/url-check.json', as_json({'base': report['base'], 'standardPages': report['standardPages']}))
@@ -167,7 +165,7 @@ Use the local upload helper for the guided workflow. A ZIP upload alone does not
             archive.writestr('UPLOAD-FIRST.txt', readmes[name])
             archive.writestr('upload-manifest.csv', manifest([r for r in rows if r['bundle'] == name]))
             archive.writestr('bundle-info.json', as_json(notes))
-    names = ['01-website-source.zip', '02-static-assets.zip', '03-video-audio.zip']
+    names = ['01-website-source.zip', '02-static-assets.zip']
     for name in names:
         with zipfile.ZipFile(scratch / name) as archive:
             if archive.testzip():

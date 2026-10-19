@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { mkdtemp,writeFile,readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import {templateDefaults,newNode,emptyLayout} from '../selfhost-dist/server/shared.mjs';
+const dir=await mkdtemp(path.resolve('work/header-export-'));
+const values={...templateDefaults('blank'),'site:appearance':'luca','layout:home':JSON.stringify({...emptyLayout,nodes:[{...newNode('custom-content','section')},{...newNode('legacy-header','section'),name:'Site header',parentId:'custom-content',padding:3},{...newNode('home-link','button'),parentId:'legacy-header',linkTo:'/',text:'Header export test'}],order:['custom-content','legacy-header','home-link'],customCss:'[data-layer-id="custom-content"] > .canvas-children > [data-layer-kind="section"][style*="padding-inline: 3px"] {grid-column:1/-1!important}'} )};
+await writeFile(path.join(dir,'snapshot.json'),JSON.stringify({format:'prion-wiki-source',version:1,values}));
+const result=spawnSync(process.execPath,['scripts/export-static.mjs','--snapshot',path.join(dir,'snapshot.json'),'--base','/test-team/','--out',path.join(dir,'export')],{encoding:'utf8'});
+assert.equal(result.status,0,result.stdout+result.stderr);
+const html=await readFile(path.join(dir,'export/public/index.html'),'utf8');
+assert.match(html,/data-layer-id="legacy-header"[^>]*data-site-header="true"/);
+assert.ok(html.includes('[data-site-header]'));
+assert.ok(!html.includes('[style*="padding-inline: 3px"]'));
+assert.match(html,/padding-inline:3px/);
+console.log('PASS: complete static export preserves the semantic header marker and translates saved selectors with compact inline styles.');

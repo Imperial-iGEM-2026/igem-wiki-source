@@ -47,6 +47,8 @@ export function useCanvasObjectMove(options: MoveOptions) {
       }
     };
     const down = (e: PointerEvent) => {
+      // A fresh gesture must not inherit suppression when a drag ended without a click.
+      suppressClick = false;
       const state = latest.current;
       if (
         state.disabled ||
@@ -59,7 +61,7 @@ export function useCanvasObjectMove(options: MoveOptions) {
       const clicked = e.target as Element;
       if (
         clicked.closest(
-          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor,[data-page-index-host]',
+          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor,[data-page-index-host],[data-html-interaction-control]',
         )
       )
         return;
@@ -196,7 +198,7 @@ export function useCanvasObjectMove(options: MoveOptions) {
         event.ctrlKey ||
         event.metaKey ||
         (event.target as Element).closest(
-          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize',
+          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,[data-html-interaction-control]',
         )
       )
         return;

@@ -1,4 +1,6 @@
 import source from './template-data.json';
+import luca from './luca-template.json';
+import type { CanvasLayout } from './canvas-schema';
 import { emptyLayout, CUSTOM_HEADING, CUSTOM_CONTENT } from './canvas-schema';
 export type TemplateAst =
   | string
@@ -15,9 +17,12 @@ export type Template = {
   name: string;
   pages: TemplatePage[];
   fields: Record<string, string>;
+  // Native editor layouts copied into a new project by the server only.
+  layouts?: Record<string, CanvasLayout>;
 };
 export const templates: Record<string, Template> = {
   ...(source as unknown as Record<string, Template>),
+  luca: luca as unknown as Template,
   blank: {
     id: 'blank',
     name: 'Blank canvas',
@@ -52,7 +57,10 @@ export function templateDefaults(id: string): Record<string, string> {
       template.pages.flatMap((page) => [
         [page.slug + ':title', page.title],
         [page.slug + ':summary', ''],
-        ['layout:' + page.slug, JSON.stringify(emptyLayout)],
+        [
+          'layout:' + page.slug,
+          JSON.stringify(template.layouts?.[page.slug] || emptyLayout),
+        ],
       ]),
     ),
   };

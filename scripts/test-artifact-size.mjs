@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { artifactSize } from './artifact-size.mjs';
+const root = await mkdtemp(path.resolve('work/artifact-size-'));
+await mkdir(path.join(root, 'public/nested'), { recursive: true });
+const html = '<p>Repeatable text with Unicode: αβγ</p>'.repeat(10000);
+await writeFile(path.join(root, 'public/nested/index.html'), html);
+await writeFile(path.join(root, 'publication-report.json'), '{}');
+await writeFile(path.join(root, 'excluded.bin'), 'not published');
+const result = await artifactSize(root);
+assert.equal(result.files, 2);
+assert.equal(result.bytes, Buffer.byteLength(html) + 2);
+assert.ok(result.compressedEstimate < result.bytes / 10);
+assert.equal(result.largest[0].name, 'igem-build/public/nested/index.html');
+console.log('PASS: recursive artifact measurement excludes non-artifacts and estimates compressed UTF-8 files.');

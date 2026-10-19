@@ -85,7 +85,8 @@ try {
   );
   const list = await (await req('/api/projects')).json();
   assert.equal(list.projects.length, 0);
-  assert.equal(list.templates.length, 5);
+  assert.deepEqual(list.templates.map((template) => template.id).sort(),
+    ['blank', 'luca', 'notebook-purple', 'notebook-white', 'regelerate', 'swiss']);
   assert.equal(list.archivedProjects[0].id, 'main');
   assert.equal((await req('/api/content', null, 'main')).status, 404);
   assert.equal(

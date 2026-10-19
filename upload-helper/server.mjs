@@ -17,6 +17,7 @@ import {
   publicationSources,
   safePath,
   digest,
+  verifyRuntimeAsset,
   uploadFolder,
 } from './files.mjs';
 import { OfficialSites } from './sites.mjs';
@@ -137,6 +138,7 @@ async function publicState() {
           team: job.team,
           teamId: job.teamId,
           imported: job.imported,
+          recordingTodoCount: job.recordingTodoCount || 0,
           rows: (job.rows || []).map((r) => ({
             source: r.source,
             file: r.file,
@@ -246,8 +248,8 @@ async function action(name, data) {
     return;
   }
   if (name === 'prepare') {
-    if (!['source', 'assets', 'media'].every((k) => job.imported.includes(k)))
-      throw Error('Choose all three ZIPs.');
+    if (!['source', 'assets'].every((k) => job.imported.includes(k)))
+      throw Error('Choose the website source and static assets ZIPs.');
     const source = path.join(job.dir, 'source');
     const config = await jsonFile(path.join(source, 'publication/config.json'));
     if (
@@ -265,8 +267,7 @@ async function action(name, data) {
     if (content.format !== 'prion-wiki-source' || content.version !== 1)
       throw Error('Unsupported website source export');
     job.team = config.teamSlug;
-    job.attributionUrl =
-      config.attributionUrl || '';
+    job.attributionUrl = config.attributionUrl || '';
     job.rows = await manifest(
       source,
       {
@@ -275,6 +276,15 @@ async function action(name, data) {
       },
       await jsonFile(path.join(source, 'publication/media-map.json')),
     );
+    const recordingTodos = await jsonFile(
+      path.join(source, 'publication/recording-todos.json'),
+    ).catch((error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    });
+    job.recordingTodoCount = Array.isArray(recordingTodos)
+      ? recordingTodos.length
+      : 0;
     await save();
     await ensureTemplateFonts(source, job.rows);
     await save();
@@ -393,6 +403,10 @@ async function action(name, data) {
       throw Error(
         `${missing.length} files still need uploaded iGEM URLs. Complete uploads or attach their local originals.`,
       );
+    for (const row of job.rows.filter((item) => item.kind === 'runtime')) {
+      log('Checking uploaded JavaScript type, CORS and exact file contents…');
+      await verifyRuntimeAsset(row);
+    }
     proposal = await sites.plan(
       job.team,
       await publicationSources(path.join(job.dir, 'source')),

@@ -1,0 +1,26 @@
+Native image runtime
+
+The server package redistributes unmodified sharp 0.35.5 and its pinned native
+runtime packages. Their package.json, README, LICENSE (where supplied), version
+manifests and npm integrity lockfiles are retained alongside the runtime.
+
+sharp source and Apache-2.0 licence:
+https://github.com/lovell/sharp/tree/v0.35.5
+
+Linux libvips/dependency binaries are from sharp-libvips 1.3.4. The corresponding
+build definitions, dependency source download URLs and platform build files are:
+https://github.com/lovell/sharp-libvips/tree/v1.3.4
+https://github.com/lovell/sharp-libvips/blob/v1.3.4/build/posix.sh
+https://github.com/lovell/sharp-libvips/releases/tag/v1.3.4
+
+A copy of the upstream build script is included here as
+libvips-build-posix.sh.txt. Exact linked library versions are recorded in each
+platform's @img/sharp-libvips-*/versions.json. THIRD-PARTY-NOTICES.md is the
+upstream notice list, and GPL-3.0.txt and LGPL-3.0.txt contain the GNU licence
+texts. Library licences remain separate from Website Studio's source licence.
+
+The native libraries are loaded dynamically from server/image-runtime and are
+not locked to a signature or checksum at runtime. They may be replaced or
+rebuilt with ABI-compatible modified versions. The source package contains
+scripts/package-image-runtime.mjs and server/image-runtime/package-lock.json
+to reproduce the distribution of the pinned upstream binaries.

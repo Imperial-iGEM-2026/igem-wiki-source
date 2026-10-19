@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { newNode, emptyLayout, insertNode } from '../selfhost-dist/server/shared.mjs';
+import { validatePageProposal } from '../selfhost-dist/server/ai-page.mjs';
+const parent = { ...newNode('parent', 'section'), layoutMode: 'flow' };
+const child = { ...newNode('child', 'text'), parentId: parent.id };
+const context = { pages: ['/'], fields: {}, layout: { ...emptyLayout, nodes: [parent, child], order: [parent.id, child.id] } };
+const proposal = layout => ({ layout, fields: [], explanation: 'Insert a text element' });
+const next = insertNode(context.layout, newNode('added', 'text'), { inside: parent.id });
+assert.doesNotThrow(() => validatePageProposal(proposal(next), context));
+const overlapping = { ...next, nodes: next.nodes.map(n => n.id === parent.id ? { ...n, layoutMode: 'free' } : n) };
+assert.throws(() => validatePageProposal(proposal(overlapping), context), /without placing its children/);
+assert.throws(() => validatePageProposal(proposal({ ...overlapping, nodes: overlapping.nodes.map(n => n.id === child.id ? { ...n, x: 5, y: 20 } : n) }), context), /without placing its children/);
+const positioned = { ...overlapping, nodes: overlapping.nodes.map((n, i) => n.parentId === parent.id ? { ...n, x: 5, y: 20 + i * 200, freeWidth: 90 } : n) };
+assert.doesNotThrow(() => validatePageProposal(proposal(positioned), context));
+assert.deepEqual(context.layout.nodes, [parent, child]);
+console.log('PASS: AI flow insertion is accepted; unsafe flow-to-free proposals are rejected without mutation; explicit positioned conversions remain supported.');

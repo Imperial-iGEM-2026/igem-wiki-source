@@ -1,7 +1,9 @@
+import { createImageValidationCache } from './export-validation-cache.mjs';
+import { googleFontReferences, prepareGoogleFonts } from './google-fonts.mjs';
+import { createExportProcessing } from './export-processing.mjs';
+import { isRecording, recordingTasks } from './export-recordings.mjs';
 import {
-  compressExportImage,
   IMAGE_UPLOAD_BYTES,
-  splitPdf,
   PDF_PART_BYTES,
   sponsorLayers,
   wikiPages,
@@ -26,6 +28,7 @@ import { pipeline } from 'node:stream/promises';
 import { zipStream } from './export-zip.mjs';
 import {
   exportMedia,
+  PDF_WORKER_SOURCE,
   mediaFolder,
   templateFonts,
   fontLicenses,
@@ -34,7 +37,6 @@ import {
 const names = {
   source: '01-website-source.zip',
   assets: '02-static-assets.zip',
-  media: '03-video-audio.zip',
 };
 const fail = (status, message) => Object.assign(Error(message), { status });
 const json = (value) => JSON.stringify(value, null, 2) + '\n';
@@ -51,19 +53,29 @@ const csv = (rows) =>
         .join(','),
     ),
   ].join('\r\n') + '\r\n';
-const common = `Extract these ZIPs before uploading. Upload the files inside assets/ or media/, not the ZIP or its manifest.
-Keep the category subfolders (banners, logos, icons, images, documents, models, fonts, videos and audio). Only folders with files are included. The upload helper creates matching static-media folders on iGEM.
+const common = `Extract these ZIPs before uploading. Upload the files inside assets/, not the ZIP or its manifest.
+Keep the category subfolders (banners, logos, icons, images, documents, models, fonts). Only folders with files are included. The upload helper creates matching static-media folders on iGEM.
 Match each file to its original URL using upload-manifest.csv. Paste the returned iGEM URLs into publication/media-map.json in ZIP 01.
-Audited open-source template fonts and their OFL notices are included in assets/fonts. The helper uploads the fonts and configures them automatically. Other external files are listed but not downloaded.
+Audited open-source template fonts and their OFL notices are included in assets/fonts. The helper uploads the fonts and configures them automatically. Referenced Google Fonts are downloaded automatically with their licence notices and uploaded by the helper. Other external files are listed but not downloaded.
 Large PDFs are automatically split into reading copies under 9 MB. The original remains in the editor. Other files are copied without conversion: check acceptance and playback in the iGEM upload tools. See the local upload helper for the guided workflow.
 `;
 
 export function createBundleExports({
   dataDir,
   clientDir,
+  projectSource,
+  assetOrigins = [],
   sourceFile = new URL('./export-source.json', import.meta.url),
   now = Date.now,
+  processing = createExportProcessing(),
+  fontFetcher = fetch,
 }) {
+  const templateOrigins = new Set(
+    assetOrigins.filter(Boolean).map((origin) => new URL(origin).origin),
+  );
+  const imageValidation = createImageValidationCache(
+    path.join(dataDir, 'export-cache', 'images'),
+  );
   const plans = new Map();
   let sourcePromise,
     active = 0,
@@ -78,6 +90,20 @@ export function createBundleExports({
       if (plan.expires <= now()) discard(id, plan);
   };
   async function localFile(source) {
+    // MCP/HTML editing can save full URLs for assets shipped with this server.
+    // Resolve only configured first-party template origins, without fetching URLs.
+    // Keep the original source as the manifest key so publication replaces it.
+    if (/^https?:\/\//.test(source)) {
+      const url = new URL(source);
+      const pathname = /^https?:\/\/[^/?#]+(\/[^?#]*)/.exec(source)?.[1];
+      if (
+        !url.username &&
+        !url.password &&
+        templateOrigins.has(url.origin) &&
+        pathname?.startsWith('/templates/')
+      )
+        source = pathname;
+    }
     let root, relative;
     if (source.startsWith('/api/media/')) {
       root = path.join(dataDir, 'media');
@@ -94,7 +120,15 @@ export function createBundleExports({
       !/^[a-zA-Z0-9_./-]+$/.test(relative) ||
       relative.split('/').some((part) => !part || part === '.' || part === '..')
     )
-      throw fail(422, 'Invalid media path.');
+      throw fail(
+        422,
+        'Invalid media path: ' +
+          JSON.stringify(source) +
+          '. ' +
+          (/[?#]/.test(relative)
+            ? 'Local media references cannot contain a query string or fragment. Select the original uploaded file again.'
+            : 'Use a local media path with letters, numbers, underscores, hyphens and dots; empty, dot and parent-directory segments are not allowed. Replace or reselect this file in the editor.'),
+      );
     try {
       const base = await realpath(root),
         file = await realpath(path.join(root, relative));
@@ -121,6 +155,7 @@ export function createBundleExports({
       template,
       team,
       requiredPages = [],
+      onProgress = () => {},
     }) {
       if (
         typeof team !== 'string' ||
@@ -137,6 +172,11 @@ export function createBundleExports({
         requiredPages.some((slug) => !igemAwards.some(([id]) => id === slug))
       )
         throw fail(400, 'Choose valid iGEM awards.');
+      onProgress({
+        message: 'Checking saved pages and required routes…',
+        completed: 0,
+        total: 0,
+      });
       const removed = parseRemovedPages(values['pages:removed']);
       const slugs = [
         ...(template?.pages || wikiPages),
@@ -186,29 +226,133 @@ export function createBundleExports({
             sourcePromise = null;
             throw error;
           });
-        const sourceFiles = await sourcePromise;
+        const baseSource = await sourcePromise;
+        const sourceFiles = projectSource
+          ? projectSource.overlay(project.id, baseSource)
+          : baseSource;
+        const sourceChanges = Object.keys(sourceFiles).filter(
+          (name) => sourceFiles[name] !== baseSource[name],
+        );
         const entries = {
           source: Object.entries(sourceFiles).map(([name, text]) =>
             textEntry(name, text),
           ),
           assets: [],
-          media: [],
         };
         const pdfParts = {};
         const rows = [],
           map = {};
-        for (const [source, kind] of exportMedia(
+        const locations = new Map();
+        const media = exportMedia(
           cleanValues,
           template,
           sponsorLayers,
-        )) {
-          const recording = ['video', 'audio', 'embed'].includes(kind),
-            key = recording ? 'media' : 'assets';
-          const local = await localFile(source);
+          locations,
+        );
+        const recordingTodos = recordingTasks(media, locations, cleanValues);
+        if ([...media.values()].includes('pdf')) {
+          media.set(PDF_WORKER_SOURCE, 'runtime');
+          locations.set(PDF_WORKER_SOURCE, [{ pageTitle: 'PDF reader', layerName: 'PDF.js worker', field: 'JavaScript runtime' }]);
+        }
+        const googleFonts = await prepareGoogleFonts(
+          googleFontReferences(
+            cleanValues,
+            template,
+            Object.fromEntries(
+              Object.entries(sourceFiles).filter(([file]) =>
+                file.endsWith('.css'),
+              ),
+            ),
+          ),
+          { fetcher: fontFetcher, onProgress },
+        );
+        for (const [url] of googleFonts.fonts) media.set(url, 'font');
+        entries.source.push(
+          textEntry(
+            'publication/google-fonts.json',
+            json(googleFonts.manifest),
+          ),
+        );
+        for (const license of googleFonts.licenses) {
+          entries.assets.push(
+            textEntry(
+              'assets/fonts/' + license.filename,
+              license.data.toString('utf8'),
+            ),
+          );
+          entries.source.push(
+            textEntry(
+              'publication/font-licenses/' + license.filename,
+              license.data.toString('utf8'),
+            ),
+          );
+        }
+        for (const [source, kind] of media)
+          if (isRecording(kind)) media.delete(source);
+        onProgress({
+          message: 'Checking images, documents and other static files…',
+          completed: 0,
+          total: media.size,
+        });
+        const localFiles = new Map();
+        const mediaIssues = [];
+        // Validate every reference before splitting PDFs or producing ZIPs, so
+        // fixing one broken image does not reveal another one on the next attempt.
+        for (const [source, kind] of media) {
+          try {
+            localFiles.set(source, await localFile(source));
+          } catch (error) {
+            if (error.status !== 422) throw error;
+            mediaIssues.push({
+              source,
+              kind,
+              reason: error.message,
+              locations: locations.get(source) || [],
+            });
+          }
+        }
+        if (mediaIssues.length) {
+          const first = mediaIssues[0];
+          const where = first.locations
+            .map((location) =>
+              [location.pageTitle, location.layerName, location.field]
+                .filter(Boolean)
+                .join(' → '),
+            )
+            .join('; ');
+          throw Object.assign(
+            fail(
+              422,
+              `${mediaIssues.length} media ${mediaIssues.length === 1 ? 'file needs' : 'files need'} attention before export. ${where ? where + ': ' : ''}${first.reason}`,
+            ),
+            { mediaIssues },
+          );
+        }
+        let completed = 0;
+        for (const [source, kind] of media) {
+          const key = 'assets';
+          onProgress({
+            message: `Preparing ${path.basename(source)}…`,
+            completed: completed++,
+            total: media.size,
+          });
+          const local = localFiles.get(source);
           let name = '';
+          const downloadedFont = googleFonts.fonts.get(source);
+          if (downloadedFont) {
+            name =
+              'assets/fonts/google-' +
+              createHash('sha256').update(source).digest('hex').slice(0, 20) +
+              downloadedFont.extension;
+            entries.assets.push({
+              name,
+              data: downloadedFont.data,
+              size: downloadedFont.data.length,
+            });
+          }
           if (local) {
             name =
-              (recording ? 'media/' : 'assets/') +
+              'assets/' +
               mediaFolder(source, kind, cleanValues) +
               '/' +
               createHash('sha256').update(source).digest('hex').slice(0, 12) +
@@ -217,7 +361,12 @@ export function createBundleExports({
             if (kind === 'pdf' && local.size > PDF_PART_BYTES) {
               let parts;
               try {
-                parts = await splitPdf(await readFile(local.file));
+                onProgress({
+                  message: `Splitting PDF: ${path.basename(local.file)}. Large documents can take several minutes.`,
+                  completed: completed - 1,
+                  total: media.size,
+                });
+                parts = await processing.run('pdf', local.file);
               } catch (error) {
                 throw fail(
                   422,
@@ -260,34 +409,68 @@ export function createBundleExports({
               continue;
             }
             if (
-              !recording &&
               /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(local.file) &&
-              local.size > IMAGE_UPLOAD_BYTES
+              (local.size > IMAGE_UPLOAD_BYTES ||
+                /\.(jpe?g|png)$/i.test(local.file))
             ) {
               let result;
               try {
-                result = compressExportImage(
-                  await readFile(local.file),
-                  path.basename(local.file),
-                );
+                onProgress({
+                  message: `${local.size > IMAGE_UPLOAD_BYTES ? 'Checking and compressing' : 'Checking'} image: ${path.basename(local.file)}…`,
+                  completed: completed - 1,
+                  total: media.size,
+                });
+                const validate = () =>
+                  processing.run('image', local.file, {
+                    omitUnchangedData: true,
+                  });
+                result =
+                  local.size <= IMAGE_UPLOAD_BYTES
+                    ? await imageValidation.check(local.file, validate, () =>
+                        onProgress({
+                          message: `Reusing verified image: ${path.basename(local.file)}…`,
+                          completed: completed - 1,
+                          total: media.size,
+                        }),
+                      )
+                    : await validate();
               } catch (error) {
-                throw fail(422, error.message);
+                const usage = locations.get(source) || [];
+                const where = usage
+                  .map((location) =>
+                    [location.pageTitle, location.layerName, location.field]
+                      .filter(Boolean)
+                      .join(' → '),
+                  )
+                  .join('; ');
+                throw Object.assign(
+                  fail(422, `${where ? where + ': ' : ''}${error.message}`),
+                  {
+                    mediaIssues: [
+                      { source, kind, reason: error.message, locations: usage },
+                    ],
+                  },
+                );
               }
-              name = name.replace(/\.[^.]+$/, result.extension);
-              tempDir ||= await mkdtemp(
-                path.join(tmpdir(), 'prion-image-export-'),
-              );
-              const file = path.join(tempDir, path.basename(name));
-              await writeFile(file, result.data);
-              const info = await stat(file);
-              entries[key].push({
-                name,
-                file,
-                size: info.size,
-                mtimeMs: info.mtimeMs,
-              });
+              if (!result.changed) {
+                entries[key].push({ name, ...local });
+              } else {
+                name = name.replace(/\.[^.]+$/, result.extension);
+                tempDir ||= await mkdtemp(
+                  path.join(tmpdir(), 'prion-image-export-'),
+                );
+                const file = path.join(tempDir, path.basename(name));
+                await writeFile(file, result.data);
+                const info = await stat(file);
+                entries[key].push({
+                  name,
+                  file,
+                  size: info.size,
+                  mtimeMs: info.mtimeMs,
+                });
+              }
             } else {
-              if (!recording && local.size >= 10_000_000)
+              if (local.size >= 10_000_000)
                 throw fail(
                   422,
                   'Cannot export ' +
@@ -298,17 +481,9 @@ export function createBundleExports({
             }
           }
           rows.push({ source, kind, bundle: names[key], file: name });
-          map[source] = recording
-            ? 'https://video.igem.org/videos/embed/REPLACE-WITH-VIDEO-ID'
+          map[source] = source.startsWith('https://static.igem.wiki/')
+            ? source
             : 'https://static.igem.wiki/YOUR-TEAM/uploaded-file';
-          if (
-            (source.startsWith('https://static.igem.wiki/') && !recording) ||
-            (/^https:\/\/video\.igem\.org\/videos\/embed\/[a-zA-Z0-9-]+$/.test(
-              source,
-            ) &&
-              recording)
-          )
-            map[source] = source;
         }
         for (const key of new Set(
           templateFonts(cleanValues).map((font) => font.license),
@@ -323,23 +498,30 @@ export function createBundleExports({
             ),
           );
         }
+        onProgress({
+          message: 'Preparing download manifests…',
+          completed: media.size,
+          total: media.size,
+        });
         const id = randomUUID(),
           exportedAt = new Date(now()).toISOString(),
           expires = now() + 30 * 60 * 1000;
         const info = {
           project: project.name,
           exportedAt,
+          sourceChanges,
           submissionReady: false,
           standardPages,
           staticFiles: entries.assets.length,
-          videoAudioFiles: entries.media.length,
+          recordingTodos,
           externalFiles: rows.filter((r) => !r.file).length,
+          googleFontsDownloaded: googleFonts.fonts.size,
           fontsIncluded: rows.some((row) => row.kind === 'font'),
         };
         const guide = `# 01 — Website source → iGEM GitLab
 
-1. Extract all three ZIPs. Upload images/files to iGEM Uploads and video/audio to Video Universe.
-2. Fill publication/media-map.json with the returned URLs. For recordings use iframe embed URLs, not watch-page URLs.
+1. Extract both ZIPs. Upload images/files to iGEM Uploads. Recordings are not packaged: add Video Universe iframe embeds in the editor and export again.
+2. Fill publication/media-map.json with the returned URLs. Existing Video Universe embeds retain their player settings.
 3. Review publication/content.json: saved source can include hidden or unpublished text. AI briefs and account metadata are omitted; this is not a full privacy scrub.
 4. Configure hosted fonts and selected award page slugs in publication/config.json. Review your content before publishing; review.json is legacy optional metadata and no longer blocks the build.
 5. Merge this source into https://gitlab.igem.org/2026/${team}, including its CC BY 4.0 root LICENSE. Third-party assets and fonts retain their own licences and attribution notices.
@@ -350,6 +532,7 @@ Local verification: npm ci, then npm run build. The compiler checks required pag
 ${common}`;
         entries.source.push(
           textEntry('publication/content.json', content),
+          textEntry('publication/recording-todos.json', json(recordingTodos)),
           textEntry('publication/pdf-parts.json', json(pdfParts)),
           textEntry('publication/media-map.json', json(map)),
           textEntry(
@@ -391,16 +574,6 @@ ${common}`;
               common,
           ),
         );
-        entries.media.push(
-          textEntry(
-            'UPLOAD-FIRST.txt',
-            "# 03 — Video and audio → Video Universe\n\nOpen https://video.igem.org/ and copy each processed recording's iframe embed URL.\n\n" +
-              (!info.videoAudioFiles
-                ? 'No local recordings in this saved project. This ZIP contains instructions and a manifest only.\n\n'
-                : '') +
-              common,
-          ),
-        );
         for (const key of Object.keys(entries))
           entries[key].push(
             textEntry(
@@ -425,15 +598,15 @@ ${common}`;
           exportedAt,
           expiresAt: new Date(expires).toISOString(),
           externalFiles: info.externalFiles,
+          sourceChanges,
+          googleFontsDownloaded: googleFonts.fonts.size,
+          recordingTodos,
           downloads: Object.keys(entries).map((key) => ({
             key,
             filename: names[key],
             url: `/api/export/bundles/${id}/${key}`,
             bytes: entries[key].reduce((total, entry) => total + entry.size, 0),
-            files:
-              key === 'source'
-                ? entries[key].length
-                : info[key === 'assets' ? 'staticFiles' : 'videoAudioFiles'],
+            files: key === 'source' ? entries[key].length : info.staticFiles,
           })),
         };
       } finally {
@@ -495,6 +668,7 @@ ${common}`;
       }
     },
     close() {
+      processing.close();
       for (const [id, plan] of plans) discard(id, plan);
     },
   };

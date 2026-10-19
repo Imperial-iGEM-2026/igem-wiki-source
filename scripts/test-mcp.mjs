@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, stat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { generateKeyPair, SignJWT } from 'jose';
@@ -185,6 +186,9 @@ try {
   assert.ok(init.capabilities.tools);
   assert.ok(init.capabilities.prompts);
   assert.match(init.instructions, /get_site_overview/);
+  assert.match(init.instructions, /ENTIRE page/);
+  assert.match(init.instructions, /overlapping steps/);
+  assert.match(init.instructions, /partial check/);
   assert.match(init.instructions, /self-healing gel/);
   assert.match(init.instructions, /Draft the Results page/);
   assert.match(init.instructions, /Project: MCP\./);
@@ -203,6 +207,76 @@ try {
   // One call gives the AI the site map, brief, task and page purposes.
   const overview = await call(key, 'get_site_overview', {});
   assert.equal(overview.project, 'MCP');
+  assert.equal(overview.projectTemplate.appearance.id, 'regelerate');
+  const templateInfo = await call(key, 'get_project_template', {});
+  assert.equal(templateInfo.contentTemplate.id, 'regelerate');
+  assert.equal(templateInfo.appearance.id, 'regelerate');
+  assert.equal(templateInfo.appearanceChanged, false);
+  assert.ok(!Object.hasOwn(templateInfo, 'css'));
+  const inspectionTool = (await rpc(key, 'tools/list', {})).tools.find(
+    (t) => t.name === 'get_project_template',
+  );
+  assert.equal(inspectionTool.annotations.readOnlyHint, true);
+  await rejects(
+    call(key, 'get_project_template', { projectId: 'another-project' }),
+    /determined by this MCP link/,
+  );
+  await rejects(
+    call(key, 'get_project_template', { includeStyles: 'yes' }),
+    /boolean/,
+  );
+  // A switched appearance must be reported accurately, without replacing the
+  // content template or mutating any saved values/versions during inspection.
+  const appearancePreview = await (
+    await api('/api/template-change', {
+      action: 'preview',
+      id: project,
+      templateId: 'luca',
+    })
+  ).json();
+  const appearanceApplied = await (
+    await api('/api/template-change', {
+      action: 'apply',
+      id: project,
+      token: appearancePreview.token,
+    })
+  ).json();
+  const beforeRead = (await (await api('/api/content', null, project)).json())
+    .rows;
+  const switched = await call(key, 'get_project_template', {
+    includeStyles: true,
+  });
+  assert.deepEqual(switched.contentTemplate, templateInfo.contentTemplate);
+  assert.equal(switched.appearance.id, 'luca');
+  assert.equal(switched.appearance.name, 'Luca');
+  assert.equal(switched.appearanceChanged, true);
+  assert.match(switched.css, /luca-footer-brand/);
+  assert.ok(switched.css.includes('data-template-theme="regelerate"'));
+  assert.ok(!switched.css.includes('data-template-theme="luca"'));
+  assert.equal(
+    (await call(key, 'get_site_overview', {})).projectTemplate.appearance.id,
+    'luca',
+  );
+  const switchedStyles = await call(key, 'get_page_styles', {
+    page: 'home',
+    includeShared: false,
+  });
+  assert.equal(switchedStyles.projectTemplate.appearance.id, 'luca');
+  assert.equal(switchedStyles.stylesheets[0].css, switched.css);
+  assert.deepEqual(
+    (await (await api('/api/content', null, project)).json()).rows,
+    beforeRead,
+  );
+  await api('/api/template-change', {
+    action: 'rollback',
+    id: project,
+    changeId: appearanceApplied.rollback.id,
+    version: appearanceApplied.version,
+  });
+  assert.equal(
+    (await call(key, 'get_project_template', {})).appearance.id,
+    'regelerate',
+  );
   assert.match(overview.teamBrief, /self-healing gel/);
   assert.equal(overview.yourTask, 'Draft the Results page.');
   assert.equal(overview.menu.groups.length, 5);
@@ -374,6 +448,75 @@ try {
     /selector from get_page/,
   );
 
+  // Standard MCP can position HTML without rewriting code or changing flow/order.
+  const { id: positionedHtml } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'html',
+    heading: 'Position test',
+    html: '<p>Keep this content</p>',
+  });
+  const beforeMove = await call(key, 'get_page', { page: 'home' });
+  await call(key, 'move_section', {
+    page: 'home',
+    id: positionedHtml,
+    offset: { x: -24, y: 48 },
+  });
+  const afterMove = await call(key, 'get_page', { page: 'home' });
+  assert.deepEqual(
+    afterMove.sections.map((n) => n.id),
+    beforeMove.sections.map((n) => n.id),
+  );
+  assert.deepEqual(
+    afterMove.sections.find((n) => n.id === positionedHtml),
+    beforeMove.sections.find((n) => n.id === positionedHtml),
+  );
+  assert.match(afterMove.customCss, /translate: -24px 48px/);
+  assert.ok(
+    afterMove.customCss.includes(`[data-layer-id="${positionedHtml}"]`),
+  );
+  await call(key, 'move_section', {
+    page: 'home',
+    id: positionedHtml,
+    offset: { x: 0, y: 12 },
+    scope: 'mobile',
+  });
+  assert.match(
+    (await call(key, 'get_page', { page: 'home' })).customCss,
+    /translate: 0px 12px/,
+  );
+  await rejects(
+    call(key, 'move_section', {
+      page: 'home',
+      id: positionedHtml,
+      offset: { x: '24', y: 0 },
+    }),
+    /finite/,
+  );
+  await rejects(
+    call(key, 'update_section', {
+      page: 'home',
+      id: positionedHtml,
+      changes: { x: 24 },
+    }),
+    /move_section/,
+  );
+  await call(key, 'move_section', {
+    page: 'home',
+    id: positionedHtml,
+    offset: { x: 0, y: 0 },
+  });
+  assert.match(
+    (await call(key, 'get_page', { page: 'home' })).customCss,
+    /translate: 0px 0px/,
+  );
+  await call(key, 'delete_section', { page: 'home', id: positionedHtml });
+
+  await call(key, 'style_element', { page: 'home', selector: h1.selector,
+    styles: { width: '400px', 'max-width': '100%', 'box-sizing': 'border-box' } });
+  const resizedText = (await call(key, 'get_page', { page: 'home' })).customCss;
+  assert.match(resizedText, /width: 400px/);
+  assert.match(resizedText, /max-width: 100%/);
+
   // Collapsible sections: several items, stable ids, selectors per item.
   const { id: faq } = await call(key, 'add_section', {
     page: 'home',
@@ -400,6 +543,28 @@ try {
   assert.equal(
     faqNode.selectors.items[1].summary,
     `[data-layer-id="${faq}"] > div:nth-of-type(1) > div:nth-of-type(1) > details:nth-of-type(2) > summary:nth-of-type(1)`,
+  );
+  const { id: faqImage } = await call(key, 'add_section', {
+    page: 'home',
+    heading: 'Subsection image',
+    kind: 'image',
+    src: 'https://example.org/photo.png',
+    inside: faq,
+    insideItem: faqNode.items[0].id,
+  });
+  const faqImageNode = (
+    await call(key, 'get_page', { page: 'home' })
+  ).sections.find((s) => s.id === faqImage);
+  assert.equal(faqImageNode.parentId, faq);
+  assert.equal(faqImageNode.parentItemId, faqNode.items[0].id);
+  await rejects(
+    call(key, 'add_section', {
+      page: 'home',
+      heading: 'Bad target',
+      kind: 'image',
+      inside: faq,
+    }),
+    /insideItem/,
   );
   // Reordering keeps each section's id; new sections get one.
   const [faqFirst, faqSecond] = faqNode.items;
@@ -432,6 +597,17 @@ try {
     }),
     /not valid/,
   );
+  await call(key, 'update_section', {
+    page: 'home',
+    id: faq,
+    changes: { items: [faqSecond] },
+  });
+  assert.ok(
+    !(await call(key, 'get_page', { page: 'home' })).sections.some(
+      (s) => s.id === faqImage,
+    ),
+    'Deleting a subsection deletes its nested media',
+  );
   const { id: plain } = await call(key, 'add_section', {
     page: 'home',
     heading: 'Plain text',
@@ -445,6 +621,79 @@ try {
     /not valid/,
   );
   await call(key, 'delete_section', { page: 'home', id: plain });
+
+  // MCP and manual insertion share the same non-destructive placement rules.
+  const { id: insertionFrame } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'section',
+    heading: 'Insertion regression',
+  });
+  const { id: childA } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'text',
+    heading: 'First child',
+    inside: insertionFrame,
+  });
+  const { id: childB } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'text',
+    heading: 'Second child',
+    inside: insertionFrame,
+  });
+  const readSavedHome = async () => {
+    const { rows } = await (await api('/api/content', null, project)).json();
+    return JSON.parse(rows.find((r) => r.id === 'layout:home').value);
+  };
+  const beforeInsert = await readSavedHome();
+  const { id: childBetween } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'image',
+    inside: insertionFrame,
+    after: childA,
+  });
+  const afterInsert = await readSavedHome();
+  assert.deepEqual(
+    afterInsert.nodes.filter((n) => n.id !== childBetween),
+    beforeInsert.nodes,
+  );
+  assert.deepEqual(
+    afterInsert.order.filter((id) => id !== childBetween),
+    beforeInsert.order,
+  );
+  assert.equal(
+    afterInsert.order.indexOf(childBetween),
+    afterInsert.order.indexOf(childA) + 1,
+  );
+  assert.ok(
+    afterInsert.order.indexOf(childBetween) < afterInsert.order.indexOf(childB),
+  );
+  await call(key, 'update_section', {
+    page: 'home',
+    id: insertionFrame,
+    changes: { layoutMode: 'free' },
+  });
+  await call(key, 'update_section', {
+    page: 'home',
+    id: childA,
+    changes: { minHeight: 1100 },
+  });
+  const beforeFreeInsert = await readSavedHome();
+  const { id: freeChild } = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'pdf',
+    inside: insertionFrame,
+  });
+  const afterFreeInsert = await readSavedHome();
+  assert.deepEqual(
+    afterFreeInsert.nodes.filter((n) => n.id !== freeChild),
+    beforeFreeInsert.nodes,
+  );
+  assert.equal(afterFreeInsert.nodes.find((n) => n.id === freeChild).y, 1144);
+  assert.equal(
+    afterFreeInsert.nodes.find((n) => n.id === freeChild).freeHeight,
+    600,
+  );
+  await call(key, 'delete_section', { page: 'home', id: insertionFrame });
 
   // Text edits land in the saved content that editors read.
   const field = template.texts[0].fieldId;
@@ -520,8 +769,62 @@ try {
 
   await call(key, 'set_page_css', {
     page: 'home',
-    css: `[data-layer-id="${added}"] h2 { color: #123456; }`,
+    css: `[data-layer-id="${added}"] h2 { color: #123456; } @media (max-width: 760px) { h2 {font-size:3vw} }`,
   });
+  const beforeStyles = (await (await api('/api/content', null, project)).json())
+    .rows;
+  const styledPage = await call(key, 'get_page', {
+    page: 'home',
+    includeStyles: true,
+  });
+  const styleRead = await call(key, 'get_page_styles', { page: 'home' });
+  assert.deepEqual(styledPage.styles, styleRead);
+  assert.equal(styleRead.version, styledPage.version);
+  assert.equal(styleRead.customCss, styledPage.customCss);
+  assert.deepEqual(styleRead.warnings, []);
+  assert.equal(styleRead.stylesheets[0].kind, 'shared');
+  assert.equal(
+    styleRead.stylesheets[0].css,
+    await readFile(
+      path.join('selfhost-dist/client', styleRead.stylesheets[0].href.slice(1)),
+      'utf8',
+    ),
+  );
+  assert.equal(styleRead.stylesheets.at(-2).kind, 'template');
+  assert.equal(styleRead.stylesheets.at(-1).kind, 'page');
+  assert.match(styleRead.stylesheets.at(-1).css, /\[data-page-css="home"\]/);
+  assert.match(styleRead.stylesheets.at(-1).css, /3vw/);
+  assert.equal(styleRead.sections.find((n) => n.id === added).settings.span, 8);
+  const editorStyles = await call(key, 'get_page_styles', {
+    page: 'home',
+    view: 'editor',
+    includeShared: false,
+  });
+  assert.equal(editorStyles.stylesheets.length, 2);
+  assert.match(editorStyles.stylesheets.at(-1).css, /@container studioPage/);
+  assert.match(editorStyles.stylesheets.at(-1).css, /3cqw/);
+  assert.deepEqual(
+    (await (await api('/api/content', null, project)).json()).rows,
+    beforeStyles,
+  );
+  assert.equal(
+    (await rpc(key, 'tools/list', {})).tools.find(
+      (t) => t.name === 'get_page_styles',
+    ).annotations.readOnlyHint,
+    true,
+  );
+  await rejects(
+    call(key, 'get_page_styles', { page: 'home', path: '../../secret' }),
+    /optional boolean/,
+  );
+  await rejects(
+    call(key, 'get_page_styles', { page: 'home', view: 'invalid' }),
+    /preview/,
+  );
+  await rejects(
+    call(key, 'get_page_styles', { page: 'missing-page' }),
+    /does not exist/,
+  );
   await call(key, 'delete_section', { page: 'home', id: sub });
   await call(key, 'delete_section', { page: 'home', id: template.id });
   home = await call(key, 'get_page', { page: 'home' });
@@ -661,62 +964,236 @@ try {
     )
   ).json();
   const scopedKey = new URL(scoped.url).searchParams.get('key');
+  assert.equal(
+    (await call(scopedKey, 'get_project_template', {})).appearance.id,
+    'regelerate',
+  );
   assert.deepEqual(
     (await call(scopedKey, 'list_pages', {})).pages.map((p) => p.slug),
     ['home'],
   );
   const other = pages.find((p) => p.slug !== 'home').slug;
+  assert.equal(
+    (
+      await call(scopedKey, 'get_page_styles', {
+        page: 'home',
+        includeShared: false,
+      })
+    ).page,
+    'home',
+  );
+  await rejects(
+    call(scopedKey, 'get_page_styles', { page: other }),
+    /can only edit/,
+  );
+  await rejects(
+    call(scopedKey, 'get_page', { page: other, includeStyles: true }),
+    /can only edit/,
+  );
   await rejects(call(scopedKey, 'get_page', { page: other }), /can only edit/);
+  await rejects(
+    call(scopedKey, 'set_page_sidebar', {
+      page: other,
+      enabled: true,
+      ifVersion: 1,
+    }),
+    /can only edit/,
+  );
   await rejects(
     call(scopedKey, 'create_page', { title: 'X', slug: 'x-page' }),
     /limited to one page/,
   );
 
   // Media is received through MCP, uses normal media URLs, and can be inserted.
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXs8AAAAASUVORK5CYII=', 'base64');
-  const uploaded = await call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: png.toString('base64') });
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXs8AAAAASUVORK5CYII=',
+    'base64',
+  );
+  const uploaded = await call(scopedKey, 'upload_media', {
+    page: 'home',
+    name: 'figure.png',
+    base64: png.toString('base64'),
+  });
   assert.equal(uploaded.complete, true);
   assert.equal(uploaded.kind, 'image');
   assert.match(uploaded.url, /^\/api\/media\/[a-f0-9-]+\.png$/);
-  assert.deepEqual(await readFile(path.join(dataDir, 'media', uploaded.url.split('/').pop())), png);
-  const imageSection = await call(scopedKey, 'add_section', { page: 'home', kind: 'image', heading: 'Uploaded figure', src: uploaded.url, alt: 'A test figure' });
-  assert.equal((await call(scopedKey, 'get_page', { page: 'home' })).sections.find(n=>n.id===imageSection.id).src, uploaded.url);
-  await rejects(call(scopedKey, 'upload_media', { page: other, name: 'figure.png', base64: png.toString('base64') }), /can only edit/);
-  await rejects(call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: Buffer.from('This is not an image file').toString('base64') }), /contents do not match/);
-  await rejects(call(scopedKey, 'upload_media', { page: 'home', name: 'figure.png', base64: 'not base64' }), /base64/);
-  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: '../figure.png', size: 100 }), /filename/);
-  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: 'script.html', size: 100 }), /Unsupported/);
-  await rejects(call(scopedKey, 'start_media_upload', { page: 'home', name: 'huge.pdf', size: 26*1024*1024 }), /25 MiB/);
-  await rejects(call(scopedKey, 'get_media_upload_url', { page: 'home', name: 'figure.png', size: png.length }), /not configured/);
-  const bytes = Buffer.alloc(700000, 65); Buffer.from('%PDF-1.7\n').copy(bytes);
-  const transfer = await call(scopedKey, 'start_media_upload', { page: 'home', name: 'notebook.pdf', size: bytes.length });
+  assert.deepEqual(
+    await readFile(path.join(dataDir, 'media', uploaded.url.split('/').pop())),
+    png,
+  );
+  const imageSection = await call(scopedKey, 'add_section', {
+    page: 'home',
+    kind: 'image',
+    heading: 'Uploaded figure',
+    src: uploaded.url,
+    alt: 'A test figure',
+  });
+  assert.equal(
+    (await call(scopedKey, 'get_page', { page: 'home' })).sections.find(
+      (n) => n.id === imageSection.id,
+    ).src,
+    uploaded.url,
+  );
+  await rejects(
+    call(scopedKey, 'upload_media', {
+      page: other,
+      name: 'figure.png',
+      base64: png.toString('base64'),
+    }),
+    /can only edit/,
+  );
+  await rejects(
+    call(scopedKey, 'upload_media', {
+      page: 'home',
+      name: 'figure.png',
+      base64: Buffer.from('This is not an image file').toString('base64'),
+    }),
+    /contents do not match/,
+  );
+  await rejects(
+    call(scopedKey, 'upload_media', {
+      page: 'home',
+      name: 'figure.png',
+      base64: 'not base64',
+    }),
+    /base64/,
+  );
+  await rejects(
+    call(scopedKey, 'start_media_upload', {
+      page: 'home',
+      name: '../figure.png',
+      size: 100,
+    }),
+    /filename/,
+  );
+  await rejects(
+    call(scopedKey, 'start_media_upload', {
+      page: 'home',
+      name: 'script.html',
+      size: 100,
+    }),
+    /Unsupported/,
+  );
+  await rejects(
+    call(scopedKey, 'start_media_upload', {
+      page: 'home',
+      name: 'huge.pdf',
+      size: 26 * 1024 * 1024,
+    }),
+    /25 MiB/,
+  );
+  await rejects(
+    call(scopedKey, 'get_media_upload_url', {
+      page: 'home',
+      name: 'figure.png',
+      size: png.length,
+    }),
+    /not configured/,
+  );
+  const bytes = Buffer.alloc(700000, 65);
+  Buffer.from('%PDF-1.7\n').copy(bytes);
+  const transfer = await call(scopedKey, 'start_media_upload', {
+    page: 'home',
+    name: 'notebook.pdf',
+    size: bytes.length,
+  });
   const first = bytes.subarray(0, transfer.chunkBytes).toString('base64');
-  const args = { page: 'home', uploadId: transfer.uploadId, offset: 0, base64: first };
+  const args = {
+    page: 'home',
+    uploadId: transfer.uploadId,
+    offset: 0,
+    base64: first,
+  };
   const part = await call(scopedKey, 'upload_media_chunk', args);
   assert.equal(part.complete, false);
   assert.equal(part.nextOffset, transfer.chunkBytes);
   assert.deepEqual(await call(scopedKey, 'upload_media_chunk', args), part);
-  assert.equal((await call(scopedKey, 'get_media_upload', { page: 'home', uploadId: transfer.uploadId })).nextOffset, transfer.chunkBytes);
-  await rejects(call(key, 'get_media_upload', { page: 'home', uploadId: transfer.uploadId }), /not found/);
-  await rejects(call(scopedKey, 'upload_media_chunk', { ...args, offset: transfer.chunkBytes + 1, base64: 'QUFBQQ==' }), /out of order/);
-  const last = { ...args, offset: transfer.chunkBytes, base64: bytes.subarray(transfer.chunkBytes).toString('base64') };
+  assert.equal(
+    (
+      await call(scopedKey, 'get_media_upload', {
+        page: 'home',
+        uploadId: transfer.uploadId,
+      })
+    ).nextOffset,
+    transfer.chunkBytes,
+  );
+  await rejects(
+    call(key, 'get_media_upload', {
+      page: 'home',
+      uploadId: transfer.uploadId,
+    }),
+    /not found/,
+  );
+  await rejects(
+    call(scopedKey, 'upload_media_chunk', {
+      ...args,
+      offset: transfer.chunkBytes + 1,
+      base64: 'QUFBQQ==',
+    }),
+    /out of order/,
+  );
+  const last = {
+    ...args,
+    offset: transfer.chunkBytes,
+    base64: bytes.subarray(transfer.chunkBytes).toString('base64'),
+  };
   const complete = await call(scopedKey, 'upload_media_chunk', last);
   assert.equal(complete.kind, 'pdf');
   assert.equal(complete.complete, true);
   assert.deepEqual(await call(scopedKey, 'upload_media_chunk', last), complete);
-  assert.deepEqual(await readFile(path.join(dataDir, 'media', complete.url.split('/').pop())), bytes);
-  await rejects(call(scopedKey, 'cancel_media_upload', { page: 'home', uploadId: transfer.uploadId }), /complete/);
-  const unfinished = await call(scopedKey, 'start_media_upload', { page: 'home', name: 'unfinished.pdf', size: 100 });
-  await call(scopedKey, 'upload_media_chunk', { page: 'home', uploadId: unfinished.uploadId, offset: 0, base64: bytes.subarray(0,32).toString('base64') });
-  await call(scopedKey, 'cancel_media_upload', { page: 'home', uploadId: unfinished.uploadId });
+  assert.deepEqual(
+    await readFile(path.join(dataDir, 'media', complete.url.split('/').pop())),
+    bytes,
+  );
+  await rejects(
+    call(scopedKey, 'cancel_media_upload', {
+      page: 'home',
+      uploadId: transfer.uploadId,
+    }),
+    /complete/,
+  );
+  const unfinished = await call(scopedKey, 'start_media_upload', {
+    page: 'home',
+    name: 'unfinished.pdf',
+    size: 100,
+  });
+  await call(scopedKey, 'upload_media_chunk', {
+    page: 'home',
+    uploadId: unfinished.uploadId,
+    offset: 0,
+    base64: bytes.subarray(0, 32).toString('base64'),
+  });
+  await call(scopedKey, 'cancel_media_upload', {
+    page: 'home',
+    uploadId: unfinished.uploadId,
+  });
   assert.equal((await readdir(path.join(dataDir, 'mcp-uploads'))).length, 0);
-  await rejects(call(scopedKey, 'get_media_upload', { page: 'home', uploadId: unfinished.uploadId }), /not found/);
+  await rejects(
+    call(scopedKey, 'get_media_upload', {
+      page: 'home',
+      uploadId: unfinished.uploadId,
+    }),
+    /not found/,
+  );
   // Batch calls are awaited in order, rather than serializing unresolved Promises.
   const batchResponse = await fetch(origin + '/mcp?key=' + scopedKey, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify([
-      {jsonrpc:'2.0',id:10001,method:'tools/call',params:{name:'upload_media',arguments:{page:'home',name:'batch.png',base64:png.toString('base64')}}},
-      {jsonrpc:'2.0',id:10002,method:'ping'},
+      {
+        jsonrpc: '2.0',
+        id: 10001,
+        method: 'tools/call',
+        params: {
+          name: 'upload_media',
+          arguments: {
+            page: 'home',
+            name: 'batch.png',
+            base64: png.toString('base64'),
+          },
+        },
+      },
+      { jsonrpc: '2.0', id: 10002, method: 'ping' },
     ]),
   });
   const batch = await batchResponse.json();
@@ -822,6 +1299,24 @@ try {
 
   // Previews: the AI renders the saved page in its own browser.
   const preview = await call(key, 'get_preview_url', { page: 'home' });
+  assert.equal(preview.inspection.viewports.desktop.width, 1440);
+  assert.equal(preview.inspection.viewports.mobile.width, 390);
+  assert.ok(
+    preview.inspection.checklist.some((step) => /real bottom/.test(step)),
+  );
+  assert.ok(
+    preview.inspection.checklist.some((step) =>
+      /nested scroll containers/.test(step),
+    ),
+  );
+  assert.ok(
+    preview.inspection.checklist.some((step) => /lazy images/.test(step)),
+  );
+  assert.ok(
+    preview.inspection.checklist.some((step) => /normal motion/.test(step)),
+  );
+  assert.match(preview.inspection.completion, /full or partial coverage/);
+  assert.match(preview.renderingScope, /overrides are not rendered/);
   const previewPath = new URL(preview.url);
   assert.equal(previewPath.pathname, '/mcp/preview');
   const html = await fetch(origin + previewPath.pathname + previewPath.search);
@@ -984,6 +1479,14 @@ try {
     (await chromeRow('many-sections')).value,
   ).nodes.find((node) => node.id === custom.id);
   assert.equal(savedCustom.kind, 'html');
+  const isolatedStyles = await call(key, 'get_page_styles', {
+    page: 'many-sections',
+    includeShared: false,
+  });
+  assert.equal(
+    isolatedStyles.isolatedHtmlStyles.find((n) => n.id === custom.id).css,
+    'p {color:blue}',
+  );
   assert.equal(savedCustom.javascript, 'document.body.dataset.ready="updated"');
   await rejects(
     call(key, 'update_section', {
@@ -993,16 +1496,516 @@ try {
     }),
     /invalid|layout|value/i,
   );
+  // Real UTF-8 file transport avoids regenerating large encoded component payloads.
+  const codeTarget = {
+    page: 'many-sections',
+    id: custom.id,
+    field: 'javascript',
+  };
+  const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const codeRead = () => call(key, 'get_section_code', codeTarget);
+  const writeArgs = async () => {
+    const read = await codeRead();
+    return {
+      ...codeTarget,
+      ifVersion: read.version,
+      ifHash: read.sha256,
+      reviewedForUpload: true,
+    };
+  };
+  const largeCode = '/*' + 'é'.repeat(65534) + '*/'; // Exactly 128 KiB, not 128K characters.
+  assert.equal(Buffer.byteLength(largeCode), 131072);
+  const issueCode = async (bytes, extra = {}) =>
+    call(key, 'get_section_code_upload_url', {
+      ...(await writeArgs()),
+      size: Buffer.byteLength(bytes),
+      sha256: digest(bytes),
+      ...extra,
+    });
+  const postCode = (ticket, bytes) =>
+    fetch(origin + new URL(ticket.url).pathname + new URL(ticket.url).search, {
+      method: 'POST',
+      headers: ticket.headers,
+      body: bytes,
+    });
+  await rejects(
+    issueCode(largeCode, { reviewedForUpload: false }),
+    /temporary test|production artifact/i,
+  );
+  await rejects(issueCode(largeCode + 'x'), /128 KiB/);
+  await rejects(call(scopedKey, 'get_section_code', codeTarget), /only edit/);
+  await rejects(
+    call(key, 'get_section_code', { ...codeTarget, field: 'body' }),
+    /field must/,
+  );
+  const transferCode = await issueCode(largeCode);
+  assert.ok(
+    !transferCode.url.includes(key),
+    'Scoped ticket must not expose the reusable MCP key',
+  );
+  const beforeUpload = await codeRead();
+  const corrupt = await postCode(transferCode, 'x'.repeat(131072));
+  assert.equal(corrupt.status, 400);
+  assert.match((await corrupt.json()).error, /SHA-256/);
+  assert.deepEqual(
+    await codeRead(),
+    beforeUpload,
+    'Corrupt upload must preserve the original field and version',
+  );
+  const uploadedCode = await postCode(transferCode, largeCode);
+  assert.equal(uploadedCode.status, 200, await uploadedCode.clone().text());
+  const receipt = await uploadedCode.json();
+  assert.equal(receipt.bytes, 131072);
+  assert.equal(receipt.sha256, digest(largeCode));
+  assert.equal((await codeRead()).content, largeCode);
+  assert.equal(
+    (await (await postCode(transferCode, largeCode)).json()).alreadyApplied,
+    true,
+  );
+  assert.equal((await codeRead()).version, receipt.version);
+  const metadata = await call(key, 'get_section_code', {
+    ...codeTarget,
+    includeContent: false,
+  });
+  assert.equal(metadata.content, undefined);
+  assert.equal(metadata.bytes, 131072);
+  await rejects(
+    call(key, 'replace_section_text', {
+      ...(await writeArgs()),
+      find: 'é',
+      replace: 'a',
+    }),
+    /exactly once/,
+  );
+  await rejects(
+    call(key, 'replace_section_text', {
+      ...(await writeArgs()),
+      find: '/*',
+      replace: '/*x',
+    }),
+    /128 KiB/,
+  );
+  const patched = await call(key, 'replace_section_text', {
+    ...(await writeArgs()),
+    find: '/*',
+    replace: '//',
+  });
+  assert.equal(patched.bytes, 131072);
+  assert.equal((await codeRead()).content, '//' + largeCode.slice(2));
+  const staleTicket = await issueCode('console.log("reviewed")');
+  await call(key, 'update_section', {
+    page: 'many-sections',
+    id: custom.id,
+    changes: { name: 'Concurrent editor change' },
+  });
+  const stalePost = await postCode(staleTicket, 'console.log("reviewed")');
+  assert.equal(stalePost.status, 409);
+  assert.match((await stalePost.json()).error, /changed/);
+  const invalidUtf8 = Buffer.from([0xff, 0xfe]);
+  const utf8Ticket = await issueCode(invalidUtf8);
+  assert.equal((await postCode(utf8Ticket, invalidUtf8)).status, 400);
+  const lockTicket = await issueCode('void 0');
+  // Lock via the actual editor API, not via a test-only MCP path.
+  const lockRow = await chromeRow('many-sections');
+  const codeLayout = JSON.parse(lockRow.value);
+  codeLayout.nodes.find((n) => n.id === custom.id).locked = true;
+  assert.equal(
+    (
+      await api(
+        '/api/content',
+        {
+          id: lockRow.id,
+          value: JSON.stringify(codeLayout),
+          version: lockRow.version,
+        },
+        project,
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await postCode(lockTicket, 'void 0')).status, 423);
+  // New larger layouts must also round-trip through the normal editor save.
+  const updatedRow = await chromeRow('many-sections');
+  const roundtrip = JSON.parse(updatedRow.value);
+  assert.equal(
+    roundtrip.nodes.find((n) => n.id === custom.id).html,
+    savedCustom.html,
+  );
+  assert.equal(
+    roundtrip.nodes.find((n) => n.id === custom.id).css,
+    savedCustom.css,
+  );
+  assert.equal(
+    roundtrip.nodes.find((n) => n.id === custom.id).javascript,
+    '//' + largeCode.slice(2),
+  );
+  console.log(
+    'PASS: 128 KiB component upload, exact UTF-8/checksum, scope, agent review, conflict/lock protection, unique patches and retry receipts.',
+  );
   await call(key, 'delete_page', { slug: 'many-sections' });
 
-  const revokedUpload = await call(key, 'start_media_upload', {page:'home',name:'revoked.png',size:100});
+  // Changing Blank's appearance to Luca must not prevent enabling its index.
+  const blankProject = (
+    await (
+      await api('/api/projects', {
+        action: 'create',
+        name: 'Blank restyled with Luca',
+        templateId: 'blank',
+      })
+    ).json()
+  ).id;
+  const blankLink = await (
+    await api(
+      '/api/mcp-links',
+      { name: 'Blank index', days: 7, page: 'home' },
+      blankProject,
+    )
+  ).json();
+  const blankKey = new URL(blankLink.url).searchParams.get('key');
+  const blankPreview = await (
+    await api('/api/template-change', {
+      action: 'preview',
+      id: blankProject,
+      templateId: 'luca',
+    })
+  ).json();
+  assert.equal(
+    (
+      await api('/api/template-change', {
+        action: 'apply',
+        id: blankProject,
+        token: blankPreview.token,
+      })
+    ).status,
+    200,
+  );
+  await call(blankKey, 'add_section', {
+    page: 'home',
+    kind: 'text',
+    heading: 'Existing results',
+    body: 'Keep this scientific content.',
+  });
+  await call(blankKey, 'set_page_css', {
+    page: 'home',
+    css: 'h2 { color: #123456; }',
+  });
+  const blankInfo = await call(blankKey, 'get_project_template', {});
+  assert.equal(blankInfo.contentTemplate.id, 'blank');
+  assert.equal(blankInfo.appearance.id, 'luca');
+  const blankRows = () =>
+    api('/api/content', null, blankProject)
+      .then((r) => r.json())
+      .then((r) => r.rows);
+  for (const enabled of [false, true]) {
+    const before = await blankRows();
+    const page = await call(blankKey, 'get_page', { page: 'home' });
+    const changed = await call(blankKey, 'set_page_sidebar', {
+      page: 'home',
+      enabled,
+      ifVersion: page.version,
+    });
+    const after = await blankRows();
+    const previous = before.find((r) => r.id === 'layout:home');
+    const current = after.find((r) => r.id === 'layout:home');
+    assert.deepEqual(JSON.parse(current.value), {
+      ...JSON.parse(previous.value),
+      sidebar: enabled,
+    });
+    assert.deepEqual(
+      after.filter((r) => r.id !== 'layout:home'),
+      before.filter((r) => r.id !== 'layout:home'),
+    );
+    assert.equal(changed.version, current.version);
+    assert.equal(
+      (await call(blankKey, 'get_page', { page: 'home' })).sidebar,
+      enabled,
+    );
+    await rejects(
+      call(blankKey, 'set_page_sidebar', {
+        page: 'home',
+        enabled: !enabled,
+        ifVersion: page.version,
+      }),
+      /Conflict/,
+    );
+    await call(blankKey, 'set_page_sidebar', {
+      page: 'home',
+      enabled,
+      ifVersion: current.version,
+    });
+    assert.deepEqual(
+      await blankRows(),
+      after,
+      'repeating the same setting does not create a version',
+    );
+  }
+  const validVersion = (await call(blankKey, 'get_page', { page: 'home' }))
+    .version;
+  await rejects(
+    call(blankKey, 'set_page_sidebar', {
+      page: 'home',
+      enabled: 'true',
+      ifVersion: validVersion,
+    }),
+    /boolean/,
+  );
+  await rejects(
+    call(blankKey, 'set_page_sidebar', { page: 'home', enabled: true }),
+    /ifVersion/,
+  );
+  await rejects(
+    call(blankKey, 'set_page_sidebar', {
+      page: 'home',
+      enabled: true,
+      ifVersion: validVersion,
+      templateId: 'luca',
+    }),
+    /Provide/,
+  );
+  assert.equal(
+    (await call(blankKey, 'get_project_template', {})).contentTemplate.id,
+    'blank',
+  );
+
+  // Source privileges need a fresh authenticated, user-confirmed project grant.
+  {
+    assert.ok(
+      !(await rpc(key, 'tools/list', {})).tools.some(
+        (t) => t.name === 'read_source_file',
+      ),
+    );
+    assert.equal(
+      (
+        await api(
+          '/api/mcp-links',
+          { name: 'Dev', days: 1, mode: 'developer', confirmDeveloper: true },
+          project,
+        )
+      ).status,
+      403,
+    );
+    const grant = await (
+      await api('/api/mcp-links', { action: 'prepare-developer' }, project)
+    ).json();
+    const devRequest = {
+      name: 'Dev',
+      days: 1,
+      mode: 'developer',
+      confirmDeveloper: true,
+      confirmation: grant.confirmation,
+    };
+    assert.equal(
+      (await api('/api/mcp-links', devRequest, project, bobJwt)).status,
+      403,
+    );
+    assert.equal(
+      (await api('/api/mcp-links', devRequest, blankProject)).status,
+      403,
+    );
+    assert.equal(
+      (await api('/api/mcp-links', { ...devRequest, page: 'home' }, project))
+        .status,
+      400,
+    );
+    const devResponse = await api('/api/mcp-links', devRequest, project);
+    assert.equal(devResponse.status, 201);
+    const dev = await devResponse.json();
+    assert.equal(dev.link.mode, 'developer');
+    assert.ok(dev.link.approvedAt);
+    assert.equal(
+      (await api('/api/mcp-links', devRequest, project)).status,
+      403,
+      'grant is single use',
+    );
+    const devKey = new URL(dev.url).searchParams.get('key');
+    const devInit = await rpc(devKey, 'initialize', {});
+    assert.match(devInit.instructions, /Do not create or start a local proxy/);
+    assert.match(devInit.instructions, /acquire_source_lock/);
+    assert.ok(
+      (await rpc(devKey, 'tools/list', {})).tools.some(
+        (t) => t.name === 'write_source_file',
+      ),
+    );
+    const source = await call(devKey, 'read_source_file', {
+      path: 'app/page-index.css',
+    });
+    assert.equal(source.editable, true);
+    const edit = {
+      path: source.path,
+      ifVersion: source.version,
+      ifBaseHash: source.baseHash,
+      content: '/* source workspace test */\n' + source.content,
+    };
+    await rejects(
+      call(devKey, 'write_source_file', edit),
+      /valid source-file lock/,
+    );
+    const lease = await call(devKey, 'acquire_source_lock', {
+      path: source.path,
+      editorName: 'Ada CSS task',
+    });
+    edit.lockToken = lease.lockToken;
+    await rejects(
+      call(devKey, 'acquire_source_lock', { path: source.path }),
+      /already reserved/,
+    );
+    const status = await call(devKey, 'get_source_status', {
+      path: source.path,
+    });
+    assert.equal(status.lock.owner.editorName, 'Ada CSS task');
+    assert.equal(status.lock.owner.linkName, 'Dev');
+    assert.ok(!JSON.stringify(status).includes(lease.lockToken));
+    const otherGrant = await (
+      await api(
+        '/api/mcp-links',
+        { action: 'prepare-developer' },
+        project,
+        bobJwt,
+      )
+    ).json();
+    const otherDev = await (
+      await api(
+        '/api/mcp-links',
+        {
+          name: 'Bob dev',
+          days: 1,
+          mode: 'developer',
+          confirmDeveloper: true,
+          confirmation: otherGrant.confirmation,
+        },
+        project,
+        bobJwt,
+      )
+    ).json();
+    const otherKey = new URL(otherDev.url).searchParams.get('key');
+    await rejects(
+      call(otherKey, 'write_source_file', edit),
+      /valid source-file lock/,
+    );
+    await rejects(
+      call(otherKey, 'release_source_lock', {
+        path: source.path,
+        lockToken: lease.lockToken,
+      }),
+      /valid source-file lock/,
+    );
+    assert.equal(
+      (await call(otherKey, 'get_source_status', { path: source.path })).lock
+        .ownedByThisLink,
+      false,
+    );
+    await call(devKey, 'renew_source_lock', {
+      path: source.path,
+      lockToken: lease.lockToken,
+      ttlSeconds: 60,
+    });
+    const written = await call(devKey, 'write_source_file', edit);
+    await rejects(call(devKey, 'write_source_file', edit), /conflict/);
+    await rejects(
+      call(devKey, 'read_source_file', { path: '../mcp-link.key' }),
+      /relative path/,
+    );
+    await rejects(
+      call(devKey, 'write_source_file', { ...edit, path: 'package.json' }),
+      /Only wiki/,
+    );
+    assert.equal(
+      (await call(devKey, 'read_source_file', { path: edit.path })).version,
+      written.version,
+    );
+    await rejects(
+      call(otherKey, 'restore_source_file', {
+        path: edit.path,
+        ifVersion: written.version,
+        ifBaseHash: written.baseHash,
+        targetVersion: 0,
+      }),
+      /valid source-file lock/,
+    );
+    const restored = await call(devKey, 'restore_source_file', {
+      path: edit.path,
+      lockToken: lease.lockToken,
+      ifVersion: written.version,
+      ifBaseHash: written.baseHash,
+      targetVersion: 0,
+    });
+    assert.equal(restored.modified, false);
+    await api('/api/mcp-links', { action: 'revoke', id: dev.link.id }, project);
+    assert.equal(
+      (await call(otherKey, 'get_source_status', { path: source.path })).lock
+        .status,
+      'unlocked',
+    );
+    const bobLease = await call(otherKey, 'acquire_source_lock', {
+      path: source.path,
+    });
+    await call(otherKey, 'release_source_lock', {
+      path: source.path,
+      lockToken: bobLease.lockToken,
+    });
+    assert.equal((await rpc(devKey, 'tools/list', {}, true)).status, 401);
+  }
+
+  // Standard links may add independent images to text and arrange overlap.
+  const imageText = await call(key, 'add_section', {page:'home',kind:'text',heading:'Image container',body:'Retain this text.'});
+  const imageA = await call(key, 'add_section', {page:'home',kind:'image',heading:'First image',src:'https://example.org/a.png',inside:imageText.id});
+  const imageB = await call(key, 'add_section', {page:'home',kind:'image',heading:'Second image',src:'https://example.org/b.png',inside:imageText.id});
+  await call(key, 'update_section', {page:'home',id:imageA.id,changes:{zIndex:4}});
+  await call(key, 'update_section', {page:'home',id:imageB.id,changes:{zIndex:-1}});
+  const imagePage = await call(key,'get_page',{page:'home'});
+  assert.equal(imagePage.sections.find(s=>s.id===imageA.id).zIndex,4);
+  assert.equal(imagePage.sections.find(s=>s.id===imageB.id).parentId,imageText.id);
+  const imageSelector = imagePage.sections.find(s=>s.id===imageA.id).selectors.image;
+  assert.match(imageSelector,/img:nth-of-type/);
+  await call(key,'style_element',{page:'home',selector:imageSelector,styles:{width:'420px','max-width':'none',height:'auto','max-height':'none'}});
+
+  await rejects(call(key,'update_section',{page:'home',id:imageB.id,changes:{zIndex:0.5}}),/not valid/);
+  const revCode = await call(key, 'add_section', {
+    page: 'home',
+    heading: 'Revocation target',
+    kind: 'html',
+  });
+  const revTarget = { page: 'home', id: revCode.id, field: 'javascript' };
+  const revRead = await call(key, 'get_section_code', revTarget);
+  const revTicket = await call(key, 'get_section_code_upload_url', {
+    ...revTarget,
+    ifVersion: revRead.version,
+    ifHash: revRead.sha256,
+    reviewedForUpload: true,
+    size: 6,
+    sha256: digest('void 0'),
+  });
+  const revokedUpload = await call(key, 'start_media_upload', {
+    page: 'home',
+    name: 'revoked.png',
+    size: 100,
+  });
   await api(
     '/api/mcp-links',
     { action: 'revoke', id: created.link.id },
     project,
   );
   assert.equal((await rpc(key, 'ping', {}, true)).status, 401);
-  assert.equal((await rpc(key, 'tools/call', {name:'upload_media_chunk',arguments:{page:'home',uploadId:revokedUpload.uploadId,offset:0,base64:png.toString('base64')}}, true)).status,401);
+  assert.equal((await postCode(revTicket, 'void 0')).status, 401);
+  assert.equal(
+    (
+      await rpc(
+        key,
+        'tools/call',
+        {
+          name: 'upload_media_chunk',
+          arguments: {
+            page: 'home',
+            uploadId: revokedUpload.uploadId,
+            offset: 0,
+            base64: png.toString('base64'),
+          },
+        },
+        true,
+      )
+    ).status,
+    401,
+  );
   assert.equal((await rpc(scopedKey, 'ping', {}, true)).status, 200);
 } finally {
   await new Promise((resolve) => server.close(resolve));

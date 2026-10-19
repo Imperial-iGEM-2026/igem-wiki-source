@@ -29,7 +29,7 @@ assert.ok(home.includes('grid-column:span 6'));assert.ok(home.includes('gap:18px
 for(const style of ['--node-tablet-span:4','--node-mobile-span:12','padding-inline:32px','border-radius:16px','--node-font-size:22px','--node-color:#123456'])assert.ok(home.includes(style),style);
 assert.ok(!home.includes('HIDDEN-DO-NOT-PUBLISH'));
 assert.ok(home.includes('[data-page-css="home"] .feature h2'));assert.ok(home.includes('color: #aabbcc'));assert.ok(home.includes('@media (max-width: 760px)'));assert.ok(!home.includes('Design assistant'));assert.ok(home.includes('[data-layer-id="explore"] > section:nth-of-type(1) > h2:nth-of-type(1)'));assert.ok(!home.includes('studio-context-menu'));
-for(const marker of ['<audio','<iframe','<model-viewer','src="https://video.igem.org/videos/embed/test-video"','class="static-nav"'])assert.ok(home.includes(marker),marker);
+for(const marker of ['data-recording-todo="audio"','<iframe','<model-viewer','data-recording-todo="video"','class="static-nav"'])assert.ok(home.includes(marker),marker);
 assert.ok(!home.includes('<video src="https://video.igem.org/videos/embed/'));
 for(const file of pages){
   const html=await readFile(file,'utf8');assert.ok(!/\/(api|auth)\//.test(html));assert.ok(!/Sign in|Edit this page|Connecting workspace|Loading 3D viewer/.test(html));
