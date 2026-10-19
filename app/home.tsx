@@ -1,5 +1,7 @@
 'use client';
 
+import { defaultLoading, startSiteLoading } from './site-loading';
+import { parseHeader } from './header-schema';
 import { startReferenceNavigation } from './reference-navigation';
 import { siteIcon } from '../scripts/export-media.mjs';
 import { MathText } from './equation-block';
@@ -109,6 +111,14 @@ export default function Home({
     ? pageCatalog(data).find((page) => page.slug === selectedWiki.slug)
     : undefined;
   const deletedPage = selectedWiki && !wiki ? selectedWiki.slug : undefined;
+  const loadingHeader = data['site:header']?.value;
+  useEffect(() => {
+    if (editing) return;
+    const loading = parseHeader(loadingHeader).loading;
+    // Preview has a separate namespace so it never consumes a visitor's session.
+    return startSiteLoading({ ...defaultLoading, ...loading },
+      (publication ? 'preview:' : 'project:') + (projectId || 'default'));
+  }, [editing, loadingHeader, publication, projectId, wiki?.slug]);
   const tabIcon = siteIcon({
     'site:header': data['site:header']?.value,
     'site:template': data['site:template']?.value,

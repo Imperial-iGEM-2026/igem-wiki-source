@@ -1,3 +1,4 @@
+import { defaultLoading, validLoading, startSiteLoading } from '../app/site-loading.js';
 import { rewriteGoogleFonts } from './google-fonts.mjs';
 import { sharedPublicationAssets } from './share-publication-assets.mjs';
 import {
@@ -559,6 +560,13 @@ await build({
     },
   },
 });
+const savedLoading = JSON.parse(snapshot.values['site:header'] || '{}').loading;
+if (savedLoading && !validLoading(savedLoading)) throw Error('Invalid website loading animation settings.');
+const loading = { ...defaultLoading, ...savedLoading };
+if (loading.image) loading.image = mediaMap[loading.image] || loading.image;
+if (loading.enabled) await writeFile(path.join(output, 'public/assets/site-loading.js'),
+  '(' + startSiteLoading.toString() + ')(' + JSON.stringify(loading) + ',' + JSON.stringify('publication:' + base) + ');');
+const loadingScript = loading.enabled ? `<script src="${base}assets/site-loading.js"></script>` : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
 if (hostedPdfWorker) {
@@ -714,7 +722,7 @@ for (const page of [undefined, ...wikiPages]) {
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
     `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}">` +
-    html +
+    loadingScript + html +
     '</body></html>';
   if (/\b(?:href|src)="\/(api|auth)\//.test(doc) || /class="account"/.test(doc))
     throw Error(

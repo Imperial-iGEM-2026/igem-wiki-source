@@ -7,6 +7,7 @@ import type { Blocks } from './content';
 // article introductions, navigation, footer and true viewport media queries.
 export function StudioPreview({
   data,
+  projectId,
   active,
   page,
   onClose,
@@ -14,6 +15,7 @@ export function StudioPreview({
   anchor,
 }: {
   data: Blocks;
+  projectId?: string;
   active: boolean;
   page: string;
   onClose: () => void;
@@ -37,10 +39,10 @@ export function StudioPreview({
   useEffect(() => {
     if (ready && active)
       frameRef.current?.contentWindow?.postMessage(
-        { type: 'prion-preview-data', data, page, anchor },
+        { type: 'prion-preview-data', data, page, anchor, projectId },
         window.location.origin,
       );
-  }, [ready, active, data, page, anchor]);
+  }, [ready, active, data, page, anchor, projectId]);
   useEffect(() => {
     if (!active)
       frameRef.current?.contentDocument

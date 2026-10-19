@@ -1,5 +1,6 @@
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 'use client';
+import { LoadingControls } from './loading-controls';
 import { copiedPage } from './custom-pages';
 import { SelectionOutline } from './selection-outline';
 import { InlineTextEditor } from './inline-text-editor';
@@ -424,7 +425,7 @@ export function StudioEditor({
   const [insertInside, setInsertInside] = useState(true);
   const revealInserted = useRef<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]),
-    [panel, updatePanel] = useState<'design' | 'css' | 'header'>('design');
+    [panel, updatePanel] = useState<'design' | 'css' | 'header' | 'loading'>('design');
   const [viewport, setViewport] = useState(1440),
     [zoom, setZoom] = useState(0.6),
     [preview, setPreview] = useState(false),
@@ -460,7 +461,7 @@ export function StudioEditor({
       version: previous?.id === HEADER_FIELD ? previous.version : row.version,
     }));
   }
-  function openHeader() {
+  function openHeader(nextPanel: 'header' | 'loading' = 'header') {
     if (textDirty && textEdit?.id !== HEADER_FIELD) {
       setError(
         'Save or cancel the current text edit before editing the header.',
@@ -469,7 +470,7 @@ export function StudioEditor({
     }
     setSelected([]);
     setTarget(null);
-    setPanel('header');
+    setPanel(nextPanel);
   }
   const artboard = useRef<HTMLDivElement>(null),
     ownSave = useRef<{ layout: CanvasLayout; version: number } | null>(null);
@@ -551,7 +552,7 @@ export function StudioEditor({
     useState<HTMLDivElement | null>(null);
   const [incomingRequest, setIncomingRequest] =
     useState<AssistantRequest | null>(null);
-  function setPanel(next: 'design' | 'css' | 'header') {
+  function setPanel(next: 'design' | 'css' | 'header' | 'loading') {
     if (next !== 'css') setIncomingRequest(null);
     updatePanel(next);
   }
@@ -2426,6 +2427,7 @@ export function StudioEditor({
       )}
       {previewOpened && (
         <StudioPreview
+          projectId={ctx.projectId}
           active={preview}
           page={page}
           onClose={() => setPreview(false)}
@@ -2498,6 +2500,7 @@ export function StudioEditor({
                     }
                   />
                 )}
+                <button className="studio-header-page studio-loading-entry" onClick={() => openHeader('loading')}><Sparkles size={15} /><span>Loading animation<small>Website welcome screen</small></span></button>
                 <StudioPages
                   onHeader={
                     templateFor(ctx.data)
@@ -2512,7 +2515,7 @@ export function StudioEditor({
                             }
                           }
                         : undefined
-                      : openHeader
+                      : () => openHeader()
                   }
                   pages={studioPages}
                   onCreate={() => {
@@ -3670,6 +3673,8 @@ export function StudioEditor({
                   ? showCode
                     ? 'Advanced CSS'
                     : 'Design assistant'
+                  : panel === 'loading'
+                    ? 'Loading animation'
                   : panel === 'header'
                     ? 'Header & logo'
                     : node?.name ||
@@ -3845,7 +3850,7 @@ export function StudioEditor({
                     };
                   })}
                 />
-              ) : panel === 'header' ? (
+              ) : (panel === 'header' || panel === 'loading') ? (
                 <>
                   <div className="studio-actions studio-header-savebar">
                     <button
@@ -3862,12 +3867,12 @@ export function StudioEditor({
                         ) {
                           setTextEdit(null);
                           setNotice(
-                            'Header saved across this project’s pages.',
+                            panel === 'loading' ? 'Loading animation saved across this project’s pages.' : 'Header saved across this project’s pages.',
                           );
                         }
                       }}
                     >
-                      Save header
+                      {panel === 'loading' ? 'Save animation' : 'Save header'}
                     </button>
                     <button
                       disabled={uploading}
@@ -3876,7 +3881,17 @@ export function StudioEditor({
                       Cancel
                     </button>
                   </div>
-                  <HeaderControls
+                  {panel === 'loading' ? <LoadingControls
+                    design={headerDesign} onChange={changeHeader} disabled={disabled} uploading={uploading}
+                    onUpload={async (file) => {
+                      setUploading(true); setError('');
+                      try {
+                        const result = await uploadMedia(file, setProgress);
+                        changeHeader({ ...headerDesign, loading: { ...headerDesign.loading, image: result.url } });
+                      } catch (error) { setError(error instanceof Error ? error.message : 'Animation image upload failed.'); }
+                      finally { setUploading(false); }
+                    }}
+                  /> : <HeaderControls
                     pages={studioPages}
                     uploading={uploading}
                     progress={progress}
@@ -3899,7 +3914,7 @@ export function StudioEditor({
                         setUploading(false);
                       }
                     }}
-                  />
+                  />}
                 </>
               ) : !selected.length ? (
                 <>

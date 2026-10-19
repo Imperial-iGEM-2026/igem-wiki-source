@@ -7,10 +7,12 @@ import '../app/globals.css';
 
 function Preview({
   data,
+  projectId,
   page,
   anchor,
 }: {
   data: Blocks;
+  projectId?: string;
   page: string;
   anchor?: { id: string; visit: number };
 }) {
@@ -86,6 +88,7 @@ function Preview({
       <Home
         key={current}
         user={null}
+        projectId={projectId}
         publication
         initialData={data}
         wiki={pageCatalog(data).find((p) => p.slug === current)}
@@ -115,6 +118,7 @@ if (parent !== window) {
       <Preview
         key={event.data.page}
         data={event.data.data}
+        projectId={typeof event.data.projectId === 'string' ? event.data.projectId : undefined}
         page={event.data.page}
         anchor={anchor}
       />,

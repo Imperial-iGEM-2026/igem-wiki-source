@@ -19,6 +19,7 @@ import {
   customDefaults,
   CUSTOM_PAGES,
   validateLayout,
+  validHeader,
   matchesMedia,
 } from './shared.mjs';
 if (!process.argv[2])
@@ -76,7 +77,7 @@ for (const [id, value] of Object.entries(snapshot.values)) {
         })()
       : value.length) >
       (id === 'site:header'
-        ? 24000
+        ? 128 * 1024
         : id.startsWith('layout:')
           ? (1024 * 1024)
           : id.startsWith('wiki:') || id === CUSTOM_PAGES
@@ -84,6 +85,12 @@ for (const [id, value] of Object.entries(snapshot.values)) {
             : 2000)
   )
     throw Error('Invalid content ' + id);
+  if (id === 'site:header') {
+    const header = JSON.parse(value);
+    if (!validHeader(header)) throw Error('Invalid header settings');
+    for (const source of [header.logo, header.loading?.image])
+      if (source?.startsWith('/api/media/')) required.add(source);
+  }
   if (id.startsWith('layout:')) {
     const layout = JSON.parse(value);
     if (!validateLayout(layout)) throw Error('Invalid layout ' + id);

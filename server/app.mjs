@@ -1195,8 +1195,10 @@ export async function createAppServer({
                 }
               })()
             : value.length) >
-            (id === 'site:header' || id === SITE_MENU
-              ? 24000
+            (id === 'site:header'
+              ? 128 * 1024
+              : id === SITE_MENU
+                ? 24000
               : id === 'ai:brief'
                 ? 8000
                 : id.startsWith('layout:')

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
           })()
         : value.length) >
         (id === 'site:header'
-          ? 24000
+          ? 128 * 1024
           : id.startsWith('layout:')
             ? (1024 * 1024)
             : id.startsWith('wiki:')

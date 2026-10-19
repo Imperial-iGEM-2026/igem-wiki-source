@@ -156,7 +156,10 @@ export function exportMedia(
       }
     }
   }
-  const logo = JSON.parse(values['site:header'] || '{}').logo;
+  const header = JSON.parse(values['site:header'] || '{}');
+  if (header.loading?.enabled && header.loading.image)
+    add(header.loading.image, 'image', { pageTitle: 'Site settings', layerName: 'Loading animation', field: 'Image source' });
+  const logo = header.logo;
   if (logo)
     add(logo, 'image', {
       pageTitle: 'Site settings',

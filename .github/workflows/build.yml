@@ -23,6 +23,7 @@ jobs:
       - run: node scripts/test-share-publication-assets.mjs
       - run: node scripts/test-artifact-size.mjs
       - run: node scripts/test-studio-performance.mjs
+      - run: node scripts/test-site-loading.mjs
       - run: node scripts/test-helper-closure.mjs
       - uses: actions/upload-artifact@v4
         with:

@@ -3266,3 +3266,9 @@
 .studio-inline-text textarea {display:block;box-sizing:border-box;width:100%;resize:none;border:0;padding:12px;outline:none;font:15px/1.65 system-ui;color:#20232a;background:#fff;}
 .studio-inline-text > div {display:flex;gap:8px;justify-content:flex-end;padding:7px;border-top:1px solid var(--studio-border);}
 .studio-inline-text button {font-size:12px;padding:6px 8px;}
+
+.studio-loading-controls select,.studio-loading-controls textarea {width:100%;min-width:0;border:1px solid var(--studio-border);border-radius:8px;padding:9px 10px;background:var(--studio-panel);color:var(--studio-text);font:inherit;}
+.studio-loading-controls textarea {font:12px/1.6 ui-monospace,monospace;resize:vertical;}
+.studio-loading-controls input[type=file] {max-width:100%;font-size:12px;}
+
+.studio .studio-loading-entry {margin:8px 12px 0;width:calc(100% - 24px);}

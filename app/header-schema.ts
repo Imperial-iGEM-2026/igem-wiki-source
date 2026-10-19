@@ -1,5 +1,6 @@
 import { safeLink } from './link-url';
 import { safeMediaURL } from './canvas-schema';
+import { defaultLoading, validLoading } from './site-loading';
 export const HEADER_FIELD = 'site:header';
 export type HeaderLink = {
   label: string;
@@ -9,6 +10,7 @@ export type HeaderLink = {
 };
 export const headerPath = (value: unknown): value is string => safeLink(value);
 export type HeaderDesign = {
+  loading: typeof defaultLoading;
   name: string;
   logo: string;
   background: string;
@@ -32,6 +34,7 @@ export type HeaderDesign = {
   layout: 'split' | 'centered' | 'reversed';
 };
 export const defaultHeader: HeaderDesign = {
+  loading: defaultLoading,
   name: '',
   logo: '',
   background: '#ffffff',
@@ -58,7 +61,7 @@ export function parseHeader(value = '{}'): HeaderDesign {
   try {
     const data = JSON.parse(value);
     if (!validHeader(data)) return defaultHeader;
-    return { ...defaultHeader, ...data };
+    return { ...defaultHeader, ...data, loading: { ...defaultLoading, ...data.loading } };
   } catch {
     return defaultHeader;
   }
@@ -67,6 +70,7 @@ export function validHeader(data: unknown): data is Partial<HeaderDesign> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const d = data as Partial<HeaderDesign>;
   return (
+    (d.loading === undefined || validLoading(d.loading)) &&
     Object.keys(d).every((k) => Object.hasOwn(defaultHeader, k)) &&
     (d.name === undefined ||
       (typeof d.name === 'string' && d.name.length <= 100)) &&
