@@ -6,6 +6,7 @@ import { EquationBlock, MathText } from './equation-block';
 import { CustomHtmlBlock } from './custom-html-block';
 import { PdfReader } from './pdf-reader';
 import { Download, Box } from 'lucide-react';
+import { editorImageURL } from './editor-image';
 import { embedURL, type CanvasNode } from './canvas-schema';
 function Model({ src, alt }: { src: string; alt: string }) {
   const [ready, setReady] = useState(false),
@@ -80,7 +81,7 @@ export function MediaBlock({
   openItems?: string[];
 }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [node.src]);
+  useEffect(() => setFailed(false), [node.src, editing]);
   return (
     <div className={'media-block media-' + node.kind}>
       {node.title &&
@@ -183,8 +184,14 @@ export function MediaBlock({
         </div>
       ) : failed ? (
         <div className="media-error">
-          This media could not load. Check the URL, file format, and access
-          permissions.
+          {editing && node.kind === 'image'
+            ? 'Editor image preview could not load. The original is unchanged. Try refreshing after the previews finish, or upload a smaller editing copy.'
+            : 'This media could not load. Check the URL, file format, and access permissions.'}
+          {editing && node.kind === 'image' && (
+            <a href={node.src} target="_blank" rel="noreferrer">
+              Open original image
+            </a>
+          )}
         </div>
       ) : (
         <>
@@ -201,6 +208,11 @@ export function MediaBlock({
                     : undefined
                 }
                 src={node.src}
+                srcSet={
+                  editing && editorImageURL(node.src) !== node.src
+                    ? editorImageURL(node.src) + ' 1x'
+                    : undefined
+                }
                 alt={node.alt || node.title}
                 loading="lazy"
                 decoding="async"

@@ -20,6 +20,7 @@ import { compileCustomCss } from './custom-css';
 import { normalizePdfPlacementCss } from './selection-style';
 import { GripVertical } from 'lucide-react';
 import { MediaBlock } from './media-block';
+import { editorImageURL } from './editor-image';
 import { materialize } from './studio-engine';
 import {
   nodeLocked,
@@ -341,6 +342,19 @@ export function CanvasSurface({
         children?: ReactNode;
       };
       const slot = props['data-canvas-slot'];
+      if (editing && element.type === 'img' && typeof props.src === 'string') {
+        const preview = editorImageURL(props.src);
+        if (preview !== props.src)
+          return cloneElement(
+            element as ReactElement<Record<string, unknown>>,
+            {
+              srcSet: preview + ' 1x',
+              sizes: undefined,
+              loading: 'lazy',
+              decoding: 'async',
+            },
+          );
+      }
       if (typeof slot === 'string')
         return nodeMap.has(slot) ? renderNode(slot) : null;
       if (props['data-sponsor-grid']) {
@@ -549,10 +563,17 @@ export function CanvasSurface({
         )}
         {sponsor ? (
           sponsorAnchor ? (
-            sponsorChildren
+            Children.map(sponsorChildren, (child) =>
+              isValidElement(child) ? fillSlots(child) : child,
+            )
           ) : n.src ? (
             <img
               src={n.src}
+              srcSet={
+                editing && editorImageURL(n.src) !== n.src
+                  ? editorImageURL(n.src) + ' 1x'
+                  : undefined
+              }
               alt={n.alt || n.name || 'Sponsor logo'}
               loading="lazy"
               decoding="async"

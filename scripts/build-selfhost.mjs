@@ -78,6 +78,7 @@ for (const name of [
   'image-native.mjs',
   'image-native-child.mjs',
   'image-native-process.mjs',
+  'image-previews.mjs',
   'export-zip.mjs',
   'projects.mjs',
   'template-changes.mjs',

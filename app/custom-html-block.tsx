@@ -5,6 +5,7 @@ import { htmlDocument, htmlFrameURL } from './html-document';
 import { localHtmlImages } from './html-image';
 import { followHtmlLink } from './html-navigation';
 import { watchHtmlFrame } from './html-visibility';
+import { editorImageURL } from './editor-image';
 
 export function CustomHtmlBlock({
   node,
@@ -36,7 +37,12 @@ export function CustomHtmlBlock({
     const controller = new AbortController();
     let active = true;
     const base = window.document.baseURI;
-    const images = localHtmlImages(document, base);
+    const images = new Map(
+      [...localHtmlImages(document, base)].map(([ref, url]) => [
+        ref,
+        editing ? editorImageURL(url) : url,
+      ]),
+    );
     const cache = imageCache.current;
     const activeURLs = new Set(images.values());
     for (const url of cache.keys()) if (!activeURLs.has(url)) cache.delete(url);
@@ -44,40 +50,41 @@ export function CustomHtmlBlock({
       const replacements = new Map<string, string>();
       const failures: string[] = [];
       // Fetch from the parent session; the opaque custom frame has no login cookies.
-      await Promise.all(
-        [...images].map(async ([reference, url]) => {
-          try {
-            if (cache.has(url)) {
-              replacements.set(reference, cache.get(url)!);
-              return;
-            }
-            const response = await fetch(url, {
-              credentials: 'same-origin',
-              signal: controller.signal,
-            });
-            if (
-              !response.ok ||
-              !response.headers.get('content-type')?.startsWith('image/')
-            )
-              throw Error('Image request failed');
-            const image = await response.blob();
-            if (!active) return;
-            // Opaque data frames cannot read parent-owned blob URLs in all browsers.
-            // This is preview-only: saved code retains the short permanent media URL.
-            const data = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(Error('Could not read image'));
-              reader.readAsDataURL(image);
-            });
-            if (!active) return;
-            cache.set(url, data);
-            replacements.set(reference, data);
-          } catch {
-            if (active) failures.push(reference.split('/').pop() || 'image');
+      const resolveImage = async ([reference, url]: [string, string]) => {
+        try {
+          if (cache.has(url)) {
+            replacements.set(reference, cache.get(url)!);
+            return;
           }
-        }),
-      );
+          const response = await fetch(url, {
+            credentials: 'same-origin',
+            signal: controller.signal,
+          });
+          if (
+            !response.ok ||
+            !response.headers.get('content-type')?.startsWith('image/')
+          )
+            throw Error('Image request failed');
+          const image = await response.blob();
+          if (!active) return;
+          // Opaque data frames cannot read parent-owned blob URLs in all browsers.
+          // This is preview-only: saved code retains the short permanent media URL.
+          const data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => reject(Error('Could not read image'));
+            reader.readAsDataURL(image);
+          });
+          if (!active) return;
+          cache.set(url, data);
+          replacements.set(reference, data);
+        } catch {
+          if (active) failures.push(reference.split('/').pop() || 'image');
+        }
+      };
+      const entries = [...images];
+      for (let i = 0; i < entries.length && active; i += 2)
+        await Promise.all(entries.slice(i, i + 2).map(resolveImage));
       if (!active || !frame.current) return;
       // Replace complete references in one pass, including CSS/JS image references.
       const refs = [...replacements.keys()].sort((a, b) => b.length - a.length);
@@ -106,7 +113,7 @@ export function CustomHtmlBlock({
       active = false;
       controller.abort();
     };
-  }, [document]);
+  }, [document, editing]);
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (frame.current) followHtmlLink(event, frame.current, setError);

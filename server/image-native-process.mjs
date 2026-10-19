@@ -18,10 +18,13 @@ export function runNativeImage(file, options = {}) {
     child.stderr.on('data', (chunk) => {
       stderr = (stderr + chunk.toString()).slice(-2048);
     });
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, 5 * 60_000);
+    const timeout = setTimeout(
+      () => {
+        timedOut = true;
+        child.kill();
+      },
+      options.timeoutMs || 5 * 60_000,
+    );
     child.on('message', (value) => {
       message = value;
     });
@@ -34,7 +37,9 @@ export function runNativeImage(file, options = {}) {
       if (timedOut)
         reject(
           Error(
-            'Image processing exceeded five minutes. Use a smaller export copy and retry.',
+            options.previewSize
+              ? 'Image preview timed out. Use a smaller image for editing.'
+              : 'Image processing exceeded five minutes. Use a smaller export copy and retry.',
           ),
         );
       else if (message?.error) reject(Error(message.error));

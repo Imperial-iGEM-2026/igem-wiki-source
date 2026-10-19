@@ -190,3 +190,24 @@ export async function processImage(
     );
   }
 }
+
+/** Display derivative only: no full-resolution JS pixel buffers or export validation pass. */
+export async function previewImage(file, size) {
+  if (![160, 1600].includes(size)) throw Error('Invalid preview size');
+  const metadata = await sharp(file, options).metadata();
+  if (!['jpeg', 'png', 'webp'].includes(metadata.format))
+    throw Error('Unsupported image preview format');
+  if (metadata.isProgressive && metadata.width * metadata.height > 24_000_000)
+    throw Error('Use a smaller or baseline JPEG for the editor preview.');
+  const { data, info } = await sharp(file, options)
+    .rotate()
+    .resize({
+      width: size,
+      height: size,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 80, effort: 1 })
+    .toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height, extension: '.webp' };
+}

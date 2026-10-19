@@ -1,5 +1,6 @@
 import { copyFieldDefaults, copyFieldId } from './shared.mjs';
 import { createExportJobs } from './export-jobs.mjs';
+import { createImagePreviews } from './image-previews.mjs';
 import { createBundleExports } from './export-bundles.mjs';
 import { createProjectSource } from './project-source.mjs';
 import { createProjects } from './projects.mjs';
@@ -66,6 +67,7 @@ export async function createAppServer({
       'Set CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD and CF_ACCESS_ORIGIN. The server will not start without verified Access configuration.',
     );
   await mkdir(path.join(dataDir, 'media'), { recursive: true });
+  const imagePreview = createImagePreviews(dataDir);
   const db = new DatabaseSync(path.join(dataDir, 'wiki.sqlite'));
   db.exec(
     'PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY,value TEXT NOT NULL,version INTEGER NOT NULL,author TEXT NOT NULL); CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY,name TEXT NOT NULL,seen INTEGER NOT NULL);',
@@ -1335,6 +1337,10 @@ export async function createAppServer({
         const key = pathname.slice('/api/media/'.length);
         if (!/^[a-f0-9-]+\.[a-z0-9]+$/.test(key))
           throw fail(404, 'File not found');
+        if (url.searchParams.has('preview')) {
+          const preview = await imagePreview(key, Number(url.searchParams.get('preview')));
+          return await file(req, res, preview, 'image/webp', 600);
+        }
         if (media) {
           res.writeHead(302, {
             Location: await media.readURL(key, user),

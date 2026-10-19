@@ -1,5 +1,6 @@
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 'use client';
+import { editorImageURL } from './editor-image';
 import { LoadingControls } from './loading-controls';
 import { copiedPage } from './custom-pages';
 import { SelectionOutline } from './selection-outline';
@@ -2862,6 +2863,11 @@ export function StudioEditor({
                                   <img
                                     className="studio-layer-thumb"
                                     src={n.src}
+                                    srcSet={
+                                      editorImageURL(n.src, 160) !== n.src
+                                        ? editorImageURL(n.src, 160) + ' 1x'
+                                        : undefined
+                                    }
                                     alt=""
                                     loading="lazy"
                                     decoding="async"
