@@ -1,6 +1,8 @@
 /* Component styles live in a shadow root so page CSS cannot reposition controls. */
 :host {
   all: initial !important;
+  /* Keep hidden editor canvases and collapsed sections hidden across the reset. */
+  visibility: inherit !important;
   display: flex !important;
   flex: 1 1 0 !important;
   width: 100% !important;

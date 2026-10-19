@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createServer as viteServer } from 'vite';
+import { build } from 'vite';
+import { createServer } from 'node:http';
 import { PDFDocument } from 'pdf-lib';
 import { chromium } from '../upload-helper/node_modules/playwright/index.mjs';
 import { common } from './build-options.mjs';
@@ -32,24 +33,53 @@ function Test(){const [editing,setEditing]=useState(true);return <div className=
 createRoot(document.getElementById('root')).render(<Test/>);
 `,
 );
-const server = await viteServer({
+await build({
   ...common,
-  server: { host: '127.0.0.1', port: 0 },
+  build: {
+    outDir: path.join(folder, 'dist'),
+    rolldownOptions: { input: path.join(folder, 'index.html') },
+  },
 });
-await server.listen();
+const server = createServer(async (req, res) => {
+  try {
+    const pathname = new URL(req.url, 'http://localhost').pathname;
+    const pdfRequest = pathname.endsWith('/document.pdf');
+    const file = pdfRequest
+      ? path.join(folder, 'document.pdf')
+      : path.join(folder, 'dist', pathname);
+    res.setHeader(
+      'Content-Type',
+      pdfRequest
+        ? 'application/pdf'
+        : /\.(m?js)$/.test(file)
+          ? 'text/javascript'
+          : file.endsWith('.css')
+            ? 'text/css'
+            : 'text/html',
+    );
+    res.end(await readFile(file));
+  } catch {
+    res.writeHead(404).end();
+  }
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({
   headless: true,
-  executablePath:
-    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  channel: 'msedge',
+  timeout: 20000,
 });
 try {
   const page = await browser.newPage({
     viewport: { width: 1200, height: 900 },
   });
+  page.setDefaultTimeout(20000);
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.error(e.message);
+  });
   await page.goto(
-    `http://127.0.0.1:${server.httpServer.address().port}/${relative}/index.html`,
+    `http://127.0.0.1:${server.address().port}/${relative}/index.html`,
     { waitUntil: 'domcontentloaded' },
   );
   const reader = page.locator('.modern-pdf-reader');
@@ -92,6 +122,38 @@ try {
   await reader.locator('[data-reader-page]').press('Enter');
   await reader.locator('.pdf-reader-sheet[data-page="3"] canvas').waitFor();
   await reader.locator('[data-reader="rotate"]').click();
+  // Studio keeps Design mounted beneath its separate Preview iframe. Exercise
+  // the real hiding rule: a shadow-root reset must not reveal that old reader.
+  const artboard = page.locator('.studio-artboard');
+  for (let cycle = 0; cycle < 3; cycle++) {
+    await artboard.evaluate((el) =>
+      el.classList.add('studio-workspace-hidden'),
+    );
+    assert.equal(
+      await reader.isVisible(),
+      false,
+      'Hidden Design PDF must not float over Preview',
+    );
+    assert.equal(
+      await reader.locator('.pdf-reader-toolbar').isVisible(),
+      false,
+      'Hidden reader controls must also disappear',
+    );
+    await artboard.evaluate((el) =>
+      el.classList.remove('studio-workspace-hidden'),
+    );
+    assert.equal(
+      await reader.isVisible(),
+      true,
+      'Back to Design restores the PDF',
+    );
+    assert.equal(await reader.locator('[data-reader-page]').inputValue(), '3');
+    assert.deepEqual(
+      await reader.boundingBox(),
+      before,
+      'Returning preserves reader geometry',
+    );
+  }
   await page.locator('#mode').click();
   const after = await reader.boundingBox();
   const previewLayer = await page
@@ -121,10 +183,14 @@ try {
   await reader.screenshot({ path: path.join(folder, 'editor-reader.png') });
   assert.deepEqual(errors, []);
   console.log(
-    'PASS: editor controls, reader containment, matching preview geometry and mobile layout. ' +
+    'PASS: editor controls, hidden Design reader, repeated mode switches, containment, matching preview geometry and mobile layout. ' +
       folder,
   );
+} catch (error) {
+  console.error(error);
+  throw error;
 } finally {
   await browser.close();
-  await server.close();
+  server.closeAllConnections();
+  await new Promise((resolve) => server.close(resolve));
 }
