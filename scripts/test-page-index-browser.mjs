@@ -138,6 +138,16 @@ try {
     .click();
   assert.equal(await nav.locator('ol').isVisible(), true);
   assert.equal(await nav.locator('.wiki-page-index-label').first().isVisible(), false);
+  // Let anchor navigation finish before hovering; scrolling intentionally hides tips.
+  await page.evaluate(async () => {
+    let last = window.scrollY, stable = 0;
+    while (stable < 4) {
+      await new Promise(requestAnimationFrame);
+      const next = window.scrollY;
+      stable = next === last ? stable + 1 : 0;
+      last = next;
+    }
+  });
   await nav.getByRole('link', { name: 'Our design', exact: true }).hover();
   assert.equal(await nav.locator('.wiki-page-index-tip').isVisible(), true);
   await page.reload();

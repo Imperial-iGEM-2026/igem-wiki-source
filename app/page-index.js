@@ -16,6 +16,10 @@ export function startPageIndex(root) {
     CSS.supports('animation-timeline', '--studio-page-scroll') &&
     CSS.supports('animation-range', '0px 100px'));
   let nativeSticky = false;
+  let geometryDirty = true, positions = [], pageEnd = 0, cachedScale = 1;
+  let tipShown = false;
+  const measuredElements = new Set();
+  const headingAncestors = new Set();
   const generated = new Map();
   let sidebar, host, panel, list, toggle, title, grid, tip;
   let entries = [],
@@ -38,8 +42,9 @@ export function startPageIndex(root) {
   const artboard = stage && root.closest('.studio-artboard');
   const zoomChanges = new MutationObserver(() => schedule());
   if (artboard) zoomChanges.observe(artboard, { attributes: true, attributeFilter: ['style', 'class'] });
-  function schedule(rebuild = false) {
+  function schedule(rebuild = false, geometry = true) {
     dirty ||= rebuild;
+    geometryDirty ||= geometry;
     if (!frame && !disposed) frame = requestAnimationFrame(update);
   }
   function setCollapsed(value, remember = false) {
@@ -114,6 +119,8 @@ export function startPageIndex(root) {
     setCollapsed(collapsed);
   }
   function hideTip() {
+    if (!tipShown) return;
+    tipShown = false;
     if (tip) tip.hidden = true;
     entries.forEach(({ link }) => link.removeAttribute('data-proximity'));
   }
@@ -127,6 +134,7 @@ export function startPageIndex(root) {
       .trim().replace(/\s+/g, ' ').slice(0, 180);
     tip.replaceChildren(label, excerpt);
     tip.hidden = false;
+    tipShown = true;
     const box = link.getBoundingClientRect(), bounds = panel.getBoundingClientRect();
     const scale = bounds.width / panel.offsetWidth || 1;
     tip.style.top = (mobile ? panel.offsetHeight + 8 :
@@ -147,6 +155,12 @@ export function startPageIndex(root) {
         !el.closest('aside,nav,[data-page-index-host],.page-heading') &&
         !el.matches('h1'),
     );
+    headingAncestors.clear();
+    for (const heading of headings) {
+      for (let element = heading; element && element !== main; element = element.parentElement)
+        headingAncestors.add(element);
+    }
+    headingAncestors.add(main);
     entries = headings.map((heading, i) => {
       if (!heading.id) {
         let id = 'page-section-' + (i + 1);
@@ -227,6 +241,15 @@ export function startPageIndex(root) {
         .find((e) => e.link.getAttribute('href') === focused)
         ?.link.focus({ preventScroll: true });
     active = -1;
+    // Observe content boxes, not index chrome. Images, accordions and component
+    // height changes invalidate positions even when the total page height stays equal.
+    for (const element of measuredElements) size.unobserve(element);
+    measuredElements.clear();
+    for (const element of main.querySelectorAll('section,.canvas-section,details,img,iframe,video')) {
+      if (element.closest('[data-page-index-host]')) continue;
+      measuredElements.add(element);
+      size.observe(element);
+    }
   }
   function topOffset() {
     const header = root.querySelector('.wiki-header,[data-site-header]');
@@ -259,6 +282,16 @@ export function startPageIndex(root) {
       rebuild();
     }
     if (!host?.isConnected || !panel) return;
+    // Publication uses CSS sticky pinning. Stable scroll frames only locate the
+    // current section in cached document coordinates; never measure every heading.
+    if (!stage && nativeSticky && !geometryDirty) {
+      const offset = topOffset();
+      stickyViewport(offset, cachedScale);
+      activate(window.scrollY > 0 && window.scrollY >= pageEnd - 2
+        ? (positions.at(-1)?.index ?? -1)
+        : currentSection(positions, window.scrollY + offset + 32, active));
+      return;
+    }
     const narrow = root.clientWidth <= 780;
     if (narrow !== mobile) {
       mobile = narrow;
@@ -315,12 +348,15 @@ export function startPageIndex(root) {
     } else {
       panel.style.removeProperty('--index-shift');
     }
-    const positions = entries
+    cachedScale = scale;
+    positions = entries
       .map((e, index) => ({
         index,
-        top: e.heading.getBoundingClientRect().top,
+        top: e.heading.getBoundingClientRect().top + (stage ? 0 : window.scrollY),
       }))
       .sort((a, b) => a.top - b.top || a.index - b.index);
+    pageEnd = document.documentElement.scrollHeight - innerHeight;
+    geometryDirty = false;
     const atEnd = stage
       ? stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2
       : window.scrollY > 0 &&
@@ -329,8 +365,14 @@ export function startPageIndex(root) {
     activate(
       atEnd
         ? (positions.at(-1)?.index ?? -1)
-        : currentSection(positions, offset + 32, active),
+        : currentSection(positions, (stage ? 0 : window.scrollY) + offset + 32, active),
     );
+  }
+  function stickyViewport(offset, scale) {
+    const top = offset / scale + 'px';
+    const height = (Math.max(160, (innerHeight - offset - 24) / scale)).toFixed(2) + 'px';
+    if (panel.style.getPropertyValue('--index-top') !== top) panel.style.setProperty('--index-top', top);
+    if (panel.style.getPropertyValue('--index-height') !== height) panel.style.setProperty('--index-height', height);
   }
   const changes = new MutationObserver((records) => {
     if (
@@ -342,6 +384,10 @@ export function startPageIndex(root) {
         if (el?.closest('[data-page-index-host],svg,.modern-pdf-reader'))
           return false;
         if (record.type === 'attributes') {
+          if (record.attributeName === 'style') {
+            if (headingAncestors.has(el)) schedule();
+            return false;
+          }
           if (record.attributeName !== 'class') return true;
           if (!el?.matches('.canvas-section')) return false;
           // Selection/hover/drag chrome does not change the page's headings.
@@ -374,16 +420,19 @@ export function startPageIndex(root) {
     attributeFilter: [
       'hidden',
       'class',
+      'style',
       'data-section-index',
       'data-index-hidden',
     ],
   });
-  const onScroll = () => { hideTip(); schedule(); };
-  const onLoad = () => schedule(true);
+  const onScroll = () => { hideTip(); schedule(false, false); };
+  const onLoad = () => schedule();
+  const onToggle = () => schedule(true);
   window.addEventListener('scroll', onScroll, { passive: true });
   stage?.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
+  window.addEventListener('resize', onLoad);
   main.addEventListener('load', onLoad, true);
+  main.addEventListener('toggle', onToggle, true);
   document.fonts?.addEventListener('loadingdone', onLoad);
   update();
   return () => {
@@ -394,8 +443,11 @@ export function startPageIndex(root) {
     cancelAnimationFrame(frame);
     window.removeEventListener('scroll', onScroll);
     stage?.removeEventListener('scroll', onScroll);
-    window.removeEventListener('resize', onScroll);
+    window.removeEventListener('resize', onLoad);
     main.removeEventListener('load', onLoad, true);
+    main.removeEventListener('toggle', onToggle, true);
+    measuredElements.clear();
+    headingAncestors.clear();
     document.fonts?.removeEventListener('loadingdone', onLoad);
     panel?.remove();
     grid?.removeAttribute('data-page-index-collapsed');
