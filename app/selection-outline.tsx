@@ -26,6 +26,9 @@ export function SelectionOutline({
   >([]);
   const selectors = targets.map((t) => t.selector).join('\n');
   useLayoutEffect(() => {
+    if (!selectors) {
+      return;
+    }
     let frame = 0;
     const measure = () => {
       frame = 0;
@@ -56,7 +59,19 @@ export function SelectionOutline({
                 : [];
             })
         : [];
-      setBoxes(next);
+      setBoxes((previous) =>
+        previous.length === next.length &&
+        previous.every(
+          (box, i) =>
+            box.left === next[i].left &&
+            box.top === next[i].top &&
+            box.width === next[i].width &&
+            box.height === next[i].height &&
+            box.clipPath === next[i].clipPath,
+        )
+          ? previous
+          : next,
+      );
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -80,7 +95,7 @@ export function SelectionOutline({
   }, [selectors, artboard, stage, revision, zoom]);
   return (
     <div aria-hidden="true">
-      {boxes.map((box, index) => (
+      {(selectors ? boxes : []).map((box, index) => (
         <div key={index} className="studio-selection-outline" style={box} />
       ))}
     </div>

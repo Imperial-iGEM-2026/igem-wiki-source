@@ -131,12 +131,15 @@ export function materialize(
         }
       : n,
   );
+  const indices = new Map(nodes.map((node, index) => [node.id, index]));
   for (const item of builtins) {
-    const index = nodes.findIndex((n) => n.id === item.id);
+    const index = indices.get(item.id) ?? -1;
     if (index >= 0 && item.defaults?.kind === 'image')
       nodes[index] = { ...item.defaults, ...nodes[index] };
     if (index < 0) {
-      const parent = nodes.find((n) => n.id === item.defaults?.parentId);
+      const parentIndex = indices.get(item.defaults?.parentId || '');
+      const parent = parentIndex === undefined ? undefined : nodes[parentIndex];
+      indices.set(item.id, nodes.length);
       nodes.push({
         ...newNode(item.id, 'template', item.label),
         name: item.label,
@@ -152,11 +155,16 @@ export function materialize(
     }
   }
   const valid = new Set(nodes.map((n) => n.id));
+  const ordered = new Set<string>();
   const order = [
     ...layout.order,
     ...builtins.map((b) => b.id),
     ...nodes.map((n) => n.id),
-  ].filter((id, i, all) => valid.has(id) && all.indexOf(id) === i);
+  ].filter((id) => {
+    if (!valid.has(id) || ordered.has(id)) return false;
+    ordered.add(id);
+    return true;
+  });
   // Upgrade old overlays: original logos precede previously added images.
   const sponsorParents = new Set(
     builtins
@@ -181,7 +189,7 @@ export function materialize(
   return { ...layout, nodes, order };
 }
 export const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+  a === b || JSON.stringify(a) === JSON.stringify(b);
 export function patchNodes(
   layout: CanvasLayout,
   ids: string[],

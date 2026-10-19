@@ -638,7 +638,10 @@ export function StudioEditor({
     panelIds: ['layers', 'canvas', 'inspector'],
   });
   const disabled = ctx.busy || ctx.locked || uploading || Boolean(conflict);
-  const changed = !same(current, base.layout),
+  const changed = useMemo(
+      () => !same(current, base.layout),
+      [current, base.layout],
+    ),
     textDirty = Boolean(textEdit && textEdit.value !== textEdit.original),
     dirty =
       changed ||
@@ -696,6 +699,17 @@ export function StudioEditor({
   const filteredLayers = useMemo(
     () => filterLayerIds(current, layerQuery, layerKind),
     [current, layerQuery, layerKind],
+  );
+  const layerNodes = useMemo(
+    () => new Map(current.nodes.map((n) => [n.id, n])),
+    [current.nodes],
+  );
+  const visibleLayerRows = useMemo(
+    () =>
+      layerTreeRows(current, filteredLayers ? [] : collapsed).filter(
+        (row) => !filteredLayers || filteredLayers.has(row.id),
+      ),
+    [current, filteredLayers, collapsed],
   );
   const breadcrumbs = layerBreadcrumb(current, selected.at(-1));
   const zoomRef = useRef(zoom);
@@ -2696,246 +2710,233 @@ export function StudioEditor({
                           No matching layers. Try another name or type.
                         </output>
                       )}
-                      {layerTreeRows(current, filteredLayers ? [] : collapsed)
-                        .filter(
-                          (row) =>
-                            !filteredLayers || filteredLayers.has(row.id),
-                        )
-                        .map((row) => {
-                          const { id, depth } = row;
-                          const n = current.nodes.find((n) => n.id === id)!;
-                          if (row.type === 'item')
-                            return (
-                              <div
-                                key={id + ':' + row.item.id}
-                                className="studio-layer-item-row"
-                                data-studio-parent={id}
-                                data-studio-item={row.item.id}
-                                style={{ marginLeft: depth * 14 }}
-                              >
-                                <button
-                                  type="button"
-                                  className="studio-layer-subsection"
-                                  aria-label={`Edit subsection ${row.index + 1}: ${row.item.title || 'Untitled subsection'}`}
-                                  aria-pressed={
-                                    selected.includes(id) &&
-                                    accordionSelection?.itemId === row.item.id
-                                  }
-                                  onClick={() =>
-                                    editAccordionItem(id, row.item.id)
-                                  }
-                                >
-                                  <span className="studio-subsection-number">
-                                    {row.index + 1}
-                                  </span>
-                                  <span>
-                                    {row.item.title || 'Untitled subsection'}
-                                  </span>
-                                </button>
-                                <StudioInsertMenu
-                                  compact
-                                  container={
-                                    row.item.title || 'Untitled subsection'
-                                  }
-                                  locked={nodeLocked(current, id)}
-                                  disabled={disabled}
-                                  inside
-                                  onInside={() => {}}
-                                  onInsert={(kind) =>
-                                    add(kind, true, {
-                                      layerId: id,
-                                      itemId: row.item.id,
-                                    })
-                                  }
-                                />
-                              </div>
-                            );
-                          if (row.type === 'add-item')
-                            return (
-                              <button
-                                key={id + ':add'}
-                                type="button"
-                                data-studio-parent={id}
-                                className="studio-layer-add-subsection"
-                                style={{
-                                  marginLeft: depth * 14,
-                                  width: `calc(100% - ${depth * 14}px)`,
-                                }}
-                                disabled={
-                                  disabled ||
-                                  nodeLocked(current, id) ||
-                                  (n.items?.length || 0) >= 30
-                                }
-                                onClick={() => addAccordionItem(id)}
-                              >
-                                <Plus size={13} /> Add subsection
-                              </button>
-                            );
+                      {visibleLayerRows.map((row) => {
+                        const { id, depth } = row;
+                        const n = layerNodes.get(id)!;
+                        if (row.type === 'item')
                           return (
-                            <Fragment key={id}>
-                              <div
-                                key={id}
-                                data-studio-layer={id}
-                                style={{
-                                  marginLeft: depth * 14,
-                                }}
-                                className={
-                                  'studio-layer' +
-                                  (selected.includes(id) ? ' active' : '') +
-                                  (n.hidden ? ' is-hidden' : '') +
-                                  (drag.visual?.ids.includes(id)
-                                    ? ' is-dragging'
-                                    : '')
+                            <div
+                              key={id + ':' + row.item.id}
+                              className="studio-layer-item-row"
+                              data-studio-parent={id}
+                              data-studio-item={row.item.id}
+                              style={{ marginLeft: depth * 14 }}
+                            >
+                              <button
+                                type="button"
+                                className="studio-layer-subsection"
+                                aria-label={`Edit subsection ${row.index + 1}: ${row.item.title || 'Untitled subsection'}`}
+                                aria-pressed={
+                                  selected.includes(id) &&
+                                  accordionSelection?.itemId === row.item.id
+                                }
+                                onClick={() =>
+                                  editAccordionItem(id, row.item.id)
                                 }
                               >
-                                {n.kind === 'accordion' ||
-                                current.nodes.some(
-                                  (child) => child.parentId === id,
-                                ) ? (
-                                  <button
-                                    className="studio-layer-expand"
-                                    aria-label={
-                                      (collapsed.includes(id)
-                                        ? 'Expand '
-                                        : 'Collapse ') +
-                                      (n.name || n.title || 'section')
-                                    }
-                                    aria-expanded={!collapsed.includes(id)}
-                                    onClick={() =>
-                                      setCollapsed((previous) =>
-                                        previous.includes(id)
-                                          ? previous.filter(
-                                              (item) => item !== id,
-                                            )
-                                          : [...previous, id],
-                                      )
-                                    }
-                                  >
-                                    {collapsed.includes(id) ? (
-                                      <ChevronRight size={12} />
-                                    ) : (
-                                      <ChevronDown size={12} />
-                                    )}
-                                  </button>
-                                ) : (
-                                  <span />
-                                )}
-                                <button
-                                  className="studio-grip"
-                                  disabled={
-                                    disabled || nodeLocked(current, n.id)
-                                  }
-                                  title="Drag layer; Alt + Up/Down also reorders"
-                                  onPointerDown={(e) => drag.start(e, id)}
-                                  onDragStart={(e) => e.preventDefault()}
-                                >
-                                  <GripVertical size={14} />
-                                </button>
-                                <button
-                                  className="studio-layer-name"
-                                  aria-pressed={selected.includes(id)}
-                                  title={layerBreadcrumb(current, n.id)
-                                    .map((n) => n.name || n.title || n.kind)
-                                    .join(' › ')}
-                                  onPointerDown={(e) => drag.start(e, id)}
-                                  onDragStart={(e) => e.preventDefault()}
-                                  onClick={(e) =>
-                                    select(
-                                      id,
-                                      e.ctrlKey || e.metaKey
-                                        ? 'toggle'
-                                        : e.shiftKey
-                                          ? 'range'
-                                          : false,
-                                    )
-                                  }
-                                >
-                                  {n.kind === 'image' && n.src && (
-                                    <img
-                                      className="studio-layer-thumb"
-                                      src={n.src}
-                                      alt=""
-                                      loading="lazy"
-                                      decoding="async"
-                                    />
-                                  )}
-                                  <span>{n.name || n.title || n.kind}</span>
-                                  <small>
-                                    {n.kind === 'accordion'
-                                      ? `Collapsible · ${n.items?.length || 0} subsections`
-                                      : `${n.kind === 'template' ? 'Section' : kinds.find((kind) => kind[0] === n.kind)?.[1] || n.kind} · ${effectiveSpan(n)}/12`}
-                                  </small>
-                                </button>
-                                {pagePeers
-                                  .filter(
-                                    (peer) => peer.selection?.layerId === id,
-                                  )
-                                  .slice(0, 3)
-                                  .map((peer) => (
-                                    <i
-                                      key={peer.id}
-                                      className="studio-layer-peer"
-                                      style={{ background: peer.color }}
-                                      title={peer.name + ' has this selected'}
-                                    >
-                                      {peer.name.slice(0, 1).toUpperCase()}
-                                    </i>
-                                  ))}
-                                <button
-                                  title={n.hidden ? 'Show layer' : 'Hide layer'}
-                                  aria-label={
-                                    (n.hidden ? 'Show ' : 'Hide ') +
-                                    (n.name || n.title || n.kind)
-                                  }
-                                  aria-pressed={n.hidden}
-                                  disabled={
-                                    disabled || nodeLocked(current, n.id)
-                                  }
-                                  onClick={() =>
-                                    edit(
-                                      patchNodes(current, [id], {
-                                        hidden: !n.hidden,
-                                      }),
-                                    )
-                                  }
-                                >
-                                  {n.hidden ? (
-                                    <EyeOff size={13} />
-                                  ) : (
-                                    <Eye size={13} />
-                                  )}
-                                </button>
-                                <button
-                                  title={
-                                    n.locked ? 'Unlock layer' : 'Lock layer'
-                                  }
-                                  aria-label={
-                                    (n.locked ? 'Unlock ' : 'Lock ') +
-                                    (n.name || n.title || n.kind)
-                                  }
-                                  aria-pressed={Boolean(n.locked)}
-                                  disabled={disabled}
-                                  onClick={() =>
-                                    edit(
-                                      patchNodes(
-                                        current,
-                                        [id],
-                                        { locked: !n.locked },
-                                        true,
-                                      ),
-                                    )
-                                  }
-                                >
-                                  {n.locked ? (
-                                    <LockKeyhole size={13} />
-                                  ) : (
-                                    <UnlockKeyhole size={13} />
-                                  )}
-                                </button>
-                              </div>
-                            </Fragment>
+                                <span className="studio-subsection-number">
+                                  {row.index + 1}
+                                </span>
+                                <span>
+                                  {row.item.title || 'Untitled subsection'}
+                                </span>
+                              </button>
+                              <StudioInsertMenu
+                                compact
+                                container={
+                                  row.item.title || 'Untitled subsection'
+                                }
+                                locked={nodeLocked(current, id)}
+                                disabled={disabled}
+                                inside
+                                onInside={() => {}}
+                                onInsert={(kind) =>
+                                  add(kind, true, {
+                                    layerId: id,
+                                    itemId: row.item.id,
+                                  })
+                                }
+                              />
+                            </div>
                           );
-                        })}
+                        if (row.type === 'add-item')
+                          return (
+                            <button
+                              key={id + ':add'}
+                              type="button"
+                              data-studio-parent={id}
+                              className="studio-layer-add-subsection"
+                              style={{
+                                marginLeft: depth * 14,
+                                width: `calc(100% - ${depth * 14}px)`,
+                              }}
+                              disabled={
+                                disabled ||
+                                nodeLocked(current, id) ||
+                                (n.items?.length || 0) >= 30
+                              }
+                              onClick={() => addAccordionItem(id)}
+                            >
+                              <Plus size={13} /> Add subsection
+                            </button>
+                          );
+                        return (
+                          <Fragment key={id}>
+                            <div
+                              key={id}
+                              data-studio-layer={id}
+                              style={{
+                                marginLeft: depth * 14,
+                              }}
+                              className={
+                                'studio-layer' +
+                                (selected.includes(id) ? ' active' : '') +
+                                (n.hidden ? ' is-hidden' : '') +
+                                (drag.visual?.ids.includes(id)
+                                  ? ' is-dragging'
+                                  : '')
+                              }
+                            >
+                              {n.kind === 'accordion' ||
+                              current.nodes.some(
+                                (child) => child.parentId === id,
+                              ) ? (
+                                <button
+                                  className="studio-layer-expand"
+                                  aria-label={
+                                    (collapsed.includes(id)
+                                      ? 'Expand '
+                                      : 'Collapse ') +
+                                    (n.name || n.title || 'section')
+                                  }
+                                  aria-expanded={!collapsed.includes(id)}
+                                  onClick={() =>
+                                    setCollapsed((previous) =>
+                                      previous.includes(id)
+                                        ? previous.filter((item) => item !== id)
+                                        : [...previous, id],
+                                    )
+                                  }
+                                >
+                                  {collapsed.includes(id) ? (
+                                    <ChevronRight size={12} />
+                                  ) : (
+                                    <ChevronDown size={12} />
+                                  )}
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+                              <button
+                                className="studio-grip"
+                                disabled={disabled || nodeLocked(current, n.id)}
+                                title="Drag layer; Alt + Up/Down also reorders"
+                                onPointerDown={(e) => drag.start(e, id)}
+                                onDragStart={(e) => e.preventDefault()}
+                              >
+                                <GripVertical size={14} />
+                              </button>
+                              <button
+                                className="studio-layer-name"
+                                aria-pressed={selected.includes(id)}
+                                title={layerBreadcrumb(current, n.id)
+                                  .map((n) => n.name || n.title || n.kind)
+                                  .join(' › ')}
+                                onPointerDown={(e) => drag.start(e, id)}
+                                onDragStart={(e) => e.preventDefault()}
+                                onClick={(e) =>
+                                  select(
+                                    id,
+                                    e.ctrlKey || e.metaKey
+                                      ? 'toggle'
+                                      : e.shiftKey
+                                        ? 'range'
+                                        : false,
+                                  )
+                                }
+                              >
+                                {n.kind === 'image' && n.src && (
+                                  <img
+                                    className="studio-layer-thumb"
+                                    src={n.src}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                )}
+                                <span>{n.name || n.title || n.kind}</span>
+                                <small>
+                                  {n.kind === 'accordion'
+                                    ? `Collapsible · ${n.items?.length || 0} subsections`
+                                    : `${n.kind === 'template' ? 'Section' : kinds.find((kind) => kind[0] === n.kind)?.[1] || n.kind} · ${effectiveSpan(n)}/12`}
+                                </small>
+                              </button>
+                              {pagePeers
+                                .filter(
+                                  (peer) => peer.selection?.layerId === id,
+                                )
+                                .slice(0, 3)
+                                .map((peer) => (
+                                  <i
+                                    key={peer.id}
+                                    className="studio-layer-peer"
+                                    style={{ background: peer.color }}
+                                    title={peer.name + ' has this selected'}
+                                  >
+                                    {peer.name.slice(0, 1).toUpperCase()}
+                                  </i>
+                                ))}
+                              <button
+                                title={n.hidden ? 'Show layer' : 'Hide layer'}
+                                aria-label={
+                                  (n.hidden ? 'Show ' : 'Hide ') +
+                                  (n.name || n.title || n.kind)
+                                }
+                                aria-pressed={n.hidden}
+                                disabled={disabled || nodeLocked(current, n.id)}
+                                onClick={() =>
+                                  edit(
+                                    patchNodes(current, [id], {
+                                      hidden: !n.hidden,
+                                    }),
+                                  )
+                                }
+                              >
+                                {n.hidden ? (
+                                  <EyeOff size={13} />
+                                ) : (
+                                  <Eye size={13} />
+                                )}
+                              </button>
+                              <button
+                                title={n.locked ? 'Unlock layer' : 'Lock layer'}
+                                aria-label={
+                                  (n.locked ? 'Unlock ' : 'Lock ') +
+                                  (n.name || n.title || n.kind)
+                                }
+                                aria-pressed={Boolean(n.locked)}
+                                disabled={disabled}
+                                onClick={() =>
+                                  edit(
+                                    patchNodes(
+                                      current,
+                                      [id],
+                                      { locked: !n.locked },
+                                      true,
+                                    ),
+                                  )
+                                }
+                              >
+                                {n.locked ? (
+                                  <LockKeyhole size={13} />
+                                ) : (
+                                  <UnlockKeyhole size={13} />
+                                )}
+                              </button>
+                            </div>
+                          </Fragment>
+                        );
+                      })}
                       <div className="studio-drop-space">
                         Drag here to place a layer at the end
                       </div>

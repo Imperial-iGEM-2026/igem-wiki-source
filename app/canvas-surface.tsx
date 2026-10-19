@@ -245,7 +245,11 @@ export function CanvasSurface({
     const groups = new Map<string, string[]>();
     for (const id of value.order) {
       const parent = nodeMap.get(id)?.parentId;
-      if (parent) groups.set(parent, [...(groups.get(parent) || []), id]);
+      if (parent) {
+        let children = groups.get(parent);
+        if (!children) groups.set(parent, (children = []));
+        children.push(id);
+      }
     }
     return groups;
   }, [value.order, nodeMap]);

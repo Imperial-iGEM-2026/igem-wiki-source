@@ -12,20 +12,27 @@ export function layerTreeRows(
   const rows: LayerTreeRow[] = [];
   const seen = new Set<string>();
   const nodes = new Map(layout.nodes.map((node) => [node.id, node]));
+  const closed = new Set(collapsed);
+  const children = new Map<
+    string | undefined,
+    Map<string | undefined, string[]>
+  >();
+  for (const id of layout.order) {
+    const node = nodes.get(id);
+    if (!node || node.deleted) continue;
+    let items = children.get(node.parentId);
+    if (!items) children.set(node.parentId, (items = new Map()));
+    let group = items.get(node.parentItemId);
+    if (!group) items.set(node.parentItemId, (group = []));
+    group.push(id);
+  }
   const visit = (parentId?: string, parentItemId?: string, depth = 0) => {
-    for (const id of layout.order) {
-      const node = nodes.get(id);
-      if (
-        !node ||
-        node.deleted ||
-        seen.has(id) ||
-        node.parentId !== parentId ||
-        node.parentItemId !== parentItemId
-      )
-        continue;
+    for (const id of children.get(parentId)?.get(parentItemId) || []) {
+      const node = nodes.get(id)!;
+      if (seen.has(id)) continue;
       seen.add(id);
       rows.push({ type: 'layer', id, depth });
-      if (collapsed.includes(id)) continue;
+      if (closed.has(id)) continue;
       if (node.kind === 'accordion') {
         (node.items || []).forEach((item, index) => {
           rows.push({ type: 'item', id, item, index, depth: depth + 1 });

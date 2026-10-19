@@ -4,13 +4,13 @@ import { startReferenceNavigation } from './reference-navigation';
 import { siteIcon } from '../scripts/export-media.mjs';
 import { MathText } from './equation-block';
 import { TextEditDialog } from './text-edit-dialog';
-import { mergeContentRows } from './content-sync';
+import { mergeContentRows, coalesceRefresh } from './content-sync';
 import { ImportedPage } from './template-renderer';
 import { templateFor } from './templates';
 import { projectFetch, projectURL } from './project-api';
 import { SiteHeader } from './site-header';
 import { useLiveChannel } from './live-sync';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowUpRight,
   ArrowRight,
@@ -136,25 +136,29 @@ export default function Home({
   useEffect(() => {
     if (publication) setData(initialData);
   }, [publication, initialData]);
-  const sync = useCallback(async () => {
-    try {
-      const r = await projectFetch('/api/content', { cache: 'no-store' });
-      if (!r.ok) throw Error();
-      const v = (await r.json()) as {
-        rows: ({ id: Field } & Blocks[Field])[];
-        people: User[];
-      };
-      setData((previous) => mergeContentRows(previous, v.rows));
-      setPeople((previous) =>
-        JSON.stringify(previous) === JSON.stringify(v.people)
-          ? previous
-          : v.people,
-      );
-      setConnected(true);
-    } catch {
-      setConnected(false);
-    }
-  }, []);
+  const sync = useMemo(
+    () =>
+      coalesceRefresh(async () => {
+        try {
+          const r = await projectFetch('/api/content', { cache: 'no-store' });
+          if (!r.ok) throw Error();
+          const v = (await r.json()) as {
+            rows: ({ id: Field } & Blocks[Field])[];
+            people: User[];
+          };
+          setData((previous) => mergeContentRows(previous, v.rows));
+          setPeople((previous) =>
+            JSON.stringify(previous) === JSON.stringify(v.people)
+              ? previous
+              : v.people,
+          );
+          setConnected(true);
+        } catch {
+          setConnected(false);
+        }
+      }),
+    [],
+  );
   const live = useLiveChannel({
     enabled: Boolean(editing && user && !publication),
     projectId,
@@ -163,22 +167,35 @@ export default function Home({
   });
   useEffect(() => {
     if (publication) return;
-    if (!projectId) sync();
+    if (!projectId) void sync();
     // Polling is the fallback; the live channel announces saves immediately.
-    const t = setInterval(sync, live.connected ? 15000 : 2500);
-    return () => clearInterval(t);
+    const refreshVisible = () => {
+      if (document.visibilityState !== 'hidden') void sync();
+    };
+    const t = setInterval(refreshVisible, live.connected ? 15000 : 2500);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
   }, [sync, publication, projectId, live.connected]);
   useEffect(() => {
     if (!editing || !user) return;
-    const pulse = () =>
-      projectFetch('/api/content', {
+    const pulse = () => {
+      if (document.visibilityState === 'hidden') return;
+      void projectFetch('/api/content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ presence: true }),
       }).catch(() => {});
+    };
     pulse();
     const t = setInterval(pulse, 7000);
-    return () => clearInterval(t);
+    document.addEventListener('visibilitychange', pulse);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', pulse);
+    };
   }, [editing, user]);
   async function save(
     id: Field,

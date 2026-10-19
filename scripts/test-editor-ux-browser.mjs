@@ -73,6 +73,6 @@ const server = createServer(async (req, res) => {
     res.end();
   }
 });
-await new Promise((resolve) => server.listen(52576, '127.0.0.1', resolve));
+await new Promise((resolve) => server.listen(Number(process.env.STUDIO_TEST_PORT ?? 52576), '127.0.0.1', resolve));
 
 console.log(`http://127.0.0.1:${server.address().port}/${relative}/index.html`);

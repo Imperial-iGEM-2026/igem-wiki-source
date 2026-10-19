@@ -41,6 +41,11 @@ export function useLayerDrag(
     cleanup.current?.();
     suppressUntil.current = 0;
     const parentId = value.layout.nodes.find((n) => n.id === id)?.parentId;
+    const siblings = new Set(
+      value.layout.nodes
+        .filter((n) => n.parentId === parentId)
+        .map((n) => n.id),
+    );
     const ids = (value.selected.includes(id) ? value.selected : [id]).filter(
       (id) =>
         value.layout.nodes.some(
@@ -65,19 +70,19 @@ export function useLayerDrag(
         ? '[data-studio-layer]'
         : '.studio-canvas [data-layer-id]';
       const rects = Array.from(region.querySelectorAll<HTMLElement>(selector))
-        .filter(
-          (el) =>
-            value.layout.nodes.find(
-              (n) => n.id === (el.dataset.studioLayer || el.dataset.layerId),
-            )?.parentId === parentId,
+        .filter((el) =>
+          siblings.has(el.dataset.studioLayer || el.dataset.layerId || ''),
         )
-        .map((el) => ({
-          id: el.dataset.studioLayer || el.dataset.layerId!,
-          left: el.getBoundingClientRect().left,
-          top: el.getBoundingClientRect().top,
-          width: el.getBoundingClientRect().width,
-          height: el.getBoundingClientRect().height,
-        }));
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            id: el.dataset.studioLayer || el.dataset.layerId!,
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          };
+        });
       return findDropMark(rects, ids, p);
     };
     const session = createDragSession(point, pointerId, {
