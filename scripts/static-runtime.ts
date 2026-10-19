@@ -1,4 +1,6 @@
 import '../app/globals.css';
+import { watchImageDisplay } from '../app/image-display';
+document.querySelectorAll<HTMLImageElement>('img[data-image-small]').forEach(watchImageDisplay);
 if (document.querySelector('model-viewer')) void import('@google/model-viewer');
 
 import { startTemplateMotion } from '../app/template-motion';

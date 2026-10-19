@@ -89,6 +89,7 @@ export async function createAppServer({
     dataDir,
     clientDir,
     projectSource,
+    imagePreview,
     assetOrigins: [config.origin, environment.MEDIA_ORIGIN],
   });
   const exportJobs = createExportJobs({

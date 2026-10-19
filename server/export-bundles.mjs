@@ -1,4 +1,5 @@
 import { createImageValidationCache } from './export-validation-cache.mjs';
+import { createImagePreviews } from './image-previews.mjs';
 import { googleFontReferences, prepareGoogleFonts } from './google-fonts.mjs';
 import { createExportProcessing } from './export-processing.mjs';
 import { isRecording, recordingTasks } from './export-recordings.mjs';
@@ -14,6 +15,7 @@ import {
 } from './shared.mjs';
 import {
   readFile,
+  copyFile,
   stat,
   realpath,
   mkdtemp,
@@ -69,6 +71,7 @@ export function createBundleExports({
   now = Date.now,
   processing = createExportProcessing(),
   fontFetcher = fetch,
+  imagePreview = createImagePreviews(dataDir),
 }) {
   const templateOrigins = new Set(
     assetOrigins.filter(Boolean).map((origin) => new URL(origin).origin),
@@ -252,7 +255,13 @@ export function createBundleExports({
         const recordingTodos = recordingTasks(media, locations, cleanValues);
         if ([...media.values()].includes('pdf')) {
           media.set(PDF_WORKER_SOURCE, 'runtime');
-          locations.set(PDF_WORKER_SOURCE, [{ pageTitle: 'PDF reader', layerName: 'PDF.js worker', field: 'JavaScript runtime' }]);
+          locations.set(PDF_WORKER_SOURCE, [
+            {
+              pageTitle: 'PDF reader',
+              layerName: 'PDF.js worker',
+              field: 'JavaScript runtime',
+            },
+          ]);
         }
         const googleFonts = await prepareGoogleFonts(
           googleFontReferences(
@@ -484,6 +493,70 @@ export function createBundleExports({
           map[source] = source.startsWith('https://static.igem.wiki/')
             ? source
             : 'https://static.igem.wiki/YOUR-TEAM/uploaded-file';
+          // Ship smooth display copies through the normal static upload workflow.
+          // Pin them into this export: cache eviction must not break a prepared ZIP.
+          if (
+            kind === 'image' &&
+            /^\/api\/media\/[a-f0-9-]+\.jpe?g$/.test(source)
+          ) {
+            for (const size of [640, 1600]) {
+              onProgress({
+                message: `Preparing ${size}px display image: ${path.basename(source)}…`,
+                completed: completed - 1,
+                total: media.size,
+              });
+              let preview;
+              try {
+                preview = await imagePreview(source.slice(11), size);
+                if ((await stat(preview)).size > IMAGE_UPLOAD_BYTES)
+                  throw Error(
+                    'The display copy exceeds the static upload limit. Use a smaller image.',
+                  );
+              } catch (error) {
+                throw Object.assign(
+                  fail(
+                    422,
+                    `Cannot prepare display image ${source}: ${error.message}`,
+                  ),
+                  {
+                    mediaIssues: [
+                      {
+                        source,
+                        kind,
+                        reason: error.message,
+                        locations: locations.get(source) || [],
+                      },
+                    ],
+                  },
+                );
+              }
+              tempDir ||= await mkdtemp(
+                path.join(tmpdir(), 'prion-image-export-'),
+              );
+              const displaySource = source + `?preview=${size}&v=2`;
+              const displayName = name.replace(
+                /\.[^.]+$/,
+                `-display-${size}.webp`,
+              );
+              const file = path.join(tempDir, path.basename(displayName));
+              await copyFile(preview, file);
+              const info = await stat(file);
+              entries.assets.push({
+                name: displayName,
+                file,
+                size: info.size,
+                mtimeMs: info.mtimeMs,
+              });
+              rows.push({
+                source: displaySource,
+                kind: 'image',
+                bundle: names.assets,
+                file: displayName,
+              });
+              map[displaySource] =
+                'https://static.igem.wiki/YOUR-TEAM/uploaded-file';
+            }
+          }
         }
         for (const key of new Set(
           templateFonts(cleanValues).map((font) => font.license),

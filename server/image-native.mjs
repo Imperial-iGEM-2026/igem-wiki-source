@@ -193,7 +193,7 @@ export async function processImage(
 
 /** Display derivative only: no full-resolution JS pixel buffers or export validation pass. */
 export async function previewImage(file, size) {
-  if (![160, 1600].includes(size)) throw Error('Invalid preview size');
+  if (![160, 640, 1600].includes(size)) throw Error('Invalid preview size');
   const metadata = await sharp(file, options).metadata();
   if (!['jpeg', 'png', 'webp'].includes(metadata.format))
     throw Error('Unsupported image preview format');
@@ -206,8 +206,14 @@ export async function previewImage(file, size) {
       height: size,
       fit: 'inside',
       withoutEnlargement: true,
+      // Avoid the decoder's aggressive shortcut, which can alias fine patterns.
+      fastShrinkOnLoad: false,
+      kernel: 'lanczos3',
     })
-    .webp({ quality: 80, effort: 1 })
+    // Preserve the resized pixels, including coloured text/lines. Lossy WebP's
+    // chroma subsampling can smear these even at a high quality setting.
+    // Dimensions remain capped; low encoder effort keeps previews inexpensive.
+    .webp({ lossless: true, effort: 0 })
     .toBuffer({ resolveWithObject: true });
   return { data, width: info.width, height: info.height, extension: '.webp' };
 }

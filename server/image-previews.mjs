@@ -40,7 +40,7 @@ export function createImagePreviews(
   return async (key, size) => {
     if (
       !/^[a-f0-9-]+\.(jpe?g|png|webp)$/.test(key) ||
-      ![160, 1600].includes(size)
+      ![160, 640, 1600].includes(size)
     )
       throw Object.assign(Error('Invalid image preview'), { status: 400 });
     const input = path.join(dataDir, 'media', key);
@@ -52,7 +52,7 @@ export function createImagePreviews(
         status: 422,
       });
     const hash = createHash('sha256')
-      .update(`preview-v1:${key}:${info.size}:${info.mtimeMs}:${size}`)
+      .update(`preview-v2:${key}:${info.size}:${info.mtimeMs}:${size}`)
       .digest('hex');
     const output = path.join(directory, hash + '.webp');
     try {

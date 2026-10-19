@@ -6,7 +6,7 @@ import { EquationBlock, MathText } from './equation-block';
 import { CustomHtmlBlock } from './custom-html-block';
 import { PdfReader } from './pdf-reader';
 import { Download, Box } from 'lucide-react';
-import { editorImageURL } from './editor-image';
+import { imageDisplayAttributes, imageDisplayRetry, watchImageDisplay } from './image-display';
 import { embedURL, type CanvasNode } from './canvas-schema';
 function Model({ src, alt }: { src: string; alt: string }) {
   const [ready, setReady] = useState(false),
@@ -81,6 +81,10 @@ export function MediaBlock({
   openItems?: string[];
 }) {
   const [failed, setFailed] = useState(false);
+  const image = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    if (image.current) return watchImageDisplay(image.current);
+  }, [node.src, editing, failed]);
   useEffect(() => setFailed(false), [node.src, editing]);
   return (
     <div className={'media-block media-' + node.kind}>
@@ -198,6 +202,7 @@ export function MediaBlock({
           {node.kind === 'image' && (
             <div className="media-image-frame">
               <img
+                ref={image}
                 style={
                   node.minHeight
                     ? {
@@ -208,15 +213,15 @@ export function MediaBlock({
                     : undefined
                 }
                 src={node.src}
-                srcSet={
-                  editing && editorImageURL(node.src) !== node.src
-                    ? editorImageURL(node.src) + ' 1x'
-                    : undefined
-                }
+                {...imageDisplayAttributes(node.src, editing)}
                 alt={node.alt || node.title}
                 loading="lazy"
                 decoding="async"
-                onError={() => setFailed(true)}
+                onError={(event) => {
+                  // The display watcher retries a failed small copy with the
+                  // large copy, or uses the original outside editing mode.
+                  if (!imageDisplayRetry(event.nativeEvent)) setFailed(true);
+                }}
               />
               <a
                 className="media-image-original"

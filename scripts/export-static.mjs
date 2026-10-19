@@ -1,4 +1,8 @@
-import { defaultLoading, validLoading, startSiteLoading } from '../app/site-loading.js';
+import {
+  defaultLoading,
+  validLoading,
+  startSiteLoading,
+} from '../app/site-loading.js';
 import { rewriteGoogleFonts } from './google-fonts.mjs';
 import { sharedPublicationAssets } from './share-publication-assets.mjs';
 import {
@@ -231,6 +235,13 @@ const refs = exportMedia(
   template,
   sponsorLayers,
 );
+// Fresh exports include display copies; older/offline snapshots need no new media.
+for (const source of [...refs.keys()]) {
+  for (const size of [640, 1600]) {
+    const display = source + `?preview=${size}&v=2`;
+    if (map[display]) refs.set(display, 'image');
+  }
+}
 for (const url of googleFonts.fonts || []) refs.set(url, 'font');
 for (const [source, kind] of refs) if (isRecording(kind)) refs.delete(source);
 const recordingTodos = [];
@@ -260,7 +271,10 @@ for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
   await cp(
     path.join(root, 'node_modules/pdfjs-dist', dir),
     path.join(output, 'public/assets/pdfjs', dir),
-    { recursive: true, filter: (source) => path.basename(source) !== 'quickjs-eval.wasm' },
+    {
+      recursive: true,
+      filter: (source) => path.basename(source) !== 'quickjs-eval.wasm',
+    },
   );
 // Source bundles contain LICENSE; editor checkouts keep the export licence scoped
 // to publication/ so exporting does not relicense the editor itself.
@@ -561,17 +575,35 @@ await build({
   },
 });
 const savedLoading = JSON.parse(snapshot.values['site:header'] || '{}').loading;
-if (savedLoading && !validLoading(savedLoading)) throw Error('Invalid website loading animation settings.');
+if (savedLoading && !validLoading(savedLoading))
+  throw Error('Invalid website loading animation settings.');
 const loading = { ...defaultLoading, ...savedLoading };
 if (loading.image) loading.image = mediaMap[loading.image] || loading.image;
-if (loading.enabled) await writeFile(path.join(output, 'public/assets/site-loading.js'),
-  '(' + startSiteLoading.toString() + ')(' + JSON.stringify(loading) + ',' + JSON.stringify('publication:' + base) + ');');
-const loadingScript = loading.enabled ? `<script src="${base}assets/site-loading.js"></script>` : '';
+if (loading.enabled)
+  await writeFile(
+    path.join(output, 'public/assets/site-loading.js'),
+    '(' +
+      startSiteLoading.toString() +
+      ')(' +
+      JSON.stringify(loading) +
+      ',' +
+      JSON.stringify('publication:' + base) +
+      ');',
+  );
+const loadingScript = loading.enabled
+  ? `<script src="${base}assets/site-loading.js"></script>`
+  : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
 if (hostedPdfWorker) {
-  if (typeof hostedPdfWorker !== 'string' || !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(hostedPdfWorker) || /YOUR-TEAM/.test(hostedPdfWorker))
-    throw Error('Upload the PDF JavaScript worker and use its actual static.igem.wiki URL.');
+  if (
+    typeof hostedPdfWorker !== 'string' ||
+    !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(hostedPdfWorker) ||
+    /YOUR-TEAM/.test(hostedPdfWorker)
+  )
+    throw Error(
+      'Upload the PDF JavaScript worker and use its actual static.igem.wiki URL.',
+    );
   // The worker is a self-contained ES module. PDF.js wraps a cross-origin worker
   // in a blob module; no relative module dependencies need URL rewriting.
   let rewritten = false;
@@ -584,9 +616,16 @@ if (hostedPdfWorker) {
       rewritten = true;
     }
   }
-  if (!rewritten) throw Error('Could not locate the PDF worker reference; refusing to remove its local copy.');
+  if (!rewritten)
+    throw Error(
+      'Could not locate the PDF worker reference; refusing to remove its local copy.',
+    );
   await unlink(path.join(output, 'public/assets/pdf.worker.min.mjs'));
-  assets.push({ source: PDF_WORKER_SOURCE, kind: 'runtime', publishedURL: hostedPdfWorker });
+  assets.push({
+    source: PDF_WORKER_SOURCE,
+    kind: 'runtime',
+    publishedURL: hostedPdfWorker,
+  });
 }
 const css = assetFiles.filter((f) => f.endsWith('.css'));
 for (const file of css) {
@@ -614,12 +653,24 @@ const known = new Set(
   wikiPages.flatMap((p) => ['/' + p.slug, '/' + routeSlug(p.slug)]),
 );
 const sharedAssets = sharedPublicationAssets(output, base);
+const mappedImageSources = new Set(Object.keys(mediaMap).map(esc));
 for (const page of [undefined, ...wikiPages]) {
   let html = replaceRecordingFrames(render(data, page), recordingTodos, {
     page: page?.slug || 'home',
     pageTitle: page?.title || 'Home',
   });
   html = rewriteGoogleFonts(html, googleFonts, mediaMap);
+  html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const small = /data-image-small="([^"]+)"/.exec(tag)?.[1];
+    const large = /data-image-large="([^"]+)"/.exec(tag)?.[1];
+    if (!small || !large) return tag;
+    if (mappedImageSources.has(small) && mappedImageSources.has(large))
+      return tag;
+    return tag.replace(
+      /\s(?:srcSet|srcset|data-image-small|data-image-large|data-image-capped)="[^"]*"/g,
+      '',
+    );
+  });
   if (fontCss) {
     html = html.replace(
       /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
@@ -722,7 +773,8 @@ for (const page of [undefined, ...wikiPages]) {
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
     `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}">` +
-    loadingScript + html +
+    loadingScript +
+    html +
     '</body></html>';
   if (/\b(?:href|src)="\/(api|auth)\//.test(doc) || /class="account"/.test(doc))
     throw Error(
@@ -749,7 +801,10 @@ for (const page of [undefined, ...wikiPages]) {
     await mkdir(legacy, { recursive: true });
     // Keep legacy links working without another complete copy of the page.
     const target = base + routeSlug(slug) + '/';
-    await writeFile(path.join(legacy, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="canonical" href="${esc(target)}"><meta http-equiv="refresh" content="0;url=${esc(target)}"><title>${esc(title)}</title></head><body><a href="${esc(target)}">Continue to ${esc(title)}</a><script>location.replace(${JSON.stringify(target)}+location.search+location.hash)</script></body></html>`);
+    await writeFile(
+      path.join(legacy, 'index.html'),
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="canonical" href="${esc(target)}"><meta http-equiv="refresh" content="0;url=${esc(target)}"><title>${esc(title)}</title></head><body><a href="${esc(target)}">Continue to ${esc(title)}</a><script>location.replace(${JSON.stringify(target)}+location.search+location.hash)</script></body></html>`,
+    );
   }
 }
 await sharedAssets.write();

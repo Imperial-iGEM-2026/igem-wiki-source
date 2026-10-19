@@ -46,6 +46,8 @@ for (const file of [
   'package-lock.json',
   'tsconfig.json',
   'scripts/build-igem.mjs',
+  'scripts/artifact-size.mjs',
+  'scripts/share-publication-assets.mjs',
   'scripts/export-static.mjs',
   'scripts/export-media.mjs',
   'scripts/export-recordings.mjs',

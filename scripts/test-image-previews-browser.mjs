@@ -139,7 +139,7 @@ try {
       [...document.querySelectorAll('.media-image-frame > img')].length ===
         12 &&
       [...document.querySelectorAll('.media-image-frame > img')].every(
-        (img) => img.complete && img.naturalWidth > 0,
+        (img) => img.complete && img.naturalWidth === 640,
       ),
     null,
     { timeout: 90000 },
@@ -154,8 +154,8 @@ try {
     })),
   );
   for (const item of sizes) {
-    assert.equal(item.width, 1600);
-    assert.ok(item.current.endsWith('?preview=1600'));
+    assert.equal(item.width, 640);
+    assert.ok(item.current.endsWith('?preview=640&v=2'));
     assert.ok(!item.source.includes('?'));
   }
   await page.locator('.custom-html-frame').scrollIntoViewIfNeeded();
@@ -202,7 +202,8 @@ try {
     ).status,
     304,
   );
-  // Switch to real Preview: originals are used, saved sources and element width stay intact.
+  // Preview uses the same small display copy. Large frames can request the
+  // original; shrinking them again returns to a smooth, filtered small copy.
   const smaller = await sharp(original).resize(1600).jpeg().toBuffer();
   await page.route('**/api/media/**', (route) => {
     if (new URL(route.request().url()).searchParams.has('preview'))
@@ -213,23 +214,81 @@ try {
     });
   });
   await page.locator('#mode').click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector('.media-image-frame > img')
+      ?.currentSrc.endsWith('?preview=640&v=2'),
+  );
+  await images.first().evaluate((img) => {
+    img.style.width = '1900px';
+    img.style.maxWidth = 'none';
+    img.style.objectFit = 'cover';
+  });
   await page.waitForFunction(
     () =>
       document.querySelector('.media-image-frame > img')?.naturalWidth === 6000,
   );
-  assert.equal(await images.first().getAttribute('srcset'), null);
+  assert.equal(
+    await images.first().getAttribute('src'),
+    '/api/media/' + keys[0],
+  );
+  await images.first().evaluate((img) => {
+    img.style.removeProperty('width');
+    img.style.removeProperty('max-width');
+    img.style.removeProperty('object-fit');
+  });
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.media-image-frame > img')?.naturalWidth === 640,
+  );
   assert.equal(
     Math.round(
       await images.first().evaluate((img) => img.getBoundingClientRect().width),
     ),
     Math.round(sizes[0].box),
   );
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 3,
+      configurable: true,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.media-image-frame > img')?.naturalWidth === 1600,
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'devicePixelRatio', {
+      value: 1,
+      configurable: true,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.media-image-frame > img')?.naturalWidth === 640,
+  );
+  await page.route('**/*fail-test=1', (route) => route.abort());
+  await images.first().evaluate((img) => {
+    img.dataset.imageSmall += '&fail-test=1';
+    window.dispatchEvent(new Event('resize'));
+  });
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.media-image-frame > img')?.naturalWidth === 1600,
+  );
+  assert.equal(
+    await images.count(),
+    12,
+    'failed small copy must retry without removing the image',
+  );
   assert.deepEqual(
     await readFile(path.join(dataDir, 'media', keys[0])),
     original,
   );
   console.log(
-    'PASS: twelve 24 MP images use capped canvas previews and 160px thumbnails; HTML images use derivatives; editor requests zero originals; UI click works during loading; original/signed media and preview geometry preserved.',
+    'PASS: twelve 24 MP images use smooth 640px copies in small frames, 160px thumbnails and capped HTML images; editor requests zero originals; Preview adapts to large/small frames without changing saved sources; UI click and signed original downloads work.',
   );
 } finally {
   await browser.close();
