@@ -43,7 +43,7 @@ let imageRequests = 0;
 let sourceRequests = 0;
 let source = '';
 const server = createServer(async (req, res) => {
-  if (req.url === '/api/media/aabb.svg') {
+  if (new URL(req.url, 'http://localhost').pathname === '/api/media/aabb.svg') {
     imageRequests++;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.end(

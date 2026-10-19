@@ -1,6 +1,8 @@
 import '../app/globals.css';
 import { watchImageDisplay } from '../app/image-display';
-document.querySelectorAll<HTMLImageElement>('img[data-image-small]').forEach(watchImageDisplay);
+document
+  .querySelectorAll<HTMLImageElement>('img[data-image-small]')
+  .forEach(watchImageDisplay);
 if (document.querySelector('model-viewer')) void import('@google/model-viewer');
 
 import { startTemplateMotion } from '../app/template-motion';
@@ -19,6 +21,9 @@ import { htmlFrameURL } from '../app/html-document';
 import { followHtmlLink } from '../app/html-navigation';
 import { watchHtmlFrame } from '../app/html-visibility';
 const htmlRoutes = JSON.parse(document.body.dataset.customHtmlRoutes || '{}');
+const htmlImages = JSON.parse(
+  atob(document.body.dataset.customHtmlMedia || 'e30='),
+);
 const htmlSources = new Map<string, Promise<unknown>>();
 function loadHtmlSource(url: string): Promise<unknown> {
   if (!htmlSources.has(url))
@@ -60,7 +65,11 @@ for (const frame of document.querySelectorAll<HTMLIFrameElement>(
               return text;
             }),
           );
-          frame.src = htmlFrameURL(parts.join(''), document.baseURI);
+          frame.src = htmlFrameURL(
+            parts.join(''),
+            document.baseURI,
+            htmlImages,
+          );
         })
         .catch(() => {
           const error = document.createElement('output');
@@ -73,6 +82,7 @@ for (const frame of document.querySelectorAll<HTMLIFrameElement>(
       frame.src = htmlFrameURL(
         frame.dataset.htmlDocument || '',
         document.baseURI,
+        htmlImages,
       );
   });
   window.addEventListener('message', (event) =>

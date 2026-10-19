@@ -1,6 +1,20 @@
 // Shared by the offline compiler and the server's two-ZIP handoff.
 // This version must match the pinned pdfjs-dist dependency.
 export const PDF_WORKER_SOURCE = '/templates/runtime/pdfjs-6.4.299-worker.js';
+// Card widgets often keep filenames in data arrays and concatenate the media
+// prefix at runtime. Collect literal upload IDs without evaluating custom code.
+export function dynamicHtmlImages(code) {
+  if (!code.includes('/api/media/')) return [];
+  return [
+    ...new Set(
+      [
+        ...code.matchAll(
+          /(?:["'`]|&quot;|&#39;|&#x27;)([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.(?:jpe?g|png|webp|gif|avif|svg|ico))(?:["'`]|&quot;|&#39;|&#x27;)/gi,
+        ),
+      ].map((match) => '/api/media/' + match[1]),
+    ),
+  ];
+}
 // Tab icons use the same source in the editor, preview and published HTML.
 export function siteIcon(values) {
   let logo;
@@ -138,6 +152,12 @@ export function exportMedia(
         const code = [node.html, node.css, node.javascript]
           .filter(Boolean)
           .join('\n');
+        for (const source of dynamicHtmlImages(code))
+          add(
+            source,
+            'image',
+            at(key.slice(7), node, 'Custom HTML / CSS / JavaScript'),
+          );
         // Explicit local asset references in snippets participate in the normal export mapping.
         for (const [source] of code.matchAll(
           /\/api\/media\/[a-f0-9-]+\.[a-z0-9]+|\/templates\/[a-zA-Z0-9_./-]+/g,
@@ -158,7 +178,11 @@ export function exportMedia(
   }
   const header = JSON.parse(values['site:header'] || '{}');
   if (header.loading?.enabled && header.loading.image)
-    add(header.loading.image, 'image', { pageTitle: 'Site settings', layerName: 'Loading animation', field: 'Image source' });
+    add(header.loading.image, 'image', {
+      pageTitle: 'Site settings',
+      layerName: 'Loading animation',
+      field: 'Image source',
+    });
   const logo = header.logo;
   if (logo)
     add(logo, 'image', {

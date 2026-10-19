@@ -14,6 +14,7 @@ import { compressExportImage, IMAGE_UPLOAD_BYTES } from './image-export.mjs';
 import { splitPdf, PDF_PART_BYTES } from './pdf-parts.mjs';
 import {
   exportMedia,
+  dynamicHtmlImages,
   PDF_WORKER_SOURCE,
   mediaFolder,
   templateFontCss,
@@ -660,6 +661,14 @@ for (const page of [undefined, ...wikiPages]) {
     pageTitle: page?.title || 'Home',
   });
   html = rewriteGoogleFonts(html, googleFonts, mediaMap);
+  const htmlImageMap = Object.fromEntries(
+    dynamicHtmlImages(html)
+      .filter((source) => mediaMap[source])
+      .map((source) => [source, mediaMap[source]]),
+  );
+  const htmlImageData = Buffer.from(JSON.stringify(htmlImageMap)).toString(
+    'base64',
+  );
   html = html.replace(/<img\b[^>]*>/gi, (tag) => {
     const small = /data-image-small="([^"]+)"/.exec(tag)?.[1];
     const large = /data-image-large="([^"]+)"/.exec(tag)?.[1];
@@ -772,7 +781,7 @@ for (const page of [undefined, ...wikiPages]) {
     css
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
-    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}">` +
+    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}">` +
     loadingScript +
     html +
     '</body></html>';

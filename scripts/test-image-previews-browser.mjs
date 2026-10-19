@@ -104,6 +104,21 @@ try {
     redirect: 'manual',
   });
   assert.equal(raw.status, 302, 'originals still use signed media links');
+  const inline = await fetch(origin + '/api/media/' + keys[0] + '?inline=1', {
+    headers,
+    redirect: 'manual',
+  });
+  assert.equal(
+    inline.status,
+    200,
+    'authenticated HTML resolution does not redirect',
+  );
+  assert.deepEqual(Buffer.from(await inline.arrayBuffer()), original);
+  assert.match(inline.headers.get('cache-control'), /private/);
+  assert.equal(
+    (await fetch(origin + '/api/media/' + keys[0] + '?inline=1')).status,
+    401,
+  );
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
     extraHTTPHeaders: { 'cf-access-jwt-assertion': token },

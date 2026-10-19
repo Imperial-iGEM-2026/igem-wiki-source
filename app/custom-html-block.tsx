@@ -6,6 +6,7 @@ import { localHtmlImages } from './html-image';
 import { followHtmlLink } from './html-navigation';
 import { watchHtmlFrame } from './html-visibility';
 import { editorImageURL } from './editor-image';
+import { dynamicHtmlImages } from '../scripts/export-media.mjs';
 
 export function CustomHtmlBlock({
   node,
@@ -23,6 +24,7 @@ export function CustomHtmlBlock({
   );
   const [document, setDocument] = useState(source);
   const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
   const imageCache = useRef(new Map<string, string>());
   useEffect(() => {
@@ -40,7 +42,9 @@ export function CustomHtmlBlock({
     const images = new Map(
       [...localHtmlImages(document, base)].map(([ref, url]) => [
         ref,
-        editing ? editorImageURL(url) : url,
+        editing && editorImageURL(url) !== url
+          ? editorImageURL(url)
+          : url + '?inline=1',
       ]),
     );
     const cache = imageCache.current;
@@ -64,7 +68,11 @@ export function CustomHtmlBlock({
             !response.ok ||
             !response.headers.get('content-type')?.startsWith('image/')
           )
-            throw Error('Image request failed');
+            throw Error(
+              response.ok
+                ? 'response is not an image'
+                : `HTTP ${response.status}`,
+            );
           const image = await response.blob();
           if (!active) return;
           // Opaque data frames cannot read parent-owned blob URLs in all browsers.
@@ -78,8 +86,11 @@ export function CustomHtmlBlock({
           if (!active) return;
           cache.set(url, data);
           replacements.set(reference, data);
-        } catch {
-          if (active) failures.push(reference.split('/').pop() || 'image');
+        } catch (cause) {
+          if (active)
+            failures.push(
+              `${reference.split('/').pop() || 'image'} (${cause instanceof Error ? cause.message : 'request failed'})`,
+            );
         }
       };
       const entries = [...images];
@@ -96,10 +107,14 @@ export function CustomHtmlBlock({
             replacements.get(match)!,
           )
         : document;
-      frame.current.src = htmlFrameURL(resolved, base);
+      const imageMap: Record<string, string> = {};
+      for (const reference of dynamicHtmlImages(document))
+        if (replacements.has(reference))
+          imageMap[reference] = replacements.get(reference)!;
+      frame.current.src = htmlFrameURL(resolved, base, imageMap);
       setError(
         failures.length
-          ? `Could not load uploaded image: ${failures.join(', ')}. Refresh and sign in, then retry.`
+          ? `Could not load uploaded image: ${failures.join(', ')}. Retry loading; HTTP 404 means the file is missing, while 401/403 means sign-in is needed.`
           : '',
       );
     }
@@ -113,7 +128,7 @@ export function CustomHtmlBlock({
       active = false;
       controller.abort();
     };
-  }, [document, editing]);
+  }, [document, editing, retry]);
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (frame.current) followHtmlLink(event, frame.current, setError);
@@ -144,6 +159,11 @@ export function CustomHtmlBlock({
         data-html-document={document}
       />
       {error && <output className="custom-html-error">{error}</output>}
+      {error.startsWith('Could not load uploaded image:') && (
+        <button type="button" onClick={() => setRetry((value) => value + 1)}>
+          Retry images
+        </button>
+      )}
     </div>
   );
 }

@@ -1342,6 +1342,13 @@ export async function createAppServer({
           const preview = await imagePreview(key, Number(url.searchParams.get('preview')));
           return await file(req, res, preview, 'image/webp', 600);
         }
+        // Parent-side Custom HTML resolution needs authenticated bytes, not a
+        // cross-origin redirect. Keep the opaque frame isolated from this API.
+        if (url.searchParams.get('inline') === '1') {
+          const type = mediaTypes[key.split('.').pop()];
+          if (!type?.startsWith('image/')) throw fail(400, 'Inline resolution supports images only');
+          return await file(req, res, path.join(dataDir, 'media', key), type, 600);
+        }
         if (media) {
           res.writeHead(302, {
             Location: await media.readURL(key, user),

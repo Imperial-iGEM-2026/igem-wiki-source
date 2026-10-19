@@ -1,5 +1,6 @@
 import type { CanvasNode } from './canvas-schema';
 import { htmlVisibilityBridge } from './html-visibility';
+import { htmlImageBridge } from './html-image';
 
 export const htmlExample = {
   html: '<button class="orbit" aria-label="Change animation speed"><span></span><span></span><span></span></button>\n<p>Click to change the rhythm</p>',
@@ -43,7 +44,11 @@ export function htmlDocument(
  * This lets nested HTTPS players retain their own origins without granting
  * custom code access to the editor. Never substitute srcdoc or a blob URL.
  */
-export function htmlFrameURL(source: string, pageURL: string) {
+export function htmlFrameURL(
+  source: string,
+  pageURL: string,
+  images: Record<string, string> = {},
+) {
   const url = new URL(pageURL);
   // Relative assets need the path, never private preview keys or credentials.
   url.search = url.hash = url.username = url.password = '';
@@ -65,7 +70,7 @@ export function htmlFrameURL(source: string, pageURL: string) {
         .replace('<style>', base + '<style>')
         .replace(
           '<script>',
-          `<script>(${htmlVisibilityBridge.toString()})();</script><script>`,
+          `<script>(${htmlVisibilityBridge.toString()})();${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
         ),
     )
   );
