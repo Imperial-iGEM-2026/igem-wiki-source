@@ -224,6 +224,13 @@ export function CustomHtmlEditor({
           access to the surrounding page are blocked. Use self-contained code
           and respect reduced-motion preferences.
         </p>
+        <p>
+          Blocks load near the viewport. CSS, SVG, Web Animations and
+          requestAnimationFrame loops pause off screen and resume when visible.
+          For animation loops using timers, listen for the studio:visibility
+          event and use event.detail.visible to stop or restart your animation
+          work. Application timers and media playback are not stopped for you.
+        </p>
       </details>
     </div>
   );

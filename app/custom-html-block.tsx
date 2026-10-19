@@ -4,6 +4,7 @@ import type { CanvasNode } from './canvas-schema';
 import { htmlDocument, htmlFrameURL } from './html-document';
 import { localHtmlImages } from './html-image';
 import { followHtmlLink } from './html-navigation';
+import { watchHtmlFrame } from './html-visibility';
 
 export function CustomHtmlBlock({
   node,
@@ -95,8 +96,13 @@ export function CustomHtmlBlock({
           : '',
       );
     }
-    void preview();
+    const stop = frame.current
+      ? watchHtmlFrame(frame.current, () => {
+          void preview();
+        })
+      : undefined;
     return () => {
+      stop?.();
       active = false;
       controller.abort();
     };

@@ -555,6 +555,7 @@ export function CanvasSurface({
               src={n.src}
               alt={n.alt || n.name || 'Sponsor logo'}
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <span>Add sponsor logo</span>

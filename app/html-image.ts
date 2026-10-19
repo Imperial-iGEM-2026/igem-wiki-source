@@ -17,7 +17,7 @@ export function insertHtmlImage(
       .replace(/"/g, '&quot;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-  const tag = `<img src="${escape(url)}" alt="${escape(alt)}" style="max-width:100%;height:auto" />`;
+  const tag = `<img src="${escape(url)}" alt="${escape(alt)}" loading="lazy" decoding="async" style="max-width:100%;height:auto" />`;
   const from = Math.max(0, Math.min(html.length, start));
   const to = Math.max(from, Math.min(html.length, end));
   const inserted = `\n${tag}\n`;

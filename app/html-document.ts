@@ -1,4 +1,5 @@
 import type { CanvasNode } from './canvas-schema';
+import { htmlVisibilityBridge } from './html-visibility';
 
 export const htmlExample = {
   html: '<button class="orbit" aria-label="Change animation speed"><span></span><span></span><span></span></button>\n<p>Click to change the rhythm</p>',
@@ -59,6 +60,13 @@ export function htmlFrameURL(source: string, pageURL: string) {
       : source;
   return (
     'data:text/html;charset=utf-8,' +
-    encodeURIComponent(content.replace('<style>', base + '<style>'))
+    encodeURIComponent(
+      content
+        .replace('<style>', base + '<style>')
+        .replace(
+          '<script>',
+          `<script>(${htmlVisibilityBridge.toString()})();</script><script>`,
+        ),
+    )
   );
 }

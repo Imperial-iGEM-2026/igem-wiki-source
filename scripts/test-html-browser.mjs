@@ -31,7 +31,7 @@ await build({
   ...common,
   build: {
     outDir: dist,
-    rollupOptions: { input: path.join(folder, 'index.html') },
+    rolldownOptions: { input: path.join(folder, 'index.html') },
   },
 });
 const server = createServer(async (req, res) => {
@@ -68,6 +68,8 @@ try {
   const host = page.locator('.custom-html-frame');
   const content = page.frameLocator('.custom-html-frame');
   await content.locator('.orbit').waitFor();
+  // Selection mode intentionally shields sandbox interactions; Preview enables them.
+  await page.locator('#mode').click();
   await page.screenshot({ path: path.join(folder, 'before.png') });
   await content.locator('.orbit').click();
   assert.match(await content.locator('.orbit').getAttribute('class'), /fast/);
@@ -116,7 +118,8 @@ try {
     .locator('#studio-html-source')
     .fill('throw new Error("example runtime error")');
   await page
-    .getByText('Animation error: Uncaught Error: example runtime error')
+    .locator('.custom-html-error')
+    .filter({ hasText: 'example runtime error' })
     .waitFor();
   await page
     .locator('#studio-html-source')

@@ -203,6 +203,7 @@ export function MediaBlock({
                 src={node.src}
                 alt={node.alt || node.title}
                 loading="lazy"
+                decoding="async"
                 onError={() => setFailed(true)}
               />
               <a
