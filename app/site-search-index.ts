@@ -39,6 +39,8 @@ export function buildSearchIndex(values: Record<string, string>): SearchIndex {
     return ast.c.map(astText).join(' ');
   };
   for (const page of pages) {
+    // Development copies remain saved, but are never part of public search.
+    if (/(?:^|-)(?:backup|test|scratch)(?:-|$)/i.test(page.slug)) continue;
     const slug = page.slug === 'home' ? '' : publicationSlug(page.slug, slugs);
     const title = searchText(all[page.slug + ':title'] || page.title);
     const add = (key: string, heading: string, content: string) => {

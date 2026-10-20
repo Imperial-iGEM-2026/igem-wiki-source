@@ -10,7 +10,15 @@ const child={...newNode('child','text'),parentId:'hidden',body:'SECRET_SUBTREE'}
 const html={...newNode('html','html'),html:'<p>Accessible workshop &amp; education</p><script>SECRET_SCRIPT</script><style>SECRET_CSS</style>'};
 const deleted={...newNode('deleted','text'),deleted:true,body:'SECRET_DELETED'};
 const values={'site:template':'blank','pages:custom':JSON.stringify([{slug:'education',title:'Education'},{slug:'removed',title:'Removed'}]),'pages:removed':'["removed"]','layout:education':JSON.stringify({...emptyLayout,nodes:[text,hidden,child,html,deleted],order:['text','hidden','child','html','deleted']}),'layout:removed':JSON.stringify({...emptyLayout,nodes:[{...text,body:'SECRET_PAGE'}]})};
+const development=['hp-backup-1','members-flip-test','results-rebuild-scratch'];
+const regular=['contest','testing-methods'];
+values['pages:custom']=JSON.stringify([...JSON.parse(values['pages:custom']),...[...development,...regular].map(slug=>({slug,title:slug}))]);
+for(const slug of development)values['layout:'+slug]=JSON.stringify({...emptyLayout,nodes:[{...text,body:'SECRET_DEVELOPMENT'}]});
+const before=JSON.stringify(values);
 const index=buildSearchIndex(values),serialized=JSON.stringify(index);
+assert.equal(JSON.stringify(values),before,'Indexing must not alter saved pages');
+assert.ok(!index.documents.some(d=>development.includes(d.page)));
+assert.ok(regular.every(slug=>index.documents.some(d=>d.page===slug)),'Only whole slug segments identify development copies');
 assert.ok(serialized.includes('Café'));assert.ok(serialized.includes('Accessible workshop & education'));
 assert.ok(!serialized.includes('SECRET_'));assert.ok(!index.documents.some(d=>d.page==='removed'));
 assert.deepEqual(buildSearchIndex(values),index);
@@ -37,6 +45,7 @@ assert.equal((await quality.search('hydrogel',{limit:1})).length,1);
 if(process.argv[2]) {
  const start=performance.now(),real=buildSearchIndex(JSON.parse(await readFile(process.argv[2],'utf8')));
  const actual=createWebsiteSearch(async()=>real);
+ assert.ok(!real.documents.some(d=>/(?:^|-)(?:backup|test|scratch)(?:-|$)/i.test(d.page)),'No development pages in the exported index');
  const cases=[['human practices','human-practices'],['education','education'],['lab notebook','notebook'],['sponsor','sponsors'],['ethics','ethics'],['great exhibition road festival','education']];
  for(const [query,page] of cases)assert.equal((await actual.search(query))[0]?.page,page,query);
  assert.equal((await actual.search('streptavidn'))[0]?.correction,'streptavidin');
