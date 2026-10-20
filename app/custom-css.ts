@@ -32,7 +32,8 @@ export function compileCustomCss(
       comment.text === 'prion-selection-controls' &&
       (next?.type === 'rule' ||
         (next?.type === 'atrule' && next.name === 'media'))
-    ) controls.add(next);
+    )
+      controls.add(next);
   });
   root.walkComments((comment) => {
     comment.remove();
@@ -105,6 +106,40 @@ export function compileCustomCss(
         node.value = node.value.replace(/(-?(?:\d*\.)?\d+)vw\b/gi, '$1cqw');
     } else throw Error('Unsupported CSS syntax.');
   });
+  if (editor) {
+    // A zoomed, nested editor scrollport can leave view()/scroll() animations
+    // at their transparent entrance frame. Show their completed pose in Design;
+    // Preview/export still use the original scroll timeline and saved CSS.
+    // Clone at the end of the same media scope so later animation shorthands
+    // cannot reset these longhands. Do not override authored opacity/display.
+    const reveals: import('postcss').Rule[] = [];
+    root.walkRules((rule) => {
+      const timeline = rule.nodes.findLast(
+        (node) =>
+          node.type === 'decl' &&
+          node.prop.toLowerCase() === 'animation-timeline',
+      );
+      if (
+        timeline?.type === 'decl' &&
+        /\b(?:view|scroll)\s*\(|--[\w-]+/i.test(timeline.value)
+      )
+        reveals.push(rule);
+    });
+    for (const rule of reveals) {
+      const pose = rule.clone({ nodes: [] });
+      for (const [prop, value] of Object.entries({
+        'animation-timeline': 'auto',
+        'animation-range': 'normal',
+        'animation-duration': '1ms',
+        'animation-delay': '-1ms',
+        'animation-iteration-count': '1',
+        'animation-fill-mode': 'both',
+        'animation-play-state': 'paused',
+      }))
+        pose.append({ prop, value, important: true });
+      rule.parent?.append(pose);
+    }
+  }
   // Important declarations in a layer outrank unlayered important styles,
   // regardless of selector specificity. Compile only after normal validation,
   // and use the same layer in editor, preview and static export.
