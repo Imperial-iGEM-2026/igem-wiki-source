@@ -100,9 +100,25 @@ self.onmessage = async (event) => {
               loader: 'js',
             }));
             b.onLoad({ filter: /.*/, namespace: 'source' }, (a) => {
-              if (a.path === 'app/source-preview-ui.tsx')
+              if (a.path === 'app/ai-link-dialog.tsx')
                 return {
-                  contents: 'export const SourcePreview=()=>null;',
+                  contents: `import {useEffect} from 'react';export function AiLinkDialog({open,onOpenChange,page}){useEffect(()=>{if(open){window.__studioOpenAI(page);onOpenChange(false)}},[open]);return null}`,
+                  loader: 'js',
+                };
+              if (a.path === 'app/studio-projects.tsx')
+                return {
+                  contents: `import React from 'react';export function StudioProjects(){return React.createElement('button',{onClick:()=>window.__studioOpenProjects()},'Projects')}`,
+                  loader: 'js',
+                };
+              if (a.path === 'app/export-panel.tsx')
+                return {
+                  contents: `import React from 'react';export function ExportPanel({disabled}){return React.createElement('button',{disabled,onClick:()=>window.__studioOpenExport()},'Export website')}`,
+                  loader: 'js',
+                };
+              if (a.path === 'app/upload-media.ts')
+                return {
+                  contents:
+                    'export const uploadMedia=(file,progress)=>window.__studioUpload(file,progress);',
                   loader: 'js',
                 };
               if (a.path.endsWith('.css'))
@@ -115,7 +131,12 @@ self.onmessage = async (event) => {
                 };
               const ext = a.path.split('.').pop();
               return {
-                contents: files[a.path],
+                contents: /\.[cm]?[jt]sx?$/.test(a.path)
+                  ? files[a.path].replaceAll(
+                      'window.location.assign(',
+                      'window.__studioNavigate(',
+                    )
+                  : files[a.path],
                 loader: ext === 'mjs' ? 'js' : (ext as esbuild.Loader),
               };
             });

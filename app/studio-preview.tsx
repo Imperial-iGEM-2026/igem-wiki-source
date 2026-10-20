@@ -63,7 +63,51 @@ export function StudioPreview({
         ?.querySelectorAll('video,audio')
         .forEach((media) => (media as HTMLMediaElement).pause());
   }, [active]);
-  const [source, setSource] = useState(false);
+  const [sourceState, setSourceState] = useState<{
+    project?: string;
+    overrides: boolean;
+    error?: string;
+  } | null>(null);
+  const [check, setCheck] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    setSourceState(null);
+    void fetch(
+      '/api/source-preview?project=' + encodeURIComponent(projectId || ''),
+      {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: controller.signal,
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok)
+          throw Error(
+            'Could not check project source (HTTP ' + response.status + ').',
+          );
+        const metadata = (await response.json()) as { modifiedFiles?: unknown };
+        if (!Array.isArray(metadata.modifiedFiles))
+          throw Error('Invalid source preview response.');
+        if (!controller.signal.aborted)
+          setSourceState({
+            project: projectId,
+            overrides: metadata.modifiedFiles.length > 0,
+          });
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setSourceState({
+            project: projectId,
+            overrides: false,
+            error: String(error.message || error),
+          });
+      });
+    return () => controller.abort();
+  }, [active, projectId, check]);
+  const checking = !sourceState || sourceState.project !== projectId;
+  const source = !checking && sourceState.overrides;
+  const blocked = checking || Boolean(sourceState?.error);
   const [width, setWidth] = useState(1440);
   return (
     <section
@@ -100,16 +144,38 @@ export function StudioPreview({
           ))}
         </div>
       </div>
-      <div className="studio-preview-version" aria-label="Preview version">
-        <button aria-pressed={!source} onClick={() => setSource(false)}>Installed version</button>
-        <button aria-pressed={source} onClick={() => setSource(true)}>Developer source</button>
-        <small>{source ? 'Project source overrides · isolated browser build' : 'Installed Studio components'}</small>
-      </div>
-      {source && active && <SourcePreview data={data} page={page} projectId={projectId} width={width} active={active} />}
-      <div className="studio-preview-viewport" style={source ? {display: 'none'} : undefined}>
+      {blocked && (
+        <div className="studio-source-status" role="status">
+          {checking ? (
+            'Checking the website source…'
+          ) : (
+            <>
+              {sourceState?.error} The website version has not been verified.{' '}
+              <button onClick={() => setCheck((value) => value + 1)}>
+                Retry source check
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {source && active && (
+        <SourcePreview
+          data={data}
+          page={page}
+          projectId={projectId}
+          width={width}
+          active={active}
+        />
+      )}
+      <div
+        className="studio-preview-viewport"
+        style={source || blocked ? { display: 'none' } : undefined}
+      >
         <iframe
           ref={frameRef}
-          src="/studio-preview"
+          src={
+            (window as any).__studioSourceBuild ? undefined : '/studio-preview'
+          }
           title="Complete website preview"
           style={{ width }}
         />

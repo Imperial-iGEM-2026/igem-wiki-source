@@ -3,6 +3,7 @@
 import { sectionLinkTargets, sectionLinkPages } from './section-link-targets';
 import { startSectionLinks, revealSection } from './section-links';
 import { startWebsiteSearch } from './site-search';
+import { startWebsiteAccessibility } from './site-accessibility';
 import { defaultLoading, startSiteLoading } from './site-loading';
 import { parseHeader } from './header-schema';
 import { startReferenceNavigation } from './reference-navigation';
@@ -123,13 +124,15 @@ export default function Home({
       (publication ? 'preview:' : 'project:') + (projectId || 'default'));
   }, [editing, loadingHeader, publication, projectId, wiki?.slug]);
   useEffect(() => {
-    if (editing) return;
     return startWebsiteSearch(async () => {
       const response = await projectFetch('/api/search-index' + (projectId ? '?project=' + encodeURIComponent(projectId) : ''), { credentials: 'same-origin' });
       if (!response.ok) throw Error('Search unavailable');
       return response.json();
-    }, '/', document.body, (url) => projectURL(url, false));
+    }, '/', document.body, (url) => projectURL(url, false), !editing);
   }, [editing, projectId]);
+  useEffect(() => {
+    if (!editing) return startWebsiteAccessibility((publication ? 'preview:' : 'project:') + (projectId || 'default'));
+  }, [editing, publication, projectId]);
   const tabIcon = siteIcon({
     'site:header': data['site:header']?.value,
     'site:template': data['site:template']?.value,
@@ -337,6 +340,10 @@ export default function Home({
     }
     if (editing && (active || structuralDirty)) {
       setError('Save or cancel your current edit before leaving edit mode.');
+      return;
+    }
+    if (!editing && projectId) {
+      window.location.assign(projectURL(location.pathname + location.search + location.hash, true));
       return;
     }
     setEditing(!editing);

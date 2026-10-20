@@ -4,6 +4,7 @@ import { EditorLoading } from '../app/editor-loading';
 import { projectFetch, setApiProject, type Projects } from '../app/project-api';
 import { createRoot } from 'react-dom/client';
 import Home from '../app/home';
+import { SourceStudio } from '../app/source-studio';
 import type { Blocks } from '../app/content';
 import { pageCatalog } from '../app/custom-pages';
 import '../app/globals.css';
@@ -77,8 +78,9 @@ void (async () => {
       );
       return;
     }
+    const Website = new URLSearchParams(location.search).get('studio') === '1' ? SourceStudio : Home;
     root.render(
-      <Home
+      <Website
         projectId={content.projectId}
         user={session.user}
         wiki={page}

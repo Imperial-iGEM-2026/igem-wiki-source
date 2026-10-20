@@ -1,3 +1,4 @@
+import { searchHtmlExample } from './html-search';
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, FileUp, Copy } from 'lucide-react';
@@ -154,6 +155,9 @@ export function CustomHtmlEditor({
         autoCorrect="off"
         rows={14}
       />
+      {!node.html?.trim() && !node.javascript?.trim() && <button type="button" disabled={disabled} onClick={() => {
+        onChange({...searchHtmlExample, minHeight:320}, 'search-ui'); onEnd();
+      }}>Insert editable search interface</button>}
       <div className="studio-html-assets">
         <label htmlFor="studio-html-image-alt">
           Image description (alt text)

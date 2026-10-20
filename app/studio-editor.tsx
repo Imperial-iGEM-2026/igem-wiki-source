@@ -914,6 +914,7 @@ export function StudioEditor({
   const reportDirty = ctx.dirty;
   useEffect(() => {
     reportDirty(dirty);
+    window.dispatchEvent(new CustomEvent('studio-dirty', { detail: dirty }));
     return () => reportDirty(false);
   }, [dirty, reportDirty]);
   useEffect(() => {

@@ -1,8 +1,13 @@
+import { startWebsiteAccessibility } from '../app/site-accessibility';
+startWebsiteAccessibility('published:' + (document.body.dataset.siteBase || '/'));
 import { startSectionLinks } from '../app/section-links';
 startSectionLinks();
 import { startWebsiteSearch } from '../app/site-search';
 const searchURL = document.body.dataset.siteSearch;
 if (searchURL) startWebsiteSearch(async () => (await import(/* @vite-ignore */ searchURL)).default, document.body.dataset.siteBase || '/');
+import { serveHtmlSearch } from '../app/html-search';
+const searchHost = window as Window & {__htmlSearchBridge?: unknown; websiteSearch?: {search: Parameters<typeof serveHtmlSearch>[0]}};
+if (!searchHost.__htmlSearchBridge && searchHost.websiteSearch) serveHtmlSearch(searchHost.websiteSearch.search);
 import '../app/globals.css';
 import { watchImageDisplay } from '../app/image-display';
 document

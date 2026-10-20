@@ -147,9 +147,10 @@ function size(bytes: number) {
   return (bytes / 1024 ** 3).toFixed(1) + ' GB';
 }
 
-export function ExportPanel({ disabled }: { disabled: boolean }) {
-  const [open, setOpen] = useState(false),
+export function ExportPanel({ disabled, standalone = false, onClose }: { disabled: boolean; standalone?: boolean; onClose?: () => void }) {
+  const [open, setOpenState] = useState(standalone),
     [busy, setBusy] = useState(false);
+  const setOpen = (value: boolean) => { setOpenState(value); if (!value) onClose?.(); };
 
   const [team, setTeam] = useState('imperial-college');
 
@@ -263,7 +264,7 @@ export function ExportPanel({ disabled }: { disabled: boolean }) {
 
   return (
     <>
-      <button
+      {!standalone && <button
         disabled={disabled}
 
         title={
@@ -275,7 +276,7 @@ export function ExportPanel({ disabled }: { disabled: boolean }) {
         onClick={() => changeOpen(true)}
       >
         Export wiki
-      </button>
+      </button>}
       <Dialog open={open} onOpenChange={changeOpen}>
         <DialogContent className="wiki-export-dialog" ref={dialogRef}>
           <div className="wiki-export-heading">

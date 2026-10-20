@@ -1,4 +1,16 @@
+import { StudioProjects } from './studio-projects';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { useEffect, useRef, useState } from 'react';
+import { pageCatalog } from './custom-pages';
+import { sourceEditorRequest } from './source-editor-policy';
+import { uploadMedia } from './upload-media';
+import { ExportPanel } from './export-panel';
+import { AiLinkDialog } from './ai-link-dialog';
 import type { Blocks } from './content';
 import { sourcePreviewBootstrap } from './source-preview-frame';
 
@@ -23,15 +35,29 @@ export function SourcePreview({
   projectId,
   width,
   active,
+  editor,
 }: {
   data: Blocks;
   page: string;
   projectId?: string;
-  width: number;
+  width: number | string;
   active: boolean;
+  editor?: { id: string; name: string };
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const latest = useRef({ data, page, projectId });
+  const latest = useRef({ data, page, projectId, editor });
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => {
+      if (dirtyRef.current) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, []);
+  const [aiPage, setAiPage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState('Preparing developer source…');
   const [error, setError] = useState('');
@@ -39,7 +65,7 @@ export function SourcePreview({
   const [stale, setStale] = useState(false);
   const connection = useRef<{ token: string; ready: boolean } | null>(null);
   useEffect(() => {
-    latest.current = { data, page, projectId };
+    latest.current = { data, page, projectId, editor };
     if (connection.current?.ready)
       frame.current?.contentWindow?.postMessage(
         {
@@ -48,6 +74,7 @@ export function SourcePreview({
           data,
           page,
           projectId,
+          editor,
         },
         '*',
       );
@@ -57,6 +84,7 @@ export function SourcePreview({
     let worker: Worker | undefined;
     let disposed = false;
     let inflight = 0;
+    const streams = new Map<string, EventSource>();
     const waiting: (() => void)[] = [];
     const token = crypto.randomUUID();
     connection.current = { token, ready: false };
@@ -86,6 +114,124 @@ export function SourcePreview({
       )
         return;
       const message = event.data;
+      if (
+        editor &&
+        message.type === 'source-editor-projects' &&
+        !dirtyRef.current
+      )
+        setProjectsOpen(true);
+      if (editor && message.type === 'source-editor-dirty') {
+        dirtyRef.current = Boolean(message.dirty);
+        setDirty(dirtyRef.current);
+      }
+      if (
+        editor &&
+        message.type === 'source-editor-export' &&
+        !dirtyRef.current
+      )
+        setExportOpen(true);
+      if (
+        editor &&
+        message.type === 'source-editor-navigate' &&
+        !dirtyRef.current
+      ) {
+        const destination = new URL(String(message.url), document.baseURI);
+        if (
+          destination.origin === new URL(document.baseURI).origin &&
+          (destination.pathname === '/workspace' ||
+            (destination.searchParams.get('studio') === '1' &&
+              /^[a-zA-Z0-9-]+$/.test(
+                destination.searchParams.get('project') || '',
+              ) &&
+              (destination.pathname === '/' ||
+                pageCatalog(latest.current.data).some(
+                  (p) => '/' + p.slug === destination.pathname,
+                ))))
+        )
+          window.location.assign(destination.href);
+      }
+      if (editor && message.type === 'source-editor-route') {
+        const route = new URL(String(message.url), document.baseURI);
+        if (
+          route.origin === new URL(document.baseURI).origin &&
+          /^\/[a-zA-Z0-9/_-]*$/.test(route.pathname)
+        ) {
+          route.searchParams.set('project', projectId || '');
+          route.searchParams.set('studio', '1');
+          latest.current.page =
+            route.pathname.replace(/^\/+|\/+$/g, '') || 'home';
+          history.replaceState(
+            null,
+            '',
+            route.pathname + route.search + route.hash,
+          );
+        }
+      }
+      if (editor && message.type === 'source-editor-ai')
+        setAiPage(String(message.page || page));
+      if (editor && message.type === 'source-editor-upload') {
+        try {
+          if (!(message.file instanceof File))
+            throw Error('Choose a file to upload.');
+          const result = await uploadMedia(message.file, (progress) =>
+            frame.current?.contentWindow?.postMessage(
+              {
+                type: 'source-editor-upload-progress',
+                token,
+                id: message.id,
+                progress,
+              },
+              '*',
+            ),
+          );
+          frame.current?.contentWindow?.postMessage(
+            {
+              type: 'source-editor-upload-result',
+              token,
+              id: message.id,
+              result,
+            },
+            '*',
+          );
+        } catch (e) {
+          frame.current?.contentWindow?.postMessage(
+            {
+              type: 'source-editor-upload-result',
+              token,
+              id: message.id,
+              error: String(e),
+            },
+            '*',
+          );
+        }
+      }
+      if (editor && message.type === 'source-editor-live-close') {
+        streams.get(message.id)?.close();
+        streams.delete(message.id);
+      }
+      if (editor && message.type === 'source-editor-live' && streams.size < 2) {
+        const url = new URL('/api/live', location.origin);
+        url.searchParams.set('project', projectId || '');
+        url.searchParams.set('clientId', String(message.clientId).slice(0, 80));
+        url.searchParams.set('page', String(message.page).slice(0, 200));
+        streams.get(message.id)?.close();
+        const stream = new EventSource(url);
+        streams.set(message.id, stream);
+        for (const name of ['hello', 'presence', 'revision', 'error'])
+          stream.addEventListener(name, (e) =>
+            frame.current?.contentWindow?.postMessage(
+              {
+                type: 'source-editor-live-event',
+                token,
+                id: message.id,
+                name,
+                data: (e as MessageEvent).data,
+              },
+              '*',
+            ),
+          );
+      }
+
       if (message.type === 'source-preview-ready')
         frame.current?.contentWindow?.postMessage(
           {
@@ -94,17 +240,14 @@ export function SourcePreview({
             javascript,
             vendor,
             tailwind,
+            revision: bundle.revision,
             ...latest.current,
           },
           '*',
         );
       if (message.type === 'source-preview-loaded') {
         connection.current = { token, ready: true };
-        setStatus(
-          'Developer source · ' +
-            bundle.modifiedFiles.length +
-            ' changed files',
-        );
+        setStatus('');
         setRevision(bundle.revision);
       }
       if (message.type === 'source-preview-error')
@@ -136,30 +279,69 @@ export function SourcePreview({
         if (disposed) return;
         inflight++;
         try {
-          const url = new URL(message.url);
+          const url = new URL(message.url, document.baseURI);
+          const method = String(message.method || 'GET').toUpperCase();
+          const editRequest = editor
+            ? sourceEditorRequest(
+                url,
+                method,
+                message.body,
+                projectId || '',
+                new URL(document.baseURI).origin,
+              )
+            : null;
           if (
-            url.origin !== location.origin ||
-            !(
-              /^\/api\/media\/[a-zA-Z0-9.-]+$/.test(url.pathname) ||
-              /^\/(assets|templates)\/[a-zA-Z0-9_./-]+$/.test(url.pathname) ||
-              url.pathname === '/api/search-index' ||
-              url.pathname === '/prion-hero.png'
-            )
+            !editRequest &&
+            (url.origin !== new URL(document.baseURI).origin ||
+              method !== 'GET' ||
+              !(
+                /^\/api\/media\/[a-zA-Z0-9.-]+$/.test(url.pathname) ||
+                /^\/(assets|templates)\/[a-zA-Z0-9_./-]+$/.test(url.pathname) ||
+                url.pathname === '/api/search-index' ||
+                url.pathname === '/api/source-preview' ||
+                url.pathname === '/prion-hero.png'
+              ))
           )
             throw Error(
               'This resource is not available to the read-only source preview.',
             );
+          if (url.pathname === '/api/source-preview') {
+            const files = url.searchParams.has('files');
+            url.search =
+              '?project=' +
+              encodeURIComponent(projectId || '') +
+              (files ? '&files=1' : '');
+          }
           if (url.pathname === '/api/search-index')
             url.search = '?project=' + encodeURIComponent(projectId || '');
           const response = await fetch(url, {
+            ...editRequest,
             credentials: 'same-origin',
             signal: abort.signal,
           });
           if (Number(response.headers.get('content-length')) > 64 * 1024 * 1024)
-            throw Error(
-              'Preview resource exceeds 64 MiB. Use the installed preview for this file.',
-            );
+            throw Error('Resource exceeds the 64 MiB browser bridge limit.');
           const body = await response.arrayBuffer();
+          if (editor && response.ok && url.pathname === '/api/content') {
+            try {
+              const value = JSON.parse(new TextDecoder().decode(body));
+              const rows =
+                method === 'GET'
+                  ? value.rows
+                  : [{ ...value, id: JSON.parse(message.body).id }];
+              const snapshot = { ...latest.current.data };
+              for (const row of rows || [])
+                if (
+                  typeof row.id === 'string' &&
+                  typeof row.value === 'string' &&
+                  Number.isSafeInteger(row.version)
+                )
+                  snapshot[row.id] = row;
+              latest.current = { ...latest.current, data: snapshot };
+            } catch {
+              /* An unsuccessful/non-content response is not a snapshot. */
+            }
+          }
           if (body.byteLength > 64 * 1024 * 1024)
             throw Error('Preview resource exceeds 64 MiB.');
           respond(
@@ -186,8 +368,13 @@ export function SourcePreview({
       setStale(false);
       setStatus('Loading project source…');
       bundle = await (await request(endpoint)).json();
+      const inherited = (window as any).__studioSourceBuild;
+      if (!editor && inherited) {
+        lastBuild = inherited;
+        bundle = { ...bundle, revision: inherited.revision };
+      }
       if (
-        attempt === 0 &&
+        (attempt === 0 || (!editor && inherited)) &&
         lastBuild?.key === (projectId || '') &&
         lastBuild.revision === bundle.revision
       ) {
@@ -203,12 +390,7 @@ export function SourcePreview({
         });
         const compiled = new Promise<string>((resolve, reject) => {
           const timer = setTimeout(
-            () =>
-              reject(
-                Error(
-                  'Source build timed out. Retry or use Installed version.',
-                ),
-              ),
+            () => reject(Error('Source build timed out. Retry the build.')),
             60000,
           );
           worker!.onmessage = (e) => {
@@ -225,7 +407,7 @@ export function SourcePreview({
             ...sourceBundle.compiler,
             wasmURL: new URL(
               '/assets/source-preview/esbuild.wasm',
-              location.href,
+              document.baseURI,
             ).href,
           });
         });
@@ -249,7 +431,7 @@ export function SourcePreview({
       setStatus('Opening isolated source preview…');
       const base = new URL(
         latest.current.page === 'home' ? '/' : '/' + latest.current.page,
-        location.origin,
+        new URL(document.baseURI).origin,
       ).href
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;');
@@ -278,12 +460,13 @@ export function SourcePreview({
       disposed = true;
       abort.abort();
       worker?.terminate();
+      streams.forEach((stream) => stream.close());
       window.removeEventListener('message', receive);
       connection.current = null;
     };
-  }, [projectId, attempt]);
+  }, [projectId, attempt, Boolean(editor)]);
   useEffect(() => {
-    if (!active || !revision) return;
+    if (!active || !revision || (window as any).__studioSourceBuild) return;
     const abort = new AbortController();
     const check = () => {
       void fetch(
@@ -306,25 +489,66 @@ export function SourcePreview({
     };
   }, [active, revision, projectId]);
   return (
-    <div className="studio-source-preview">
-      <output className="studio-source-status">
-        <span>
-          {status}
-          {stale && ' · New source changes available'}
-        </span>
-        <button onClick={() => setAttempt((v) => v + 1)}>
-          Rebuild source preview
-        </button>
-      </output>
+    <div className={editor ? 'studio-source-editor' : 'studio-source-preview'}>
+      {(status || stale || error) && (
+        <output className="studio-source-status">
+          <span>
+            {status}
+            {stale && ' · New source changes available'}
+          </span>
+          <button
+            disabled={dirty}
+            title={dirty ? 'Save your edits before rebuilding' : undefined}
+            onClick={() => setAttempt((v) => v + 1)}
+          >
+            Rebuild source preview
+          </button>
+        </output>
+      )}
       {error && (
         <pre role="alert" className="studio-source-error">
           {error}
         </pre>
       )}
+      {editor && projectId && (
+        <Dialog open={projectsOpen} onOpenChange={setProjectsOpen}>
+          <DialogContent>
+            <DialogTitle>Projects</DialogTitle>
+            <DialogDescription>
+              Manage your project or switch to another website.
+            </DialogDescription>
+            <StudioProjects
+              current={projectId}
+              onSwitch={(id) =>
+                window.location.assign(
+                  '/?studio=1&project=' + encodeURIComponent(id),
+                )
+              }
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+      {editor && exportOpen && (
+        <ExportPanel
+          disabled={false}
+          standalone
+          onClose={() => setExportOpen(false)}
+        />
+      )}
+      {editor && (
+        <AiLinkDialog
+          open={aiPage !== null}
+          onOpenChange={(open) => {
+            if (!open) setAiPage(null);
+          }}
+          page={aiPage || page}
+          pageTitle={aiPage || page}
+        />
+      )}
       <iframe
         ref={frame}
-        title="Developer source preview"
-        sandbox="allow-scripts allow-same-origin allow-presentation"
+        title={editor ? 'Website editor' : 'Developer source preview'}
+        sandbox="allow-scripts allow-same-origin allow-presentation allow-downloads"
         allow="fullscreen *"
         style={{ width }}
       />

@@ -39,6 +39,7 @@ await build({
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/api/source-preview') { res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({modifiedFiles:[]})); return; }
     if (url.pathname === '/api/search-index') {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ version: 1, documents: [

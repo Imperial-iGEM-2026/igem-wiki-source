@@ -277,3 +277,28 @@ Open the text editor (choose **Expand editor** from the on-canvas editor), selec
 Section fragments use persistent layer/item IDs, so renaming or reordering a destination does not break its link. Hidden/deleted sections and removed pages are absent from the picker. Deleting and recreating a destination creates a new ID and requires updating its links. All templates use the same anchors without requiring a page index/sidebar. A Custom HTML block is a destination as a whole; headings inside its isolated frame are not individual targets.
 
 Preview and live navigation reveal collapsed ancestors, scroll to the destination and briefly highlight it (respecting reduced-motion preferences). Export rewrites the page path to the team's prefix while preserving its fragment. MCP `get_page.linkTargets` returns each available `{ anchor, label, href }`; use these URLs with `update_text`, section bodies or button links instead of guessing IDs. Install the new server and prepare fresh exports to deploy new anchors. Upload helper 1.0.29 carries the section navigation dependency when upgrading older source ZIPs; older ZIPs need a fresh export for the full feature.
+
+
+## Colour accessibility API
+
+Preview and exported websites provide a visitor-side API (no server call):
+
+```js
+window.websiteAccessibility.setColorMode('high-contrast');
+window.websiteAccessibility.setColorMode('default');
+window.websiteAccessibility.toggleColorMode();
+window.websiteAccessibility.getColorMode();
+```
+
+Add a keyboard-accessible control in the header or Custom HTML:
+
+```html
+<button type="button" data-website-color-toggle aria-pressed="false">High contrast colours</button>
+```
+
+High contrast uses dark text, white surfaces, blue underlined links and a brown focus outline. Preference is saved locally per website/project; Preview is separate from the live website. Default restores authored styles. Photos, videos, SVG figures and canvas plots are not filtered. Place `data-preserve-colors` on a diagram container to preserve its HTML colours too. Chart code may listen for `website:colormodechange` with `{ mode, palette }` in `event.detail`. Use labels, patterns or shapes as well as colour for scientific meaning; this interface palette does not automatically make diagrams, third-party embeds or PDF content accessible. Custom HTML receives changes through its existing isolated-frame boundary without access to editor data.
+
+Studio Design and Preview use the project source when overrides exist. There is no installed/source version selector. The full editor runs in an isolated browser document, preserving layer selection, resizing, content editing and project-scoped saves. Preview reuses that same build. Connection management, export downloads and file uploads remain in the trusted parent. Reopen Studio after adding the first override; rebuild source after saving edits when a newer revision is available. Source-check/build failures are shown rather than silently replacing the website view with older components. Build-script/server changes and new npm dependencies still require a real build/deployment.
+
+
+Custom HTML can call `await window.websiteSearch.search(query)` to receive up to 20 result objects (`title`, `excerpt`, `url`, `page`, `score`). An empty Custom HTML block offers **Insert editable search interface**: its HTML, CSS and JavaScript remain ordinary editable fields and its block uses the normal size/position controls. Select **Interact** to try the form in Design, or use Preview. Query access is read-only; the sandbox gets no authenticated fetch capability. Render result strings with `textContent` and use ordinary links for navigation. The built-in search dialog remains a runtime component, not a page layer; this optional interface does not replace an existing developer search design.

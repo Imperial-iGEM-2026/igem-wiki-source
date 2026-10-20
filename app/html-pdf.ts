@@ -65,7 +65,7 @@ export function openHtmlPdf(
     'width:min(1100px,94vw);max-width:94vw;height:90dvh;max-height:90dvh;padding:0;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#172033;box-shadow:0 20px 80px #0005;';
   const host = document.createElement('div');
   host.style.height = '100%';
-  dialog.append(host);
+  dialog.appendChild(host);
   const shell = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent =
@@ -76,7 +76,8 @@ export function openHtmlPdf(
   const close = document.createElement('button');
   close.textContent = 'Close PDF';
   close.type = 'button';
-  header.append(label, close);
+  header.appendChild(label);
+  header.appendChild(close);
   const viewer = document.createElement('div');
   viewer.className = 'document';
   viewer.dataset.pdfParts = JSON.stringify(
@@ -88,7 +89,7 @@ export function openHtmlPdf(
   const metadata = document.createElement('iframe');
   metadata.title = title || 'PDF document';
   metadata.hidden = true;
-  viewer.append(metadata);
+  viewer.appendChild(metadata);
   shell.append(style, header, viewer);
   let disposed = false;
   let cleanup: (() => void) | undefined;
@@ -103,7 +104,7 @@ export function openHtmlPdf(
   dialogs.set(frame, remove);
   close.onclick = () => dialog.close();
   dialog.addEventListener('close', remove, { once: true });
-  document.body.append(dialog);
+  document.body.appendChild(dialog);
   dialog.showModal();
   close.focus();
   void import('./pdf-parts-viewer')

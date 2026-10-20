@@ -117,3 +117,7 @@ const reader = await readFile(path.join(dir, 'export/public', destination.replac
 assert.ok(reader.includes('part-1.pdf') && reader.includes('part-2.pdf'));
 assert.ok(html.includes('data-custom-html-pdfs='));
 console.log('PASS: custom HTML PDF links survive export and open every partition, not just the first file.');
+
+assert.ok(runtime.includes('websiteAccessibility'));
+assert.ok(runtime.includes('website-color-mode'));
+console.log('PASS: exported runtime includes the visitor colour accessibility API.');

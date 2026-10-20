@@ -15,6 +15,7 @@ export function sourcePreviewBootstrap(token: string) {
       data: unknown,
       page: string,
       project?: string,
+      editor?: { id: string; name: string },
     ) => void;
   };
   const pending = new Map<
@@ -22,30 +23,92 @@ export function sourcePreviewBootstrap(token: string) {
     { resolve: (r: Response) => void; reject: (e: Error) => void }
   >();
   let next = 0;
+  let editing = false;
   const send = (type: string, data = {}) =>
     parent.postMessage({ type, token, ...data }, '*');
   const originalFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
+  window.fetch = async (input, init = {}) => {
     const address = input instanceof Request ? input.url : String(input);
     const url = new URL(address, document.baseURI);
     if (url.origin !== new URL(document.baseURI).origin)
       return originalFetch(input, init);
-    if (
-      (
-        init.method || (input instanceof Request ? input.method : 'GET')
-      ).toUpperCase() !== 'GET'
-    )
-      return Promise.reject(Error('Source Preview is read-only.'));
+    const method = (
+      init.method || (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
+    if (method !== 'GET' && !editing)
+      throw Error('Source Preview is read-only.');
+    const body =
+      method === 'GET'
+        ? undefined
+        : (init.body ??
+          (input instanceof Request ? await input.clone().text() : undefined));
     const id = ++next;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
-      send('source-preview-fetch', { id, url: url.href });
-      setTimeout(() => {
-        if (pending.delete(id))
-          reject(Error('Preview resource request timed out'));
-      }, 60000);
+      send('source-preview-fetch', { id, url: url.href, method, body });
+      const timer = setTimeout(() => {
+        if (pending.delete(id)) reject(Error('Website request timed out'));
+      }, 180000);
+      const signal =
+        init.signal || (input instanceof Request ? input.signal : undefined);
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          if (pending.delete(id))
+            reject(new DOMException('Aborted', 'AbortError'));
+        },
+        { once: true },
+      );
     });
   };
+  const uploads = new Map<
+    number,
+    {
+      resolve: (v: unknown) => void;
+      reject: (e: Error) => void;
+      progress: (n: number) => void;
+    }
+  >();
+  const streams = new Map<string, EventTarget>();
+  const host = window as any;
+  host.__studioUpload = (file: File, progress: (n: number) => void) => {
+    if (!editing) return Promise.reject(Error('Preview is read-only.'));
+    return new Promise((resolve, reject) => {
+      const id = ++next;
+      uploads.set(id, { resolve, reject, progress });
+      send('source-editor-upload', { id, file });
+    });
+  };
+  host.__studioNavigate = (url: string) => {
+    if (editing) send('source-editor-navigate', { url });
+  };
+  host.__studioOpenProjects = () => {
+    if (editing) send('source-editor-projects');
+  };
+  host.__studioOpenExport = () => {
+    if (editing) send('source-editor-export');
+  };
+  window.addEventListener('studio-dirty', (event) => {
+    if (editing)
+      send('source-editor-dirty', {
+        dirty: Boolean((event as CustomEvent).detail),
+      });
+  });
+  host.__studioOpenAI = (page: string) => {
+    if (editing) send('source-editor-ai', { page });
+  };
+  // Data documents cannot change their URL to the authenticated site's origin.
+  // Keep navigation inside React and reflect the route in the trusted parent.
+  const route = (
+    _state: unknown,
+    _title: string,
+    url?: string | URL | null,
+  ) => {
+    if (editing && url) send('source-editor-route', { url: String(url) });
+  };
+  history.replaceState = route;
+  history.pushState = route;
   const images = new Map<string, Promise<string>>();
   const loadImage = (img: HTMLImageElement) => {
     const src = img.getAttribute('src');
@@ -103,6 +166,19 @@ export function sourcePreviewBootstrap(token: string) {
   addEventListener('message', async (event) => {
     if (event.source !== parent || event.data?.token !== token) return;
     const payload = event.data;
+    if (payload.type === 'source-editor-live-event') {
+      streams
+        .get(payload.id)
+        ?.dispatchEvent(new MessageEvent(payload.name, { data: payload.data }));
+    }
+    if (payload.type === 'source-editor-upload-progress')
+      uploads.get(payload.id)?.progress(payload.progress);
+    if (payload.type === 'source-editor-upload-result') {
+      const item = uploads.get(payload.id);
+      uploads.delete(payload.id);
+      if (payload.error) item?.reject(Error(payload.error));
+      else item?.resolve(payload.result);
+    }
     if (payload.type === 'source-preview-response') {
       const item = pending.get(payload.id);
       if (!item) return;
@@ -118,6 +194,41 @@ export function sourcePreviewBootstrap(token: string) {
     }
     if (payload.type === 'source-preview-load' && !loaded) {
       loaded = true;
+      editing = Boolean(payload.editor);
+      host.__studioSourceBuild = {
+        key: payload.projectId || '',
+        revision: payload.revision,
+        javascript: payload.javascript,
+        vendor: payload.vendor,
+        tailwind: payload.tailwind,
+      };
+      if (editing) {
+        document.body.classList.remove('publication');
+        host.EventSource = class extends EventTarget {
+          id = String(++next);
+          onerror: ((event: Event) => void) | null = null;
+          constructor(address: string) {
+            super();
+            const url = new URL(address, document.baseURI);
+            if (
+              url.pathname !== '/api/live' ||
+              url.origin !== new URL(document.baseURI).origin
+            )
+              throw Error('Unsupported event stream');
+            streams.set(this.id, this);
+            this.addEventListener('error', (e) => this.onerror?.(e));
+            send('source-editor-live', {
+              id: this.id,
+              clientId: url.searchParams.get('clientId'),
+              page: url.searchParams.get('page'),
+            });
+          }
+          close() {
+            streams.delete(this.id);
+            send('source-editor-live-close', { id: this.id });
+          }
+        };
+      }
       runtime.__studioSourceCss = [];
       inject(payload.vendor);
       // PDF.js normally fetches from its worker. Keep authenticated reads in
@@ -153,6 +264,7 @@ export function sourcePreviewBootstrap(token: string) {
         payload.data,
         payload.page,
         payload.projectId,
+        payload.editor,
       );
       send('source-preview-loaded');
     }
@@ -161,6 +273,7 @@ export function sourcePreviewBootstrap(token: string) {
         payload.data,
         payload.page,
         payload.projectId,
+        payload.editor,
       );
   });
   addEventListener('error', (e) =>

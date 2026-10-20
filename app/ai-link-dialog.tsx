@@ -390,7 +390,7 @@ export function AiLinkDialog({
                     <section className="ai-connect-developer" aria-label="Developer permissions" aria-live="polite">
                       <strong>{confirmation ? 'Confirm developer access' : 'Project source access'}</strong>
                       <p>This link can edit all pages and read and change this wiki’s template/component source. Anyone holding the link has these permissions until it expires or you revoke it.</p>
-                      <p>Source edits are saved per project with rollback history and included in the next website-source ZIP. Use Preview → Developer source to check them before exporting. Design and Installed version keep using the installed release.</p>
+                      <p>Source edits are saved per project with rollback history and included in the next website-source ZIP. Design and Preview use those same project components. Reopen Studio after adding the first source override; rebuild when new source changes are available.</p>
                       <p>Server files, credentials, build scripts and dependencies cannot be changed. Revoking a link stops access; saved edits remain.</p>
                       {confirmation && <p><b>Allow “{name}” developer access for {days} {days === 1 ? 'day' : 'days'}?</b></p>}
                     </section>

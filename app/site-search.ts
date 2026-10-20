@@ -1,3 +1,4 @@
+import { serveHtmlSearch } from './html-search';
 import type { SearchIndex, SearchDocument } from './site-search-index';
 import './site-search.css';
 export type SearchResult = { id: string; title: string; page: string; excerpt: string; url: string; score: number; correction?: string };
@@ -64,12 +65,13 @@ export function createWebsiteSearch(load: () => Promise<SearchIndex>, base = '/'
   };
 }
 
-export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/', host: HTMLElement = document.body, route: (url: string) => string = (url) => url) {
+export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/', host: HTMLElement = document.body, route: (url: string) => string = (url) => url, showInterface = true) {
   const api = createWebsiteSearch(load, base, route);
+  const stopBridge = serveHtmlSearch(api.search);
   const container = document.createElement('div');
   container.className = 'website-search';
   container.innerHTML = '<button type="button" class="website-search-open" aria-label="Search this website">⌕ Search</button><dialog aria-label="Search this website"><form method="dialog"><strong>Search this website</strong><button aria-label="Close search">✕</button></form><input type="search" aria-label="Search pages" placeholder="Search pages and sections…" maxlength="200"><p role="status">Type to search this project.</p><ol></ol></dialog>';
-  host.appendChild(container);
+  if (showInterface) host.appendChild(container);
   const dialog = container.querySelector('dialog')!;
   const input = container.querySelector('input')!;
   const status = container.querySelector('[role=status]')!;
@@ -104,11 +106,12 @@ export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/',
   const shortcut = (event: KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); open(); }
   };
-  window.addEventListener('keydown', shortcut);
+  if (showInterface) window.addEventListener('keydown', shortcut);
   const publicAPI = { ...api, open, close };
   const target = window as Window & { websiteSearch?: typeof publicAPI };
   target.websiteSearch = publicAPI;
   return () => {
+    stopBridge();
     alive = false; sequence++; clearTimeout(timer); dialog.close(); container.remove();
     window.removeEventListener('keydown', shortcut);
     if (target.websiteSearch === publicAPI) delete target.websiteSearch;

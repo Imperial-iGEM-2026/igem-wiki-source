@@ -2220,3 +2220,5 @@ body:has(.studio-chat-history) [data-slot='dialog-overlay'] {
 .studio-source-status {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;font-size:13px;color:#47516b;flex-shrink:0}
 .studio-source-preview>iframe {border:0;background:#fff;border-radius:8px;max-width:100%;flex:1;min-height:400px;box-shadow:0 8px 30px #20264412}
 .studio-source-error {width:100%;white-space:pre-wrap;overflow-wrap:anywhere;background:#fff0f1;color:#a8283d;border:1px solid #f3c7ce;border-radius:8px;padding:14px;max-height:220px;overflow:auto;flex-shrink:0;font-size:12px}
+
+.studio-source-editor{height:100dvh;display:flex;flex-direction:column;background:#f8f9fc}.studio-source-editor>iframe{flex:1;min-height:0;border:0;width:100%}.studio-source-editor>.studio-source-status{padding:8px 16px}

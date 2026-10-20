@@ -19,15 +19,15 @@ await writeFile(
 await writeFile(
   path.join(dir, 'entry.tsx'),
   `
-import React,{useState}from'react';import{createRoot}from'react-dom/client';import{StudioPreview}from'/app/studio-preview';
+import React,{useState}from'react';import{createRoot}from'react-dom/client';import{StudioPreview}from'/app/studio-preview';import{SourceStudio}from'/app/source-studio';
 import{templateDefaults}from'/app/templates';import{customDefaults}from'/app/custom-pages';import{newNode,CUSTOM_CONTENT}from'/app/canvas-schema';
 import'/app/globals.css';import'/app/studio-polish.css';
 const pages=JSON.stringify([{slug:'demo',title:'Preview demo'},{slug:'second',title:'Second page'}]);
 const values={...templateDefaults('blank'),...customDefaults(pages),'pages:custom':pages};
-for(const [slug,title] of [['demo','Preview demo'],['second','Second page']]){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=title;values['layout:'+slug]=JSON.stringify(l)};const layout=JSON.parse(values['layout:demo']);const widget={...newNode('widget','html'),parentId:CUSTOM_CONTENT,minHeight:140,html:'<button id="counter">0</button>',javascript:"document.getElementById('counter').onclick=e=>e.target.textContent=String(Number(e.target.textContent)+1)"};layout.nodes.push(widget);layout.order.push(widget.id);values['layout:demo']=JSON.stringify(layout);
+for(const [slug,title] of [['demo','Preview demo'],['second','Second page']]){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=title;values['layout:'+slug]=JSON.stringify(l)};const layout=JSON.parse(values['layout:demo']);const widget={...newNode('widget','html'),parentId:CUSTOM_CONTENT,minHeight:140,html:'<button id="counter">0</button>',javascript:"document.getElementById('counter').onclick=e=>e.target.textContent=String(Number(e.target.textContent)+1)"};const searchWidget={...newNode('search-widget','html'),parentId:CUSTOM_CONTENT,name:'Editable search',html:'',css:'',javascript:'',minHeight:320};layout.nodes.push(widget,searchWidget);layout.order.push(widget.id,searchWidget.id);values['layout:demo']=JSON.stringify(layout);
 for(let i=0;i<36;i++)values['unused:'+i]='x'.repeat(80000);
 const initial=Object.fromEntries(Object.entries(values).map(([k,value])=>[k,{value,version:1,author:''}]));
-function App(){const[data,setData]=useState(initial),[active,setActive]=useState(true),[page,setPage]=useState('demo'),[project,setProject]=useState('one');return <><button id="open" onClick={()=>setActive(true)}>Open preview</button><button id="draft" onClick={()=>setData(d=>{const l=JSON.parse(d['layout:demo'].value);l.nodes.find(n=>n.id==='custom-intro').title='Updated draft';return {...d,'layout:demo':{value:JSON.stringify(l),version:2,author:''}}})}>Edit draft</button><button id="delete" onClick={()=>setData(d=>{const n={...d};delete n['unused:0'];return n})}>Delete row</button><button id="page" onClick={()=>setPage('second')}>Second page</button><button id="project" onClick={()=>setProject('two')}>Other project</button><StudioPreview data={data} active={active} projectId={project} page={page} onClose={()=>setActive(false)}/></>};createRoot(document.getElementById('root')).render(<App/>);`,
+function App(){const[data,setData]=useState(initial),[active,setActive]=useState(true),[page,setPage]=useState('demo'),[project,setProject]=useState('one'),[editor,setEditor]=useState(false);if(editor)return <SourceStudio projectId='one' user={{id:'test-user',name:'Test user'}} startEditing initialData={data} wiki={{slug:'demo',title:'Preview demo'}}/>;return <><button id='edit-source' onClick={()=>setEditor(true)}>Edit project source</button><button id="open" onClick={()=>setActive(true)}>Open preview</button><button id="draft" onClick={()=>setData(d=>{const l=JSON.parse(d['layout:demo'].value);l.nodes.find(n=>n.id==='custom-intro').title='Updated draft';return {...d,'layout:demo':{value:JSON.stringify(l),version:2,author:''}}})}>Edit draft</button><button id="delete" onClick={()=>setData(d=>{const n={...d};delete n['unused:0'];return n})}>Delete row</button><button id="page" onClick={()=>setPage('second')}>Second page</button><button id="project" onClick={()=>setProject('two')}>Other project</button><StudioPreview data={data} active={active} projectId={project} page={page} onClose={()=>setActive(false)}/></>};createRoot(document.getElementById('root')).render(<App/>);`,
 );
 if (!process.env.SOURCE_PREVIEW_TEST_DIST)
   await build({
@@ -70,11 +70,29 @@ const compiler = JSON.parse(
     'utf8',
   ),
 );
+const savedRows = new Map();
 let revision = 'first',
   sourceReads = 0;
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/api/projects') {res.setHeader('Content-Type','application/json');res.end(JSON.stringify({defaultId:'one',projects:[{id:'one',name:'Test project'}]}));return;}
+    if (url.pathname === '/api/content') {
+      res.setHeader('Content-Type','application/json');
+      if(req.method==='POST') {
+        assert.equal(req.headers['x-prion-project'],'one');
+        let body='';for await(const chunk of req) body+=chunk;
+        const value=JSON.parse(body);
+        if(value.presence){res.end('{}');return;}
+        const row={id:value.id,value:value.value,version:value.version+1,author:'Test user'};
+        savedRows.set(row.id,row);res.end(JSON.stringify(row));return;
+      }
+      res.end(JSON.stringify({rows:[...savedRows.values()],people:[]}));return;
+    }
+    if (url.pathname === '/api/live') {
+      if(req.method==='POST'){res.end('{}');return;}
+      res.setHeader('Content-Type','text/event-stream');res.write('event: hello\ndata: {}\n\n');return;
+    }
     if (url.pathname.startsWith('/api/media/')) {
       res.setHeader(
         'Content-Type',
@@ -163,9 +181,7 @@ try {
       relative +
       '/index.html',
   );
-  await page
-    .getByRole('button', { name: 'Developer source', exact: true })
-    .click();
+  // Website version automatically uses source overrides without a separate opt-in.
   const preview = page.frameLocator('iframe[title="Developer source preview"]');
   try {
     await preview.getByText('Source override works', { exact: true }).waitFor();
@@ -184,12 +200,9 @@ try {
     'rgb(111, 22, 155)',
   );
   await page.screenshot({ path: path.join(dir, 'source-preview.png') });
-  await page
-    .getByRole('button', { name: 'Installed version', exact: true })
-    .click();
-  await page
-    .getByRole('button', { name: 'Developer source', exact: true })
-    .click();
+  assert.equal(await page.locator('.studio-preview-version').count(), 0);
+  await page.getByRole('button', { name: 'Back to editor' }).click();
+  await page.locator('#open').click();
   await preview.getByText('Source override works', { exact: true }).waitFor();
   assert.equal(
     sourceReads,
@@ -209,10 +222,12 @@ try {
       ),
   );
   await preview.locator('.partitioned-pdf canvas').first().waitFor();
-  await preview.locator('iframe.custom-html-frame').scrollIntoViewIfNeeded();
-  const custom = preview.frameLocator('iframe.custom-html-frame');
+  await preview.locator('[data-layer-id=widget] iframe.custom-html-frame').scrollIntoViewIfNeeded();
+  const custom = preview.frameLocator('[data-layer-id=widget] iframe.custom-html-frame');
   await custom.getByRole('button', { name: '0', exact: true }).click();
   await custom.getByRole('button', { name: '1', exact: true }).waitFor();
+  const customSearch = await custom.locator('body').evaluate(async () => window.websiteSearch.search('Other page'));
+  assert.equal(customSearch[0].page, 'second', 'Custom HTML can render real search results through the read-only API');
   assert.equal(
     await f.evaluate(() => {
       try {
@@ -237,6 +252,9 @@ try {
     true,
     'Preview cannot mutate server',
   );
+  await f.evaluate(() => window.websiteAccessibility.setColorMode('high-contrast'));
+  await preview.locator('html[data-website-color-mode="high-contrast"]').waitFor();
+  await f.evaluate(() => window.websiteAccessibility.setColorMode('default'));
   await f.evaluate(() => window.websiteSearch.open());
   await preview
     .getByRole('searchbox', { name: 'Search pages' })
@@ -259,6 +277,40 @@ try {
     .getByRole('status')
     .filter({ hasText: 'New source changes available' })
     .waitFor();
+  await page.locator('#edit-source').click();
+  const editor = page.frameLocator('iframe[title="Website editor"]');
+  await editor.getByText('Website Studio',{exact:true}).waitFor();
+  await page.screenshot({path:path.join(dir,'source-editor.png')});
+  assert.equal(await editor.locator('.studio-source-status').count(),0);
+  assert.equal(await editor.locator('.source-probe').evaluate(e=>getComputedStyle(e).color),'rgb(111, 22, 155)');
+  await editor.getByText('Overview',{exact:true}).click();
+  await editor.getByLabel('Heading',{exact:true}).fill('Saved in source editor');
+  await editor.getByLabel('Heading',{exact:true}).press('Tab');
+  for(let i=0;i<80&&!savedRows.size;i++) await new Promise(r=>setTimeout(r,100));
+  assert.match(savedRows.get('layout:demo')?.value || '', /Saved in source editor/);
+  await editor.getByText('Editable search',{exact:true}).click();
+  await editor.getByRole('button',{name:'Insert editable search interface',exact:true}).click();
+  await editor.getByRole('button',{name:'Interact with HTML',exact:true}).click();
+  const searchWidget = editor.frameLocator('[data-layer-id="search-widget"] iframe.custom-html-frame');
+  await searchWidget.getByRole('searchbox').fill('Other page');
+  await searchWidget.getByRole('button',{name:'Search',exact:true}).click();
+  await searchWidget.getByRole('link',{name:'Second page',exact:true}).waitFor();
+  await editor.getByRole('button',{name:'Done interacting',exact:true}).click();
+  await editor.getByRole('button',{name:'Preview',exact:true}).click();
+  const nested = editor.frameLocator('iframe[title="Developer source preview"]');
+  await nested.getByRole('heading',{name:'Saved in source editor',exact:true}).waitFor();
+  await nested.getByText('Source override works',{exact:true}).waitFor();
+  assert.equal(await editor.locator('.studio-preview-version').count(),0);
+  const ef = await (await page.locator('iframe[title="Website editor"]').elementHandle()).contentFrame();
+  assert.equal(await ef.evaluate(async()=>{try{await fetch('/api/mcp-links',{method:'POST',body:'{}'});return false}catch{return true}}),true);
+  assert.equal(await ef.evaluate(async()=>{try{await fetch('/api/projects',{method:'POST',body:'{}'});return false}catch{return true}}),true);
+  console.log('PASS source editor selection, edit, save, matching nested preview and protected APIs');
+  await editor.getByRole('button',{name:'Back to editor',exact:true}).click();
+
+  await editor.getByRole('button',{name:'Connect AI',exact:true}).click();
+  await page.getByRole('dialog').waitFor();
+  assert.equal(await editor.getByRole('dialog').count(),0, 'Connection approval stays outside project source');
+  await page.keyboard.press('Escape');
   sourceFiles['app/project-components/PreviewProbe.tsx'] =
     'export function broken( {';
   revision = 'broken';
@@ -269,15 +321,9 @@ try {
     .getByRole('alert')
     .filter({ hasText: 'PreviewProbe.tsx' })
     .waitFor();
-  await page
-    .getByRole('button', { name: 'Installed version', exact: true })
-    .click();
-  await page
-    .frameLocator('iframe[title="Complete website preview"]')
-    .getByRole('heading', { name: 'Preview demo', exact: true })
-    .waitFor();
+  assert.equal(await page.locator('.studio-preview-version').count(), 0);
   console.log(
-    'PASS source overrides, imported component, custom CSS, opaque isolation, read-only fetch, internal navigation, responsive width, diagnostics and installed fallback',
+    'PASS source overrides, imported component, custom CSS, opaque isolation, read-only fetch, internal navigation, responsive width, diagnostics without version chooser',
   );
 } finally {
   await browser.close();

@@ -7,7 +7,7 @@ const problem = (status, message) => Object.assign(Error(message), { status });
 const editableApp = new Set([
   'home.tsx', 'canvas-surface.tsx', 'page-canvas.tsx', 'wiki-components.tsx',
   'site-header.tsx', 'header-design.tsx', 'site-search.ts', 'site-search.css', 'media-block.tsx', 'references.tsx',
-  'equation-block.tsx', 'custom-html-block.tsx', 'html-document.ts',
+  'site-accessibility.ts', 'html-search.ts', 'equation-block.tsx', 'custom-html-block.tsx', 'html-document.ts',
   'pdf-reader.tsx', 'pdf-reader.css', 'pdf-parts-viewer.ts', 'globals.css',
   'templates.ts', 'template-renderer.tsx', 'template-css.ts', 'template-transform.ts',
   'template-data.json', 'template-styles.json', 'template-motion.js',
@@ -24,7 +24,7 @@ const canWrite = name => safePath(name) && (
   (name.startsWith('app/') && editableApp.has(name.slice(4))) ||
   /^(app\/project-components|components\/project)\/[a-zA-Z0-9_/-]+\.(tsx?|jsx?|css|json)$/.test(name)
 );
-export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. In Studio Preview, choose Developer source to compile and preview the overrides in an isolated browser frame. Design and the Installed version preview use the installed release. Source is never executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
+export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. Studio Design and Preview automatically use project source overrides in an isolated browser build. Reopen Studio after adding the first source override; use Rebuild when new source is available. Source is never executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
 
 export function createProjectSource({ db, sourceFile = new URL('./export-source.json', import.meta.url), now = Date.now }) {
   let base, releaseHash;
