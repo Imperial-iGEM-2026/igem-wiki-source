@@ -479,7 +479,7 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
         review: 'publication/review.json',
       }),
     ],
-    ['publication/content.json', '{"format":"prion-wiki-source","version":1}'],
+    ['publication/content.json', '{"format":"prion-wiki-source","version":1,"values":{}}'],
     ['publication/media-map.json', '{}'],
     ['publication/recording-todos.json', '[{"kind":"video","source":"missing.mp4"}]'],
     [
@@ -1213,6 +1213,7 @@ await test('Older exports receive the current compiler without publishing review
       'scripts/image-export.mjs',
       'scripts/pdf-parts.mjs',
       'scripts/share-publication-assets.mjs',
+      'scripts/source-parts.mjs',
       'scripts/static-runtime.ts',
     ],
   );
@@ -1341,7 +1342,7 @@ await test('Resuming older exports adds bundled fonts once and preserves uploade
   await mkdir(path.join(root, 'publication'));
   await writeFile(
     path.join(root, 'publication/content.json'),
-    JSON.stringify({ values: { 'site:template': 'notebook-purple' } }),
+    JSON.stringify({ format: 'prion-wiki-source', version: 1, values: { 'site:template': 'notebook-purple' } }),
   );
   const rows = [];
   await ensureTemplateFonts(root, rows);

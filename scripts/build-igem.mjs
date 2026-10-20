@@ -2,6 +2,7 @@ import { readFile, access } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readSource } from './source-parts.mjs';
 import { logArtifactSize } from './artifact-size.mjs';
 
 // All build inputs are committed source. Nothing is fetched from the editor,
@@ -43,21 +44,7 @@ await access(path.join(root, 'LICENSE')).catch(() => {
 });
 await access(path.join(root, 'package-lock.json'));
 const sourcePath = local(config.source);
-const source = JSON.parse(await readFile(sourcePath, 'utf8'));
-if (
-  source.format !== 'prion-wiki-source' ||
-  source.version !== 1 ||
-  !source.values ||
-  Array.isArray(source.values) ||
-  typeof source.values !== 'object' ||
-  Object.keys(source).some(
-    (key) => !['format', 'version', 'values'].includes(key),
-  ) ||
-  Object.values(source.values).some((value) => typeof value !== 'string')
-)
-  throw Error(
-    'Use reviewed prion-wiki-source data with only format, version and string values. Never commit a portable/private snapshot or embedded media.',
-  );
+await readSource(sourcePath);
 const mediaMap = local(config.mediaMap);
 await access(mediaMap);
 const command = [

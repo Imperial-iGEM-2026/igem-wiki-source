@@ -1,3 +1,4 @@
+import { resolveSource, readSource } from './source-parts.mjs';
 import {
   defaultLoading,
   validLoading,
@@ -65,7 +66,10 @@ try {
 } catch (e) {
   if (e.code !== 'ENOENT') throw e;
 }
-const snapshot = JSON.parse(await readFile(source, 'utf8'));
+const input = JSON.parse(await readFile(source, 'utf8'));
+const snapshot = input.format === 'prion-wiki-source'
+  ? input.version === 2 ? await readSource(source) : await resolveSource(input)
+  : input;
 if (
   !['prion-wiki-snapshot', 'prion-wiki-source'].includes(snapshot.format) ||
   snapshot.version !== 1 ||

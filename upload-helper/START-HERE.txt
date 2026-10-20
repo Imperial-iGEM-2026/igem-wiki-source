@@ -26,6 +26,12 @@ the SAME helper folder and replace files when asked. Keep its jobs folder.
 Start again, choose Continue an earlier upload, sign in, and check remaining
 files. Completed uploads are recovered without uploading them twice.
 
+Version 1.0.25 also splits publication/content.json when it is large. Check source
+changes upgrades an existing export automatically; keep the jobs folder and
+reuse its media uploads. The generated content-parts files must accompany the
+small content.json index. Changed source after a failed partial upload starts
+a separate review branch, preserving the old branch.
+
 Version 1.0.24 fixes GitLab sends: source changes are sent in small batches,
 and errors include the HTTP status and request ID when available. A failed send
 does not mean your login expired. Click Retry / resume GitLab upload after

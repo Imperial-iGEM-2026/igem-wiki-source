@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkGitResponse, publishGitLab, publicationComplete } from './gitlab.mjs';
+import { checkGitResponse, publishGitLab, publicationComplete, publicationTarget, publicationDigest } from './gitlab.mjs';
 import { OfficialSites } from './sites.mjs';
 
 const plan = (n = 5) => ({
@@ -172,4 +172,15 @@ test('legacy failed attempt retries only when its branch does not exist', async 
   await assert.rejects(g.send(p), /earlier upload already exists/);
   assert.equal(g.posts.length, 0);
   assert.ok(publicationComplete({ url: 'https://gitlab.igem.org/2026/test/-/merge_requests/34' }));
+});
+
+test('re-reviewed upgraded source uses a fresh branch and then resumes that branch', () => {
+  const p = plan(1);
+  const old = { attempted: true, branch: 'wiki-upload-test', digest: 'old-source', head: 'partial' };
+  const target = publicationTarget(p, 'wiki-upload-test', old);
+  assert.ok(target.branch.startsWith('wiki-upload-test-'));
+  assert.equal(target.publication, undefined);
+  assert.equal(target.replacedBranch, old.branch);
+  const saved = { digest: publicationDigest(p), branch: target.branch, next: 1 };
+  assert.deepEqual(publicationTarget(p, 'wiki-upload-test', saved), { branch: target.branch, publication: saved });
 });

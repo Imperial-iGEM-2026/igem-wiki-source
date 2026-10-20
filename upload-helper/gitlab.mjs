@@ -46,11 +46,21 @@ const commitBody = (plan, state, start, end) => ({
 
 // A conservative request budget, not an assertion about iGEM's server limit.
 const REQUEST_BYTES = 512 * 1024;
+export const publicationDigest = (plan) =>
+  createHash('sha256').update(JSON.stringify([plan.base, plan.sha, plan.actions])).digest('hex');
+
+export function publicationTarget(plan, branch, prior) {
+  const digest = publicationDigest(plan);
+  if (prior?.digest && prior.digest !== digest && !publicationComplete(prior))
+    return { branch: `${branch}-${digest.slice(0, 12)}`, publication: undefined, replacedBranch: prior.branch };
+  return { branch: prior?.branch || branch, publication: prior };
+}
+
 export async function publishGitLab(git, plan, branch, prior = {}, persist = async () => {}, log = () => {}) {
   if (publicationComplete(prior)) return prior;
   if (!plan.actions.length && !prior.attempted)
     return { complete: true, url: '', message: 'The repository already matches these files.' };
-  const digest = createHash('sha256').update(JSON.stringify([plan.base, plan.sha, plan.actions])).digest('hex');
+  const digest = publicationDigest(plan);
   if (prior.digest && prior.digest !== digest)
     throw Error('The reviewed source changed since this upload started. Keep the existing review branch; import a fresh export to start a separate upload.');
   const state = {

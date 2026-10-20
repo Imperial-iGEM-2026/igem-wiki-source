@@ -23,6 +23,7 @@ export async function packageUploadHelper(root, destination) {
     'wiki-LICENSE.txt',
     'compiler/igem.gitlab-ci.yml',
     'compiler/build-igem.mjs',
+    'compiler/source-parts.mjs',
     'compiler/artifact-size.mjs',
     'compiler/share-publication-assets.mjs',
     'compiler/static-runtime.ts',

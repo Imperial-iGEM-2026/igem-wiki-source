@@ -190,10 +190,11 @@ export function repositoryFile(name) {
     ].includes(name) ||
     (/^(app|components|hooks|lib)\/.*\.(ts|tsx|js|css|json)$/.test(name) &&
       !name.startsWith('app/api/')) ||
-    /^scripts\/(build-igem|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
+    /^scripts\/(build-igem|source-parts|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
       name,
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||
+    /^publication\/content-parts\/[a-f0-9]{64}\.json$/.test(name) ||
     /^publication\/(content|config|media-map|pdf-parts|google-fonts)\.json$/.test(
       name,
     ) ||
@@ -287,6 +288,7 @@ export async function publicationSources(sourceRoot) {
   else files.push({ path: 'LICENSE', content: license });
   for (const name of [
     'build-igem.mjs',
+    'source-parts.mjs',
     'artifact-size.mjs',
     'share-publication-assets.mjs',
     'static-runtime.ts',
@@ -316,7 +318,31 @@ export async function publicationSources(sourceRoot) {
     if (existing) existing.content = content;
     else files.push({ path: target, content });
   }
+  const catalog = await sourceCatalog();
+  const contentFile = files.find((file) => file.path === 'publication/content.json');
+  if (contentFile) {
+    const content = await catalog.resolveSource(JSON.parse(contentFile.content), async (name) => {
+      const part = files.find((file) => file.path === 'publication/' + name);
+      if (!part) throw Error('Missing publication source part: ' + name);
+      return part.content;
+    });
+    const packed = catalog.partitionSource(content);
+    for (let i = files.length - 1; i >= 0; i--)
+      if (files[i].path === 'publication/content.json' || files[i].path.startsWith('publication/content-parts/')) files.splice(i, 1);
+    files.push(...packed);
+  }
+  for (const file of files)
+    if (Buffer.byteLength(file.content) >= catalog.GIT_FILE_BYTES)
+      throw Error(`GitLab source file exceeds the 10 MB limit: ${file.path}. Move embedded media to iGEM static uploads or split this source file before sending.`);
   return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+async function sourceCatalog() {
+  try {
+    return await import('./compiler/source-parts.mjs');
+  } catch (error) {
+    if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+    return import('../scripts/source-parts.mjs');
+  }
 }
 async function fontCatalog() {
   try {
@@ -328,9 +354,8 @@ async function fontCatalog() {
 }
 export async function ensureTemplateFonts(sourceRoot, rows) {
   const { templateFonts, fontLicenses } = await fontCatalog();
-  const content = await jsonFile(
-    path.join(sourceRoot, 'publication/content.json'),
-  );
+  const { readSource } = await sourceCatalog();
+  const content = await readSource(path.join(sourceRoot, 'publication/content.json'));
   for (const font of templateFonts(content.values || {})) {
     const existing = rows.find((row) => row.source === font.source);
     const metadata = {

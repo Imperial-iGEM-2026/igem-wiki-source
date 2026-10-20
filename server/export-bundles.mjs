@@ -1,3 +1,4 @@
+import { partitionSource, GIT_FILE_BYTES } from './source-parts.mjs';
 import { createImageValidationCache } from './export-validation-cache.mjs';
 import { downloadExternalAsset } from './export-remote-assets.mjs';
 import { createImagePreviews } from './image-previews.mjs';
@@ -614,7 +615,7 @@ export function createBundleExports({
 
 1. Extract both ZIPs. Upload images/files to iGEM Uploads. Recordings are not packaged: add Video Universe iframe embeds in the editor and export again.
 2. Fill publication/media-map.json with the returned URLs. Existing Video Universe embeds retain their player settings.
-3. Review publication/content.json: saved source can include hidden or unpublished text. AI briefs and account metadata are omitted; this is not a full privacy scrub.
+3. Review publication/content.json and any publication/content-parts/ files: saved source can include hidden or unpublished text. AI briefs and account metadata are omitted; this is not a full privacy scrub.
 4. Configure hosted fonts and selected award page slugs in publication/config.json. Review your content before publishing; review.json is legacy optional metadata and no longer blocks the build.
 5. Merge this source into https://gitlab.igem.org/2026/${team}, including its CC BY 4.0 root LICENSE. Third-party assets and fonts retain their own licences and attribution notices.
 6. Review the diff and commit through your team's workflow. The included .gitlab-ci.yml builds the wiki from source on each main push.
@@ -623,7 +624,7 @@ Local verification: npm ci, then npm run build. The compiler checks required pag
 
 ${common}`;
         entries.source.push(
-          textEntry('publication/content.json', content),
+          ...partitionSource(JSON.parse(content)).map((file) => textEntry(file.path, file.content)),
           textEntry('publication/recording-todos.json', json(recordingTodos)),
           textEntry('publication/pdf-parts.json', json(pdfParts)),
           textEntry('publication/media-map.json', json(map)),
@@ -676,6 +677,9 @@ ${common}`;
             ),
             textEntry('bundle-info.json', json(info)),
           );
+        const oversizedSource = entries.source.find((entry) => entry.size >= GIT_FILE_BYTES);
+        if (oversizedSource)
+          throw fail(422, `GitLab source file exceeds the 10 MB limit: ${oversizedSource.name}. Remove embedded media or split this source file before exporting.`);
         plans.set(id, {
           userId,
           projectId: project.id,

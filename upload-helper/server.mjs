@@ -21,7 +21,7 @@ import {
   uploadFolder,
 } from './files.mjs';
 import { OfficialSites } from './sites.mjs';
-import { publicationComplete } from './gitlab.mjs';
+import { publicationComplete, publicationTarget } from './gitlab.mjs';
 import {
   scanStorage,
   removeStorage,
@@ -421,8 +421,10 @@ async function action(name, data) {
     if (!proposal) throw Error('Check the source changes first.');
     if (publicationComplete(job.publication))
       throw Error('This upload is complete. Open its GitLab review link.');
-    const branch = 'wiki-upload-' + job.id;
-    const result = await sites.commit(proposal, branch, job.publication, async (progress) => {
+    const target = publicationTarget(proposal, 'wiki-upload-' + job.id, job.publication);
+    if (target.replacedBranch)
+      log(`The reviewed source changed. Starting ${target.branch}; the earlier incomplete branch ${target.replacedBranch} is preserved.`);
+    const result = await sites.commit(proposal, target.branch, target.publication, async (progress) => {
       job.publication = progress;
       await save();
     });

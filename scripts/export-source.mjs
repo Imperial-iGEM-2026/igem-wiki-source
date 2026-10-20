@@ -26,6 +26,7 @@ export async function exportSource(root) {
     'tsconfig.json',
     'ops/igem.gitlab-ci.yml',
     'scripts/build-igem.mjs',
+    'scripts/source-parts.mjs',
     'scripts/artifact-size.mjs',
     'scripts/share-publication-assets.mjs',
     'scripts/export-static.mjs',

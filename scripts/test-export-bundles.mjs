@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { partitionSource } from './source-parts.mjs';
 import { request as httpRequest } from 'node:http';
 // Send the fixture's public Host explicitly while connecting over localhost.
 // Node's Fetch implementation can replace Host with the socket destination.
@@ -26,7 +27,7 @@ function fetch(url, options = {}) {
     req.end(options.body);
   });
 }
-import { mkdtemp, writeFile, readFile, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, symlink, mkdir } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -421,6 +422,14 @@ print('ZIP64 CRC, source isolation and frozen snapshot passed')`;
     path.join(publication, 'config.json'),
     JSON.stringify(config),
   );
+  // CI must consume the partitioned source directly, without committing a
+  // reassembled large JSON file.
+  const reviewedContent = JSON.parse(await readFile(path.join(publication, 'content.json'), 'utf8'));
+  for (const file of partitionSource(reviewedContent, { force: true })) {
+    const target = path.join(checkout, file.path);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, file.content);
+  }
   execFileSync(process.execPath, ['scripts/build-igem.mjs'], {
     cwd: checkout,
     stdio: 'pipe',
