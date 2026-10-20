@@ -1,6 +1,27 @@
 // Shared by the offline compiler and the server's two-ZIP handoff.
 // This version must match the pinned pdfjs-dist dependency.
 export const PDF_WORKER_SOURCE = '/templates/runtime/pdfjs-6.4.299-worker.js';
+// Literal static references in widgets, CSS backgrounds and JavaScript photo
+// arrays. Ordinary external links and Video Universe players are not assets.
+export function externalStaticAssets(code = '') {
+  const urls = new Set();
+  const add = (url) => {
+    if (/^(?:https?:)?\/\//i.test(url)) urls.add(url);
+  };
+  for (const [url] of code.matchAll(/(?:https?:)?\/\/[^\s"'`<>\\)]+/gi)) {
+    if (/\.(?:jpe?g|png|webp|gif|avif|svg|ico|pdf|woff2?|ttf|otf|glb|gltf|obj|stl|ply)(?:[?#]|$)/i.test(url)) add(url);
+  }
+  // Image CDNs often omit filename extensions.
+  for (const [tag] of code.matchAll(/<img\b[^>]*>/gi))
+    for (const match of tag.matchAll(/\b(src|srcset)\s*=\s*["']([^"']+)["']/gi)) {
+      if (match[1].toLowerCase() === 'src') add(match[2]);
+      else for (const entry of match[2].split(/,\s*(?=(?:https?:)?\/\/)/i))
+        add(entry.trim().split(/\s+/)[0]);
+    }
+  for (const match of code.matchAll(/url\(\s*["']?((?:https?:)?\/\/[^"')\s]+)["']?\s*\)/gi))
+    add(match[1]);
+  return [...urls];
+}
 // Card widgets often keep filenames in data arrays and concatenate the media
 // prefix at runtime. Collect literal upload IDs without evaluating custom code.
 export function dynamicHtmlImages(code) {
@@ -143,15 +164,25 @@ export function exportMedia(
   }
   for (const [key, value] of Object.entries(values)) {
     if (!key.startsWith('layout:') || removed.has(key.slice(7))) continue;
-    const { nodes } = JSON.parse(value);
+    const { nodes, customCss } = JSON.parse(value);
+    for (const source of externalStaticAssets(customCss))
+      add(source, /\.pdf(?:[?#]|$)/i.test(source) ? 'pdf' : 'image',
+        at(key.slice(7), { name: 'Page styles' }, 'CSS'));
     for (const node of nodes) {
       if (!visible(node, nodes)) continue;
       if (node.src)
         add(node.src, node.kind, at(key.slice(7), node, 'Media source'));
+      if (node.kind !== 'html')
+        for (const source of externalStaticAssets(node.body || ''))
+          add(source, /\.pdf(?:[?#]|$)/i.test(source) ? 'pdf' : 'image',
+            at(key.slice(7), node, 'Content'));
       if (node.kind === 'html') {
         const code = [node.html, node.css, node.javascript]
           .filter(Boolean)
           .join('\n');
+        for (const source of externalStaticAssets(code))
+          add(source, /\.pdf(?:[?#]|$)/i.test(source) ? 'pdf' : 'image',
+            at(key.slice(7), node, 'Custom HTML / CSS / JavaScript'));
         for (const source of dynamicHtmlImages(code))
           add(
             source,

@@ -1,4 +1,5 @@
 import { createImageValidationCache } from './export-validation-cache.mjs';
+import { downloadExternalAsset } from './export-remote-assets.mjs';
 import { createImagePreviews } from './image-previews.mjs';
 import { googleFontReferences, prepareGoogleFonts } from './google-fonts.mjs';
 import { createExportProcessing } from './export-processing.mjs';
@@ -58,7 +59,7 @@ const csv = (rows) =>
 const common = `Extract these ZIPs before uploading. Upload the files inside assets/, not the ZIP or its manifest.
 Keep the category subfolders (banners, logos, icons, images, documents, models, fonts). Only folders with files are included. The upload helper creates matching static-media folders on iGEM.
 Match each file to its original URL using upload-manifest.csv. Paste the returned iGEM URLs into publication/media-map.json in ZIP 01.
-Audited open-source template fonts and their OFL notices are included in assets/fonts. The helper uploads the fonts and configures them automatically. Referenced Google Fonts are downloaded automatically with their licence notices and uploaded by the helper. Other external files are listed but not downloaded.
+Audited open-source template fonts and their OFL notices are included in assets/fonts. The helper uploads the fonts and configures them automatically. Referenced Google Fonts are downloaded automatically with their licence notices and uploaded by the helper. Referenced external static files are downloaded into this bundle; an unavailable file must be replaced before export can finish. Video Universe players remain embedded.
 Large PDFs are automatically split into reading copies under 9 MB. The original remains in the editor. Other files are copied without conversion: check acceptance and playback in the iGEM upload tools. See the local upload helper for the guided workflow.
 `;
 
@@ -71,6 +72,7 @@ export function createBundleExports({
   now = Date.now,
   processing = createExportProcessing(),
   fontFetcher = fetch,
+  remoteDownloader = downloadExternalAsset,
   imagePreview = createImagePreviews(dataDir),
 }) {
   const templateOrigins = new Set(
@@ -94,7 +96,7 @@ export function createBundleExports({
   };
   async function localFile(source) {
     // MCP/HTML editing can save full URLs for assets shipped with this server.
-    // Resolve only configured first-party template origins, without fetching URLs.
+    // Resolve configured first-party assets without fetching through sign-in.
     // Keep the original source as the manifest key so publication replaces it.
     if (/^https?:\/\//.test(source)) {
       const url = new URL(source);
@@ -103,7 +105,7 @@ export function createBundleExports({
         !url.username &&
         !url.password &&
         templateOrigins.has(url.origin) &&
-        pathname?.startsWith('/templates/')
+        (pathname?.startsWith('/templates/') || pathname?.startsWith('/api/media/'))
       )
         source = pathname;
     }
@@ -117,7 +119,7 @@ export function createBundleExports({
     } else if (source === '/prion-hero.png') {
       root = clientDir;
       relative = 'prion-hero.png';
-    } else if (/^https?:\/\//.test(source)) return null;
+    } else if (/^(?:https?:)?\/\//.test(source)) return null;
     else throw fail(422, 'Cannot package this media URL: ' + source);
     if (
       !/^[a-zA-Z0-9_./-]+$/.test(relative) ||
@@ -309,7 +311,18 @@ export function createBundleExports({
         // fixing one broken image does not reveal another one on the next attempt.
         for (const [source, kind] of media) {
           try {
-            localFiles.set(source, await localFile(source));
+            if (googleFonts.fonts.has(source)) continue;
+            let local = await localFile(source);
+            if (!local) {
+              onProgress({
+                message: `Downloading external file: ${source}`,
+                completed: localFiles.size,
+                total: media.size,
+              });
+              tempDir ||= await mkdtemp(path.join(tmpdir(), 'prion-external-export-'));
+              local = await remoteDownloader(source, tempDir);
+            }
+            localFiles.set(source, local);
           } catch (error) {
             if (error.status !== 422) throw error;
             mediaIssues.push({

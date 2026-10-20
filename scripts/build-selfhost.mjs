@@ -71,6 +71,7 @@ await build({
 for (const name of [
   'app.mjs',
   'export-bundles.mjs',
+  'export-remote-assets.mjs',
   'export-jobs.mjs',
   'export-processing.mjs',
   'export-validation-cache.mjs',

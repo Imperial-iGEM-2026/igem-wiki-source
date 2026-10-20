@@ -26,7 +26,7 @@ function fetch(url, options = {}) {
     req.end(options.body);
   });
 }
-import { mkdtemp, open, writeFile, readFile, symlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, symlink } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -241,7 +241,6 @@ try {
     'https://editor.example.com/templates/regelerate/sponsor-logos/benchling.svg',
     'https://media.example.com/templates/regelerate/sponsor-logos/atlassian.svg',
     'https://media.example.com/templates/regelerate/sponsor-logos/neb.jpg?v=2#logo',
-    'https://unrelated.example.com/templates/regelerate/sponsor-logos/benchling.svg',
   ].map((src, i) => ({ ...newNode('absolute-logo-' + i, 'image'), src }));
   nestedHome.nodes.push(
     accordion,
@@ -361,8 +360,7 @@ with zipfile.ZipFile(root/'02-static-assets.zip') as z:
   row=next(r for r in rows if r['source']==source)
   assert row['file'].startswith('assets/logos/'),row
   assert z.read(row['file'])==(pathlib.Path('public/templates/regelerate/sponsor-logos')/filename).read_bytes()
- external=next(r for r in rows if r['source'].startswith('https://unrelated.example.com/'))
- assert external['file']=='',external
+ assert all(r['file'] for r in rows),rows
 assert not (root/'03-video-audio.zip').exists()
 with zipfile.ZipFile(root/'01-website-source.zip') as z:
  assert 'scripts/export-recordings.mjs' in z.namelist()
