@@ -1,9 +1,12 @@
 import { createRoot } from 'react-dom/client';
-import { useEffect, useState, useRef } from 'react';
+import { memo, useEffect, useState, useRef, useMemo } from 'react';
 import Home from '../app/home';
 import { pageCatalog } from '../app/custom-pages';
 import type { Blocks } from '../app/content';
+import { applyPreviewChanges } from '../app/preview-sync';
 import '../app/globals.css';
+
+const PreviewHome = memo(Home);
 
 function Preview({
   data,
@@ -36,6 +39,7 @@ function Preview({
     };
   }, [anchorId, anchorVisit]);
   const [current, setCurrent] = useState(page);
+  const pages = useMemo(() => pageCatalog(data), [data]);
   useEffect(() => {
     if (parent !== window)
       parent.postMessage({ type: 'prion-preview-rendered' }, location.origin);
@@ -43,13 +47,11 @@ function Preview({
   useEffect(() => {
     // Register custom elements in this iframe's own browser realm.
     if (
-      Object.entries(data).some(
-        ([id, row]) =>
-          id.startsWith('layout:') && row.value.includes('"model"'),
-      )
+      data['layout:' + current]?.value.includes('"model"') ||
+      document.querySelector('model-viewer')
     )
       void import('@google/model-viewer');
-  }, [data]);
+  }, [data, current]);
   return (
     <div
       onClickCapture={(e) => {
@@ -68,7 +70,7 @@ function Preview({
         )
           return;
         const slug = href.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '') || 'home';
-        if (slug === 'home' || pageCatalog(data).some((p) => p.slug === slug)) {
+        if (slug === 'home' || pages.some((p) => p.slug === slug)) {
           e.preventDefault();
           e.stopPropagation();
           setCurrent(slug);
@@ -85,27 +87,49 @@ function Preview({
         }
       }}
     >
-      <Home
+      <PreviewHome
         key={current}
         user={null}
         projectId={projectId}
         publication
         initialData={data}
-        wiki={pageCatalog(data).find((p) => p.slug === current)}
+        wiki={pages.find((p) => p.slug === current)}
       />
     </div>
   );
 }
 const root = createRoot(document.getElementById('root')!);
 if (parent !== window) {
+  let snapshot: Blocks | undefined;
+  let projectId: string | undefined;
   window.addEventListener('message', (event) => {
     if (
       event.origin !== window.location.origin ||
       event.source !== parent ||
-      event.data?.type !== 'prion-preview-data'
+      !['prion-preview-data', 'prion-preview-patch'].includes(event.data?.type)
     )
       return;
-    if (!event.data.data || typeof event.data.page !== 'string') return;
+    if (typeof event.data.page !== 'string') return;
+    const nextProject =
+      typeof event.data.projectId === 'string'
+        ? event.data.projectId
+        : undefined;
+    if (event.data.type === 'prion-preview-data') {
+      if (!event.data.data || typeof event.data.data !== 'object') return;
+      snapshot = event.data.data;
+      projectId = nextProject;
+    } else {
+      if (!snapshot || projectId !== nextProject) {
+        parent.postMessage({ type: 'prion-preview-ready' }, location.origin);
+        return;
+      }
+      if (!event.data.changes || !Array.isArray(event.data.removed)) return;
+      snapshot = applyPreviewChanges(
+        snapshot,
+        event.data.changes,
+        event.data.removed,
+      );
+    }
     const raw = event.data.anchor;
     const anchor =
       raw &&
@@ -116,9 +140,9 @@ if (parent !== window) {
         : undefined;
     root.render(
       <Preview
-        key={event.data.page}
-        data={event.data.data}
-        projectId={typeof event.data.projectId === 'string' ? event.data.projectId : undefined}
+        key={(projectId || '') + ':' + event.data.page}
+        data={snapshot!}
+        projectId={projectId}
         page={event.data.page}
         anchor={anchor}
       />,

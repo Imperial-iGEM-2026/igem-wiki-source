@@ -20,6 +20,7 @@ await writeFile(
 import React from 'react';import{createRoot}from'react-dom/client';
 import{CustomHtmlBlock}from'/app/custom-html-block';import{htmlDocument}from'/app/html-document';
 const node=${JSON.stringify(node)};
+document.getElementById('host').classList.add('studio-workspace');
 if(location.search.includes('react')){
 const root=createRoot(document.getElementById('host'));window.unmount=()=>root.unmount();root.render(<CustomHtmlBlock node={node}/>);
 }else{
@@ -146,6 +147,35 @@ try {
       mode + ': interaction state retained',
     );
     assert.equal(imageRequests, imageCount, mode + ': images not refetched');
+    if (mode === 'react') {
+      await page.locator('#host').evaluate((el) => {
+        el.classList.add('studio-workspace-hidden');
+        el.style.visibility = 'hidden';
+      });
+      await frame.waitForFunction(
+        () =>
+          document.documentElement.hasAttribute('data-studio-motion-paused'),
+        null,
+        { polling: 50 },
+      );
+      const hiddenTicks = await frame.evaluate(() => window.ticks);
+      await page.waitForTimeout(150);
+      assert.equal(
+        await frame.evaluate(() => window.ticks),
+        hiddenTicks,
+        'Hidden editor canvas pauses without changing intersection geometry',
+      );
+      await page.locator('#host').evaluate((el) => {
+        el.classList.remove('studio-workspace-hidden');
+        el.style.visibility = '';
+      });
+      await frame.waitForFunction((ticks) => window.ticks > ticks, hiddenTicks);
+      assert.equal(
+        imageRequests,
+        imageCount,
+        'Returning to Design does not refetch images',
+      );
+    }
     assert.equal(
       await frame
         .locator('.author-paused')

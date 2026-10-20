@@ -985,33 +985,36 @@ export function StudioEditor({
     setConflict(null);
   }, [version, layout, base.version, base.layout, builtinInfo]); // A revision is the synchronization boundary.
   const previewData = useMemo(
-    () => ({
-      ...ctx.data,
-      ...Object.fromEntries(
-        (pagePreview?.fields || []).map((f) => [
-          f.id,
-          { value: f.value, version: 0, author: '' },
-        ]),
-      ),
-      ...(textEdit
-        ? {
-            [textEdit.id]: {
-              value: textEdit.value,
-              version: textEdit.version,
+    () =>
+      !preview
+        ? ctx.data
+        : {
+            ...ctx.data,
+            ...Object.fromEntries(
+              (pagePreview?.fields || []).map((f) => [
+                f.id,
+                { value: f.value, version: 0, author: '' },
+              ]),
+            ),
+            ...(textEdit
+              ? {
+                  [textEdit.id]: {
+                    value: textEdit.value,
+                    version: textEdit.version,
+                    author: '',
+                  },
+                }
+              : {}),
+            ['layout:' + page]: {
+              value: JSON.stringify({
+                ...(pagePreview?.layout || current),
+                ...(cssPreview !== undefined ? { customCss: cssPreview } : {}),
+              }),
+              version: 0,
               author: '',
             },
-          }
-        : {}),
-      ['layout:' + page]: {
-        value: JSON.stringify({
-          ...(pagePreview?.layout || current),
-          ...(cssPreview !== undefined ? { customCss: cssPreview } : {}),
-        }),
-        version: 0,
-        author: '',
-      },
-    }),
-    [ctx.data, pagePreview, textEdit, page, current, cssPreview],
+          },
+    [preview, ctx.data, pagePreview, textEdit, page, current, cssPreview],
   );
   function edit(value: CanvasLayout, group?: string) {
     if (disabled) return;
@@ -2164,7 +2167,7 @@ export function StudioEditor({
         }
       }}
     >
-      <div className="studio-topbar" inert={Boolean(elementText && inlineText)}>
+      <div className="studio-topbar" inert={preview || Boolean(elementText && inlineText)}>
         <button
           className="studio-icon"
           onClick={ctx.exit}
@@ -2443,7 +2446,7 @@ export function StudioEditor({
         />
       )}
       <ResizablePanelGroup
-        inert={Boolean(elementText && inlineText)}
+        inert={preview || Boolean(elementText && inlineText)}
         orientation="horizontal"
         defaultLayout={panelLayout.defaultLayout}
         onLayoutChanged={panelLayout.onLayoutChanged}
@@ -3361,7 +3364,7 @@ export function StudioEditor({
                               }))
                             : builtins
                         }
-                        editing={!preview && !pagePreview}
+                        editing={!pagePreview}
                         selected={selected}
                         selectedItem={accordionSelection}
                         onSelect={(id, multiple) => {

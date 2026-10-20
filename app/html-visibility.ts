@@ -1,20 +1,41 @@
 /** Shared by the editor and publication runtime. Never inspect the opaque frame DOM. */
-type Entry = { start: () => void; started: boolean; visible: boolean };
+type Entry = {
+  start: () => void;
+  started: boolean;
+  visible: boolean;
+  near: boolean;
+  canvas: Element | null;
+};
 const frames = new Map<HTMLIFrameElement, Entry>();
 let near: IntersectionObserver | undefined;
 let visible: IntersectionObserver | undefined;
+let canvasObserver: MutationObserver | undefined;
+
+function canvasHidden(entry: Entry) {
+  return Boolean(entry.canvas?.classList.contains('studio-workspace-hidden'));
+}
+function startNear(frame: HTMLIFrameElement, entry: Entry) {
+  if (entry.started || !entry.near || document.hidden || canvasHidden(entry))
+    return;
+  entry.started = true;
+  near?.unobserve(frame);
+  entry.start();
+}
 
 function notify(frame: HTMLIFrameElement, entry: Entry) {
   frame.contentWindow?.postMessage(
     {
       type: 'custom-html-visibility',
-      visible: entry.visible && !document.hidden,
+      visible: entry.visible && !document.hidden && !canvasHidden(entry),
     },
     '*',
   );
 }
 function visibilityChanged() {
-  for (const [frame, entry] of frames) notify(frame, entry);
+  for (const [frame, entry] of frames) {
+    startNear(frame, entry);
+    notify(frame, entry);
+  }
 }
 function ready(event: MessageEvent) {
   if (event.data?.type !== 'custom-html-ready') return;
@@ -30,15 +51,17 @@ export function watchHtmlFrame(frame: HTMLIFrameElement, start: () => void) {
   if (!frames.size) {
     window.addEventListener('message', ready);
     document.addEventListener('visibilitychange', visibilityChanged);
+    // visibility:hidden does not change intersection geometry. Studio keeps its
+    // canvas mounted during Preview, so explicitly suspend that hidden canvas.
+    canvasObserver = new MutationObserver(visibilityChanged);
     if ('IntersectionObserver' in window) {
       near = new IntersectionObserver(
         (entries) => {
           for (const item of entries) {
             const entry = frames.get(item.target as HTMLIFrameElement);
-            if (!item.isIntersecting || !entry || entry.started) continue;
-            entry.started = true;
-            near?.unobserve(item.target);
-            entry.start();
+            if (!entry) continue;
+            entry.near = item.isIntersecting;
+            startNear(item.target as HTMLIFrameElement, entry);
           }
         },
         { rootMargin: '300px' },
@@ -54,14 +77,25 @@ export function watchHtmlFrame(frame: HTMLIFrameElement, start: () => void) {
       });
     }
   }
-  const entry = { start, started: false, visible: !visible };
+  const canvas = frame.closest('.studio-workspace');
+  const entry = {
+    start,
+    started: false,
+    visible: !visible,
+    near: !near,
+    canvas,
+  };
   frames.set(frame, entry);
+  if (canvas)
+    canvasObserver?.observe(canvas, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
   if (near && visible) {
     visible.observe(frame);
     near.observe(frame);
   } else {
-    entry.started = true;
-    start();
+    startNear(frame, entry);
   }
   return () => {
     near?.unobserve(frame);
@@ -71,6 +105,8 @@ export function watchHtmlFrame(frame: HTMLIFrameElement, start: () => void) {
       near?.disconnect();
       visible?.disconnect();
       near = visible = undefined;
+      canvasObserver?.disconnect();
+      canvasObserver = undefined;
       window.removeEventListener('message', ready);
       document.removeEventListener('visibilitychange', visibilityChanged);
     }

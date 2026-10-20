@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Monitor, Tablet, Smartphone, ArrowLeft } from 'lucide-react';
 import type { Blocks } from './content';
+import { previewChanges } from './preview-sync';
 
 // Use the publication renderer in its own viewport. This includes generated
 // article introductions, navigation, footer and true viewport media queries.
@@ -23,25 +24,37 @@ export function StudioPreview({
   anchor?: { id: string; visit: number } | null;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(0);
+  const sent = useRef<{ data: Blocks; projectId?: string } | null>(null);
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (
         event.origin === window.location.origin &&
         event.source === frameRef.current?.contentWindow &&
         event.data?.type === 'prion-preview-ready'
-      )
-        setReady(true);
+      ) {
+        sent.current = null;
+        setReady((version) => version + 1);
+      }
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
   }, []);
   useEffect(() => {
-    if (ready && active)
-      frameRef.current?.contentWindow?.postMessage(
-        { type: 'prion-preview-data', data, page, anchor, projectId },
-        window.location.origin,
-      );
+    if (!ready || !active || !frameRef.current?.contentWindow) return;
+    const previous = sent.current;
+    const message =
+      previous && previous.projectId === projectId
+        ? {
+            type: 'prion-preview-patch',
+            ...previewChanges(previous.data, data),
+            page,
+            anchor,
+            projectId,
+          }
+        : { type: 'prion-preview-data', data, page, anchor, projectId };
+    frameRef.current.contentWindow.postMessage(message, window.location.origin);
+    sent.current = { data, projectId };
   }, [ready, active, data, page, anchor, projectId]);
   useEffect(() => {
     if (!active)
@@ -88,7 +101,6 @@ export function StudioPreview({
       <div className="studio-preview-viewport">
         <iframe
           ref={frameRef}
-          onLoad={() => setReady(true)}
           src="/studio-preview"
           title="Complete website preview"
           style={{ width }}
