@@ -195,7 +195,7 @@ export function repositoryFile(name) {
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||
     /^publication\/content-parts\/[a-f0-9]{64}\.json$/.test(name) ||
-    /^publication\/(content|config|media-map|pdf-parts|google-fonts)\.json$/.test(
+    /^publication\/(content|config|media-map|pdf-parts|google-fonts|search)\.json$/.test(
       name,
     ) ||
     /^publication\/font-licenses\/[a-z0-9]+-(OFL|LICENSE|UFL)\.txt$/.test(
@@ -315,6 +315,18 @@ export async function publicationSources(sourceRoot) {
       );
     }
     const target = 'scripts/' + name;
+    const existing = files.find((file) => file.path === target);
+    if (existing) existing.content = content;
+    else files.push({ path: target, content });
+  }
+  for (const name of ['site-search.ts', 'site-search.css', 'site-search-index.ts']) {
+    let content;
+    try { content = await readFile(new URL('./search/' + name, import.meta.url), 'utf8'); }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      content = await readFile(new URL('../app/' + name, import.meta.url), 'utf8');
+    }
+    const target = 'app/' + name;
     const existing = files.find((file) => file.path === target);
     if (existing) existing.content = content;
     else files.push({ path: target, content });

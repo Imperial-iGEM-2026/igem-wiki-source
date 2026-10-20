@@ -68,3 +68,5 @@ export {
   compressExportImage,
   IMAGE_UPLOAD_BYTES,
 } from '../scripts/image-export.mjs';
+
+export { buildSearchIndex } from '../app/site-search-index';

@@ -1,4 +1,4 @@
-import { copyFieldDefaults, copyFieldId } from './shared.mjs';
+import { buildSearchIndex, copyFieldDefaults, copyFieldId } from './shared.mjs';
 import { createExportJobs } from './export-jobs.mjs';
 import { createImagePreviews } from './image-previews.mjs';
 import { createBundleExports } from './export-bundles.mjs';
@@ -819,6 +819,11 @@ export async function createAppServer({
         corePages,
         defaults,
       } = project;
+      if (pathname === '/api/search-index' && req.method === 'GET') {
+        const values = defaults();
+        for (const row of rows.all()) if (Object.hasOwn(values, row.id)) values[row.id] = row.value;
+        return json(res, 200, buildSearchIndex(values));
+      }
       if (pathname === '/api/mcp-links') {
         if (req.method === 'GET')
           return json(res, 200, { links: mcp.links.list(projectId, user) });

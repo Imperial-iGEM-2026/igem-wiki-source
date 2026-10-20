@@ -23,6 +23,9 @@ export async function packageUploadHelper(root, destination) {
     'wiki-LICENSE.txt',
     'compiler/igem.gitlab-ci.yml',
     'compiler/build-igem.mjs',
+    'search/site-search.ts',
+    'search/site-search.css',
+    'search/site-search-index.ts',
     'compiler/source-parts.mjs',
     'compiler/publication-runtime.mjs',
     'compiler/artifact-size.mjs',
@@ -47,6 +50,8 @@ export async function packageUploadHelper(root, destination) {
           ? path.join(root, 'publication/wiki-LICENSE.txt')
           : name === 'compiler/igem.gitlab-ci.yml'
             ? path.join(root, 'ops/igem.gitlab-ci.yml')
+            : name.startsWith('search/')
+              ? path.join(root, 'app', path.basename(name))
             : name.startsWith('compiler/')
               ? path.join(root, 'scripts', path.basename(name))
               : name.startsWith('fonts/')

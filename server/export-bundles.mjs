@@ -7,6 +7,7 @@ import { googleFontReferences, prepareGoogleFonts } from './google-fonts.mjs';
 import { createExportProcessing } from './export-processing.mjs';
 import { isRecording, recordingTasks } from './export-recordings.mjs';
 import {
+  buildSearchIndex,
   IMAGE_UPLOAD_BYTES,
   PDF_PART_BYTES,
   sponsorLayers,
@@ -245,9 +246,20 @@ export function createBundleExports({
           ),
           assets: [],
         };
+        const searchIndex = buildSearchIndex(cleanValues);
+        const searchCode = 'export default ' + JSON.stringify(searchIndex) + ';\n';
+        if (Buffer.byteLength(searchCode) >= 9_900_000)
+          throw fail(422, 'The project search index exceeds the static upload limit. Reduce indexed content before exporting.');
+        const searchHash = createHash('sha256').update(searchCode).digest('hex');
+        const searchSource = '/templates/runtime/search-' + searchHash + '.js';
+        const searchFile = 'assets/runtime/search-' + searchHash + '.js';
+        entries.assets.push(textEntry(searchFile, searchCode));
+        entries.source.push(textEntry('publication/search.json', json({ version: 1, source: searchSource })));
         const pdfParts = {};
         const rows = [],
           map = {};
+        rows.push({ source: searchSource, kind: 'runtime', bundle: names.assets, file: searchFile });
+        map[searchSource] = '';
         const locations = new Map();
         const media = exportMedia(
           cleanValues,

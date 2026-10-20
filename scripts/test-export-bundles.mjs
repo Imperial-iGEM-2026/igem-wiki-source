@@ -137,6 +137,13 @@ try {
   );
   const project = await create('Export test', 'notebook-purple');
   const second = await create('Other project', 'notebook-purple');
+  assert.equal((await fetch(origin + '/api/search-index')).status,401);
+  await save(project, 'home:title', 'Unique search project marker');
+  const search = await request('/api/search-index', null, project);
+  assert.equal(search.status, 200);
+  assert.ok(JSON.stringify(await search.json()).includes('Unique search project marker'));
+  assert.ok(!JSON.stringify(await (await request('/api/search-index', null, second)).json()).includes('Unique search project marker'));
+  assert.equal((await request('/api/search-index', null, 'missing-search-project')).status,404);
   const requestId = 'aaaaaaaa-bbbb-cccc-dddd-123456789012';
   const asyncResponse = await request(
     '/api/export/bundles',
@@ -318,7 +325,7 @@ try {
   assert.equal(plan.downloads.length, 2);
   assert.equal(
     plan.downloads.find((entry) => entry.key === 'assets').files,
-    32 + publicationRuntime.length,
+    33 + publicationRuntime.length,
   );
   assert.deepEqual(plan.recordingTodos, []);
   await save(project, 'brand', 'Newer unsnapshotted brand', 1);
@@ -357,6 +364,10 @@ with zipfile.ZipFile(root/'02-static-assets.zip') as z:
  assert sum(n.endswith('.ttf') for n in z.namelist()) == 4
  assert sum(n.endswith('-OFL.txt') for n in z.namelist()) == 3
  rows=list(csv.DictReader(io.StringIO(z.read('upload-manifest.csv').decode())))
+ search=json.loads((root/'source/publication/search.json').read_text())
+ searchrow=next(r for r in rows if r['source']==search['source'])
+ assert searchrow['kind']=='runtime' and searchrow['file'].startswith('assets/runtime/search-')
+ assert z.read(searchrow['file']).startswith(b'export default {')
  for host,filename,suffix in [('editor.example.com','benchling.svg',''),('media.example.com','atlassian.svg',''),('media.example.com','neb.jpg','?v=2#logo')]:
   source='https://'+host+'/templates/regelerate/sponsor-logos/'+filename+suffix
   row=next(r for r in rows if r['source']==source)
@@ -447,6 +458,9 @@ print('ZIP64 CRC, source isolation and frozen snapshot passed')`;
     path.join(checkout, 'igem-build/public/index.html'),
     'utf8',
   );
+  const searchManifest=JSON.parse(await readFile(path.join(publication,'search.json'),'utf8'));
+  assert.ok(exportedHome.includes('data-site-search="'+map[searchManifest.source]+'"'));
+  assert.ok(!(await (await import('node:fs/promises')).readdir(path.join(checkout,'igem-build/public/assets'))).some(name=>/^search-[a-f0-9]{64}/.test(name)),'Search index belongs on the static host, not the Pages artifact');
   const exportedSubsection = exportedHome.match(
     /<details[^>]*data-item-id="export-item"[\s\S]*?<\/details>/,
   )?.[0];

@@ -1224,6 +1224,9 @@ await test('Older exports receive the current compiler without publishing review
     [
       '.gitlab-ci.yml',
       'app/pdf-parts-viewer.ts',
+      'app/site-search-index.ts',
+      'app/site-search.css',
+      'app/site-search.ts',
       'LICENSE',
       'ops/igem.gitlab-ci.yml',
       'package-lock.json',

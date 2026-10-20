@@ -1,5 +1,6 @@
 'use client';
 
+import { startWebsiteSearch } from './site-search';
 import { defaultLoading, startSiteLoading } from './site-loading';
 import { parseHeader } from './header-schema';
 import { startReferenceNavigation } from './reference-navigation';
@@ -119,6 +120,14 @@ export default function Home({
     return startSiteLoading({ ...defaultLoading, ...loading },
       (publication ? 'preview:' : 'project:') + (projectId || 'default'));
   }, [editing, loadingHeader, publication, projectId, wiki?.slug]);
+  useEffect(() => {
+    if (editing) return;
+    return startWebsiteSearch(async () => {
+      const response = await projectFetch('/api/search-index' + (projectId ? '?project=' + encodeURIComponent(projectId) : ''), { credentials: 'same-origin' });
+      if (!response.ok) throw Error('Search unavailable');
+      return response.json();
+    }, '/', document.body, (url) => projectURL(url, false));
+  }, [editing, projectId]);
   const tabIcon = siteIcon({
     'site:header': data['site:header']?.value,
     'site:template': data['site:template']?.value,

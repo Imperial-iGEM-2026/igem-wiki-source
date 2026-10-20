@@ -1,3 +1,6 @@
+import { startWebsiteSearch } from '../app/site-search';
+const searchURL = document.body.dataset.siteSearch;
+if (searchURL) startWebsiteSearch(async () => (await import(/* @vite-ignore */ searchURL)).default, document.body.dataset.siteBase || '/');
 import '../app/globals.css';
 import { watchImageDisplay } from '../app/image-display';
 document

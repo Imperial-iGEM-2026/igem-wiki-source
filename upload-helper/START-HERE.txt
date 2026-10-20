@@ -1,6 +1,11 @@
-reGELerate Upload Helper 1.0.27
+reGELerate Upload Helper 1.0.28
 
-This version fixes both "Invalid upload folder" and "Unsupported static-media folder" for the PDF reader's
+Version 1.0.28 supports the project's generated search index. Prepare fresh
+ZIPs after installing the matching Studio server. Upload the search JS under
+assets/runtime unchanged like other runtime assets; its mapped URL keeps the
+index outside the Pages artifact. Old ZIPs still build without search.
+
+An earlier version fixes both "Invalid upload folder" and "Unsupported static-media folder" for the PDF reader's
 assets/runtime JavaScript upload. Existing export ZIPs and saved jobs can be reused.
 
 Where your files go

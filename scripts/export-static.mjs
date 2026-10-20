@@ -82,6 +82,16 @@ if (
 const map = option('media-map')
   ? JSON.parse(await readFile(option('media-map'), 'utf8'))
   : {};
+let searchURL = '';
+if (snapshot.format === 'prion-wiki-source') {
+  try {
+    const search = JSON.parse(await readFile(path.join(path.dirname(source), 'search.json'), 'utf8'));
+    if (search.version !== 1 || !/^\/templates\/runtime\/search-[a-f0-9]{64}\.js$/.test(search.source)) throw Error('Invalid project search manifest.');
+    searchURL = map[search.source];
+    if (typeof searchURL !== 'string' || !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(searchURL) || searchURL.includes('YOUR-TEAM'))
+      throw Error('Upload the project search index from assets/runtime and include its iGEM URL in the media mapping.');
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
 let pdfParts = {};
 if (snapshot.format === 'prion-wiki-source') {
   try {
@@ -804,7 +814,7 @@ for (const page of [undefined, ...wikiPages]) {
     css
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
-    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}">` +
+    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-site-search="${esc(searchURL)}" data-site-base="${esc(base)}" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}">` +
     loadingScript +
     html +
     '</body></html>';

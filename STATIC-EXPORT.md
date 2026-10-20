@@ -240,3 +240,31 @@ The source media map points `/templates/runtime/pdfjs-6.4.299-worker.js` to the 
 Template styles and custom HTML component parts are deduplicated by content. JSON components remain inert in the parent; the browser reconstructs the original opaque sandboxed document. Relative stylesheet URLs are kept inline. Canonical page aliases use redirects preserving query/hash. PDF scripting-engine WASM is not included because this reader does not import the PDF scripting sandbox; normal PDF resources remain.
 
 `IGEM_ARTIFACT_BUDGET_BYTES` in the generated CI defaults to 4,800,000 bytes of estimated compressed ZIP size. It stops an over-budget build before upload with actionable instructions. Adjust it if iGEM confirms a different limit. This conservative budget is not an assertion about the actual GitLab/proxy setting.
+
+
+## Project search (upload helper 1.0.28)
+
+Fresh exports include a project-wide search dialog, opened by the Search button or Ctrl/Cmd+K. It searches page titles, headings and saved text, including text inside Custom HTML. Hidden/deleted layers and removed pages are omitted; headers, scripts and styles are excluded. It does not execute custom scripts, extract text from PDFs, OCR images, or index text generated only at runtime. Review this limitation for script-generated interviews or charts.
+
+Search ranks page-title and heading matches above body matches, requires all query terms (apart from common stop words), folds case/accents, and returns the best match per page. Backup/test/scratch pages rank lower unless requested. A one-edit spelling fallback is tried only when there are no exact matches, and the dialog labels any correction. Result links open the matching page, not a section anchor.
+
+The exporter creates a content-hashed `assets/runtime/search-<hash>.js` in **02-static-assets.zip**. The file is a data-only ES module uploaded unchanged by the helper, like other runtime assets. **01-website-source.zip** contains only its small `publication/search.json` pointer and the media mapping. CI requires its verified iGEM static URL and never copies the index into the Pages artifact. The small search UI remains in the application bundle. The index is loaded on the first nonempty query and cached for the page visit; unchanged content produces an identical asset. Indexes at or above 9,900,000 bytes stop export with an error. The existing 4,800,000-byte compressed Pages budget remains in force.
+
+Install the new server package, refresh Studio, prepare fresh ZIPs and upload/check assets with helper 1.0.28 before sending to GitLab. Older source ZIPs without a search manifest continue to build without published search.
+
+### UI API
+
+The live website, Studio Preview and exported website expose this browser API after initialization:
+
+```js
+window.websiteSearch.open();
+window.websiteSearch.close();
+const results = await window.websiteSearch.search('streptavidin', { limit: 10 });
+// [{ id, title, page, excerpt, url, score, correction? }]
+```
+
+`limit` defaults to 20 (maximum 50). Empty queries return an empty array. Failed index downloads reject the promise and can be retried; custom UIs should handle the error. Use `textContent` to render titles/excerpts. Use the returned `url` for navigation: it includes the exported team prefix or the live project query. Sandboxed Custom HTML has its own window and cannot call the parent API directly; use this API in the template/application UI. It is a browser search API, so the exported wiki needs no search server.
+
+For the Studio-hosted website, authenticated `GET /api/search-index?project=<project-id>` returns `{ version: 1, documents: [{ id, page, title, text }] }`. It uses the existing project/authentication boundary and only saved content. This endpoint is not needed after static export.
+
+Run `node scripts/test-site-search.mjs` for reproducible ranking, exclusion, accent/CJK, keyboard, retry and lazy-loading checks. An optional second argument can point to a local saved-values JSON snapshot for the Imperial project relevance regression; private content is not committed with the tests.

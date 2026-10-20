@@ -93,7 +93,7 @@ assert.match(manifest, /pages-1-2.pdf/);
 assert.match(manifest, /pages-3-4.pdf/);
 assert.match(manifest, /pdfjs-6\.4\.299-worker\.js.*runtime/);
 const runtimeFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'assets/assets/runtime'));
-assert.equal(runtimeFiles.length, publicationRuntime.length);
+assert.equal(runtimeFiles.length, publicationRuntime.length + 1);
 for (const asset of publicationRuntime) {
   const file = runtimeFiles.find((name) => name.endsWith(path.basename(asset.source)));
   assert.ok(file, asset.source);
@@ -116,6 +116,8 @@ const map = {
   [PDF_WORKER_SOURCE]: 'https://static.igem.wiki/teams/1/runtime/pdf-worker.js',
   '/api/media/aacc.jpg': 'https://static.igem.wiki/teams/1/images/photo.jpg',
 };
+const search = JSON.parse(await readFile(path.join(dir, 'source/publication/search.json'), 'utf8'));
+map[search.source] = 'https://static.igem.wiki/teams/1/runtime/' + path.basename(search.source);
 for (const part of parts['/api/media/aabb.pdf'])
   map[part.source] =
     `https://static.igem.wiki/teams/1/documents/part-${part.start}.pdf`;
