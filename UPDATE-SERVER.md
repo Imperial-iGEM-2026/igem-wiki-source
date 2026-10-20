@@ -1,3 +1,9 @@
+## Media contrast in accessibility mode
+
+The existing high-contrast toggle now includes photos, SVG logos/figures, native videos, embedded video players, canvas plots and PDF readers. The PDF reader passes the filter through its isolated style boundary. Custom HTML applies it inside the sandbox, avoiding double filtering. Default restores original colours without rewriting media. Existing `data-preserve-colors` exclusions remain available for colour-critical material; mark CSS-background logos with `data-website-media`.
+
+Install this package and refresh Studio. Prepare a fresh website export to include the media filter on the published site. Browser checks verify actual rendered-pixel changes and restoration for images, SVG, playing video, embedded frames and rendered PDF pages, plus persistence and Custom HTML propagation. This is contrast enhancement, not a personalised correction for each colour-vision deficiency.
+
 ## Search stays inside the editor canvas
 
 Opening the project's search button in Design now keeps the dialog and backdrop inside the visible website canvas. Studio's toolbar and side panels remain accessible. The overlay follows canvas zoom, scrolling and panel/viewport resizing, and closes when switching to Preview. Preview and exported websites retain their normal modal search. Install this package and refresh Studio. Verified with browser tests for the developer SVG button, search results, canvas bounds, close/Escape, and preview transitions.
@@ -18,7 +24,7 @@ Design and Preview now use the project's developer source automatically whenever
 
 For an editable search design, add an empty Custom HTML block and choose **Insert editable search interface**. Its HTML, CSS and JavaScript are saved normally; **Interact with HTML** tests queries in Design. Existing developer search designs are preserved.
 
-Preview and export also expose `window.websiteAccessibility.setColorMode('high-contrast')`, `setColorMode('default')`, `toggleColorMode()` and `getColorMode()`. A button with `data-website-color-toggle` works in normal markup and Custom HTML. The visitor's choice persists per site/project; preview settings are separate. The palette improves interface contrast and underlines links. Images, SVG figures, canvas and PDFs are not recoloured. Authors can preserve a diagram subtree with `data-preserve-colors` and listen for `website:colormodechange` for custom chart support. Labels/patterns remain necessary where data meaning depends on colour. API details are in STATIC-EXPORT.md.
+Preview and export also expose `window.websiteAccessibility.setColorMode('high-contrast')`, `setColorMode('default')`, `toggleColorMode()` and `getColorMode()`. A button with `data-website-color-toggle` works in normal markup and Custom HTML. The visitor's choice persists per site/project; preview settings are separate. The palette improves interface contrast and underlines links. Media now receives contrast enhancement as described in the media accessibility update above. Authors can preserve a diagram subtree with `data-preserve-colors` and listen for `website:colormodechange` for custom chart support. Labels/patterns remain necessary where data meaning depends on colour. API details are in STATIC-EXPORT.md.
 
 Prepare a fresh export for the new runtime API. No extra service or dependency is required. Validation covers automatic source-preview selection, normal preview navigation, colour toggles, reload persistence, Custom HTML, restoration and palette contrast.
 

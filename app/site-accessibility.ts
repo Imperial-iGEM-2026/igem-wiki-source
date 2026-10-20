@@ -6,8 +6,8 @@ export const accessiblePalette = {
   focus: '#9c3f00',
   border: '#667085',
 };
-// Recolour interface surfaces, not photographs, SVG figures, canvas plots or media.
-// Authors may preserve a diagram's entire subtree with data-preserve-colors.
+// Recolour interface surfaces and enhance media contrast without rewriting files.
+// Authors may preserve a colour-critical subtree with data-preserve-colors.
 export const accessibilityStyles = `
 html[data-website-color-mode="high-contrast"] { color-scheme:light; --website-a11y-background:#fff; --website-a11y-text:#172033; --website-a11y-link:#0047ab; --website-a11y-focus:#9c3f00; }
 html[data-website-color-mode="high-contrast"] :where(body,main,header,footer,nav,article,section,aside,div,p,span,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,ul,ol,li,form,label,details,summary,dialog,blockquote,pre,code):not([data-preserve-colors],[data-preserve-colors] *) { color:#172033!important; background-color:#fff!important; text-shadow:none!important; }
@@ -16,6 +16,10 @@ html[data-website-color-mode="high-contrast"] :where(button,input,textarea,selec
 html[data-website-color-mode="high-contrast"] :where(button[aria-pressed="true"],[aria-selected="true"],a[aria-current="page"]):not([data-preserve-colors],[data-preserve-colors] *) { color:#fff!important; background:#0047ab!important; text-decoration:underline!important; }
 html[data-website-color-mode="high-contrast"] :focus-visible { outline:3px solid #9c3f00!important; outline-offset:3px!important; }
 html[data-website-color-mode="high-contrast"] ::selection { color:#fff; background:#0047ab; }
+/* Filter only the outer media surface. Custom HTML receives these rules inside
+   its sandbox; filtering that frame as well would apply the effect twice. */
+html[data-website-color-mode="high-contrast"] :where(img,video,canvas,svg,iframe:not(.custom-html-frame),object,embed,.partitioned-pdf,[data-website-media]):not([data-preserve-colors],[data-preserve-colors] *):not(svg *,object *,video *,.partitioned-pdf *,[data-website-media] *) { filter:var(--website-a11y-media-filter,contrast(1.25))!important; }
+html[data-website-color-mode="high-contrast"] .partitioned-pdf:not([data-preserve-colors],[data-preserve-colors] *,[data-website-media] *) { --website-a11y-pdf-filter:var(--website-a11y-media-filter,contrast(1.25)); }
 `;
 
 const remembered = new Map<string, WebsiteColorMode>();
@@ -38,7 +42,7 @@ export function startWebsiteAccessibility(key: string) {
     frame.contentWindow?.postMessage(
       {
         type: 'website-color-state',
-        mode,
+        mode: frame.closest('[data-preserve-colors]') ? 'default' : mode,
         styles: accessibilityStyles,
         palette: accessiblePalette,
       },
