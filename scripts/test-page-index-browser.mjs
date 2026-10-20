@@ -60,7 +60,7 @@ await build({
   ...common,
   build: {
     outDir: dist,
-    rollupOptions: { input: [path.join(folder, 'index.html'), path.resolve('server/preview.html')] },
+    rolldownOptions: { input: [path.join(folder, 'index.html'), path.resolve('server/preview.html')] },
   },
 });
 const server = createServer(async (req, res) => {
@@ -241,11 +241,61 @@ try {
     await toggle.click();
     await nav.waitFor();
     assert.equal(await nav.getByRole('link').count(), 6);
+    const designNav = await nav.elementHandle();
+    const designState = await page.locator('.studio-stage').evaluate(el => ({
+      scrollTop: el.scrollTop,
+      zoom: document.querySelector('[aria-label="Canvas zoom percent"]').value,
+    }));
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     const preview = page.frameLocator('iframe[title="Complete website preview"]');
     await preview.getByRole('heading', { name: 'The question', exact: true }).waitFor();
-    assert.equal(await preview.getByRole('navigation', { name: 'Page section index', exact: true }).getByRole('link').count(), 6);
+    const previewNav = preview.getByRole('navigation', { name: 'Page section index', exact: true });
+    assert.equal(await previewNav.getByRole('link').count(), 6);
+    await preview.locator('body').evaluate(async () => {
+      await document.fonts.ready;
+      let previous = window.scrollY, stable = 0;
+      for (let frame = 0; frame < 300 && stable < 20; frame++) {
+        await new Promise(requestAnimationFrame);
+        const next = window.scrollY;
+        stable = previous === next ? stable + 1 : 0;
+        previous = next;
+      }
+    });
+    // A descendant can override inherited visibility (authored CSS, shadow
+    // resets, animated/composited navigation). It must still never paint over
+    // the independently mounted Preview. Compare actual pixels, not isVisible,
+    // which intentionally ignores ancestor opacity.
+    const workspace = page.locator('.studio-workspace-hidden');
+    assert.equal(await workspace.evaluate(el => el.inert), true);
+    // Keep a positioned copy inside the viewport regardless of the editor's
+    // current scroll/zoom. This simulates a widget resetting visibility inside
+    // the retained workspace, without depending on an offscreen index's bounds.
+    await workspace.evaluate(el => {
+      const copy = el.querySelector('.wiki-page-index').cloneNode(true);
+      copy.id = 'visibility-regression';
+      copy.style.cssText = 'position:absolute;top:180px;left:450px;width:180px;height:450px;visibility:visible!important;background:#ff00ff!important;z-index:10000';
+      el.append(copy);
+    });
+    const clip = await page.locator('.studio-preview-viewport').boundingBox();
+    const withDesign = await page.screenshot({ clip, animations: 'disabled' });
+    await page.locator('#visibility-regression').evaluate(el => el.style.setProperty('visibility', 'hidden', 'important'));
+    const withoutDesign = await page.screenshot({ clip, animations: 'disabled' });
+    await writeFile(path.join(folder, 'preview-with-design.png'), withDesign);
+    await writeFile(path.join(folder, 'preview-without-design.png'), withoutDesign);
+    assert.ok(withDesign.equals(withoutDesign), 'hidden Design index cannot paint above Preview');
+    await page.locator('#visibility-regression').evaluate(el => el.remove());
+    const previewShow = previewNav.getByRole('button', { name: 'Show page index', exact: true });
+    if (await previewShow.isVisible()) await previewShow.click();
+    await previewNav.getByRole('button', { name: 'Hide page index', exact: true }).click();
+    await previewShow.waitFor();
     await page.getByRole('button', { name: 'Back to editor', exact: true }).click();
+    assert.equal(await designNav.evaluate(el => el === document.querySelector('.wiki-page-index')), true,
+      'Design index stays mounted');
+    assert.equal(await page.locator('.studio-workspace').evaluate(el => el.inert), false);
+    assert.deepEqual(await page.locator('.studio-stage').evaluate(el => ({
+      scrollTop: el.scrollTop,
+      zoom: document.querySelector('[aria-label="Canvas zoom percent"]').value,
+    })), designState, 'Preview preserves Design scroll and zoom');
   }
   assert.deepEqual(errors, []);
   console.log(

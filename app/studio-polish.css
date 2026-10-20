@@ -836,6 +836,10 @@
 }
 .studio .studio-workspace-hidden {
   visibility: hidden;
+  /* Hide the whole painted subtree. Descendants (including isolated widgets
+     and the animated index) can override inherited visibility. Keep layout
+     intact so returning to Design preserves scroll, zoom and mounted media. */
+  opacity: 0;
   pointer-events: none;
   position: absolute;
   inset: 58px 0 0;
