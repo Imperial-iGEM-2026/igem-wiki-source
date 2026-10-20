@@ -1914,7 +1914,20 @@ try {
       lockToken: lease.lockToken,
       ttlSeconds: 60,
     });
+    const previewBefore = await (await api('/api/source-preview', null, project)).json();
+    assert.equal(previewBefore.files, undefined);
     const written = await call(devKey, 'write_source_file', edit);
+    const previewResponse = await api('/api/source-preview?files=1', null, project);
+    assert.equal(previewResponse.status, 200);
+    const sourcePreview = await previewResponse.json();
+    assert.notEqual(sourcePreview.revision, previewBefore.revision);
+    assert.equal(sourcePreview.files[edit.path], edit.content);
+    assert.ok(sourcePreview.files['server/source-preview-entry.tsx']);
+    assert.ok(sourcePreview.compiler.dependencies.includes('react'));
+    assert.equal(sourcePreview.files['server/app.mjs'], undefined);
+    assert.equal((await api('/api/source-preview?files=1', null, project, 'invalid')).status, 401);
+    assert.equal((await api('/api/source-preview?files=1', null, 'missing-project')).status, 404);
+    assert.equal((await api('/api/source-preview', {files:true}, project)).status, 404);
     await rejects(call(devKey, 'write_source_file', edit), /conflict/);
     await rejects(
       call(devKey, 'read_source_file', { path: '../mcp-link.key' }),

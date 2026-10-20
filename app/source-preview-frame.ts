@@ -1,0 +1,173 @@
+// Runs only inside an opaque data-document sandbox. Never grant parent DOM access.
+export function sourcePreviewBootstrap(token: string) {
+  if (!crypto.randomUUID)
+    crypto.randomUUID = () => {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      const h = [...bytes].map((v) => v.toString(16).padStart(2, '0')).join('');
+      return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+    };
+  const runtime = window as unknown as Window & {
+    __studioSourceCss: string[];
+    __studioSourceVendors: Record<string, Record<string, unknown>>;
+    __mountSourcePreview: (
+      data: unknown,
+      page: string,
+      project?: string,
+    ) => void;
+  };
+  const pending = new Map<
+    number,
+    { resolve: (r: Response) => void; reject: (e: Error) => void }
+  >();
+  let next = 0;
+  const send = (type: string, data = {}) =>
+    parent.postMessage({ type, token, ...data }, '*');
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const address = input instanceof Request ? input.url : String(input);
+    const url = new URL(address, document.baseURI);
+    if (url.origin !== new URL(document.baseURI).origin)
+      return originalFetch(input, init);
+    if (
+      (
+        init.method || (input instanceof Request ? input.method : 'GET')
+      ).toUpperCase() !== 'GET'
+    )
+      return Promise.reject(Error('Source Preview is read-only.'));
+    const id = ++next;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      send('source-preview-fetch', { id, url: url.href });
+      setTimeout(() => {
+        if (pending.delete(id))
+          reject(Error('Preview resource request timed out'));
+      }, 60000);
+    });
+  };
+  const images = new Map<string, Promise<string>>();
+  const loadImage = (img: HTMLImageElement) => {
+    const src = img.getAttribute('src');
+    if (!src) return;
+    const url = new URL(src, document.baseURI);
+    if (
+      url.origin !== new URL(document.baseURI).origin ||
+      !(
+        /^(\/api\/media\/|\/assets\/|\/templates\/)/.test(url.pathname) ||
+        url.pathname === '/prion-hero.png'
+      )
+    )
+      return;
+    if (!images.has(url.href))
+      images.set(
+        url.href,
+        fetch(url.href)
+          .then((r) => {
+            if (!r.ok) throw Error('Image request failed: ' + r.status);
+            return r.blob();
+          })
+          .then((b) => URL.createObjectURL(b)),
+      );
+    void images
+      .get(url.href)!
+      .then((value) => {
+        if (img.getAttribute('src') === src) img.src = value;
+      })
+      .catch((e) =>
+        send('source-preview-resource-error', { error: String(e) }),
+      );
+  };
+  new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === 'attributes' && r.target instanceof HTMLImageElement)
+        loadImage(r.target);
+      for (const n of r.addedNodes)
+        if (n instanceof Element) {
+          if (n instanceof HTMLImageElement) loadImage(n);
+          n.querySelectorAll('img').forEach(loadImage);
+        }
+    }
+  }).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src'],
+  });
+  const inject = (code: string) => {
+    const script = document.createElement('script');
+    script.textContent = code;
+    document.body.appendChild(script);
+  };
+  let loaded = false;
+  addEventListener('message', async (event) => {
+    if (event.source !== parent || event.data?.token !== token) return;
+    const payload = event.data;
+    if (payload.type === 'source-preview-response') {
+      const item = pending.get(payload.id);
+      if (!item) return;
+      pending.delete(payload.id);
+      if (payload.error) item.reject(Error(payload.error));
+      else
+        item.resolve(
+          new Response(payload.body, {
+            status: payload.status,
+            headers: { 'Content-Type': payload.contentType },
+          }),
+        );
+    }
+    if (payload.type === 'source-preview-load' && !loaded) {
+      loaded = true;
+      runtime.__studioSourceCss = [];
+      inject(payload.vendor);
+      // PDF.js normally fetches from its worker. Keep authenticated reads in
+      // the parent bridge, and give its worker an opaque local module URL.
+      const vendors = runtime.__studioSourceVendors;
+      const pdf = vendors['pdfjs-dist'];
+      if (pdf) {
+        const getDocument = pdf.getDocument as (options: unknown) => unknown;
+        pdf.getDocument = (options: { url?: string } | string) =>
+          getDocument(
+            typeof options === 'object' && options.url
+              ? {
+                  ...options,
+                  url: new URL(options.url, document.baseURI).href,
+                  useWorkerFetch: false,
+                }
+              : options,
+          );
+        const worker = await fetch('/assets/source-preview/pdf.worker.mjs');
+        if (!worker.ok) throw Error('PDF preview worker could not load');
+        vendors['pdfjs-dist/build/pdf.worker.min.mjs?url'].default =
+          URL.createObjectURL(
+            new Blob([await worker.text()], { type: 'text/javascript' }),
+          );
+      }
+      inject(payload.javascript);
+      const style = document.createElement('style');
+      style.setAttribute('type', 'text/tailwindcss');
+      style.textContent = runtime.__studioSourceCss.join('\n');
+      document.head.appendChild(style);
+      inject(payload.tailwind);
+      runtime.__mountSourcePreview(
+        payload.data,
+        payload.page,
+        payload.projectId,
+      );
+      send('source-preview-loaded');
+    }
+    if (payload.type === 'source-preview-data' && loaded)
+      runtime.__mountSourcePreview(
+        payload.data,
+        payload.page,
+        payload.projectId,
+      );
+  });
+  addEventListener('error', (e) =>
+    send('source-preview-error', { error: e.message }),
+  );
+  window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) =>
+    send('source-preview-error', { error: String(e.reason) }),
+  );
+  send('source-preview-ready');
+}

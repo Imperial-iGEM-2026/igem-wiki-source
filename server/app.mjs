@@ -9,7 +9,7 @@ import { createChatHistory } from './chat-history.mjs';
 import { isDeepStrictEqual } from 'node:util';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdir, stat, open, unlink } from 'node:fs/promises';
+import { mkdir, stat, open, unlink, readFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -819,6 +819,14 @@ export async function createAppServer({
         corePages,
         defaults,
       } = project;
+      if (pathname === '/api/source-preview' && req.method === 'GET') {
+        const bundle = projectSource.preview(projectId, url.searchParams.get('files') === '1');
+        if (bundle.files) {
+          bundle.files['server/source-preview-entry.tsx'] = await readFile(new URL('./source-preview-entry.tsx', import.meta.url), 'utf8');
+          bundle.compiler = JSON.parse(await readFile(path.join(clientDir, 'assets/source-preview/manifest.json'), 'utf8'));
+        }
+        return json(res, 200, bundle);
+      }
       if (pathname === '/api/search-index' && req.method === 'GET') {
         const values = defaults();
         for (const row of rows.all()) if (Object.hasOwn(values, row.id)) values[row.id] = row.value;

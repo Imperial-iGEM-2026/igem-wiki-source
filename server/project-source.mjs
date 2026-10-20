@@ -6,7 +6,7 @@ const problem = (status, message) => Object.assign(Error(message), { status });
 // This is a virtual source tree from the release allowlist, never a server path.
 const editableApp = new Set([
   'home.tsx', 'canvas-surface.tsx', 'page-canvas.tsx', 'wiki-components.tsx',
-  'site-header.tsx', 'header-design.tsx', 'media-block.tsx', 'references.tsx',
+  'site-header.tsx', 'header-design.tsx', 'site-search.ts', 'site-search.css', 'media-block.tsx', 'references.tsx',
   'equation-block.tsx', 'custom-html-block.tsx', 'html-document.ts',
   'pdf-reader.tsx', 'pdf-reader.css', 'pdf-parts-viewer.ts', 'globals.css',
   'templates.ts', 'template-renderer.tsx', 'template-css.ts', 'template-transform.ts',
@@ -24,10 +24,10 @@ const canWrite = name => safePath(name) && (
   (name.startsWith('app/') && editableApp.has(name.slice(4))) ||
   /^(app\/project-components|components\/project)\/[a-zA-Z0-9_/-]+\.(tsx?|jsx?|css|json)$/.test(name)
 );
-export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. Studio and its normal preview use the installed release, not these edits. Source is not executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
+export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. In Studio Preview, choose Developer source to compile and preview the overrides in an isolated browser frame. Design and the Installed version preview use the installed release. Source is never executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
 
 export function createProjectSource({ db, sourceFile = new URL('./export-source.json', import.meta.url), now = Date.now }) {
-  let base;
+  let base, releaseHash;
   const files = () => base ||= JSON.parse(readFileSync(sourceFile, 'utf8'));
   db.exec(`CREATE TABLE IF NOT EXISTS project_source (
     project_id TEXT NOT NULL, path TEXT NOT NULL, content TEXT, version INTEGER NOT NULL,
@@ -188,6 +188,13 @@ export function createProjectSource({ db, sourceFile = new URL('./export-source.
       const old = db.prepare('SELECT * FROM project_source_history WHERE project_id=? AND path=? AND version=?').get(project, args.path, args.targetVersion);
       if (!old) throw problem(404, 'That source revision is unavailable. Use get_source_history.');
       return save(project, author, args, old.content, owner);
+    },
+    preview(project, includeFiles = false) {
+      releaseHash ||= digest(JSON.stringify(files()));
+      const changed = rows.all(project);
+      const revision = digest(releaseHash + JSON.stringify(changed.map(r => [r.path, r.version, r.base_hash])));
+      const modifiedFiles = changed.filter(r => r.content !== null).map(r => ({ path: r.path, version: r.version, updatedBy: r.author, updatedAt: r.updated_at }));
+      return { revision, modifiedFiles, notice: sourceNotice, ...(includeFiles ? { files: this.overlay(project, files()) } : {}) };
     },
     overlay(project, source) {
       const result = { ...source };

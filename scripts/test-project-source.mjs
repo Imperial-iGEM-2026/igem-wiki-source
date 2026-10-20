@@ -27,9 +27,16 @@ try {
     if (!tokens.has(args.path)) tokens.set(args.path, store.acquire('one', owner, { path: args.path }).lockToken);
     return { ...args, lockToken: tokens.get(args.path) };
   };
+  const initialPreview = store.preview('one');
+  assert.equal(initialPreview.files, undefined);
+  assert.deepEqual(store.preview('one', true).files, base);
   const first = store.read('one', { path: 'app/page-index.css' });
   const args = { path: first.path, ifVersion: first.version, ifBaseHash: first.baseHash, content: 'nav { color: red; }' };
   store.write('one', 'Ada', locked(args), owner);
+  assert.notEqual(store.preview('one').revision, initialPreview.revision);
+  assert.equal(store.preview('one', true).files[first.path], args.content);
+  assert.deepEqual(store.preview('two', true).files, base);
+  assert.equal(store.preview('one').modifiedFiles[0].updatedBy, 'Ada');
   assert.equal(store.read('two', { path: first.path }).content, base[first.path]);
   assert.equal(store.overlay('one', base)[first.path], args.content);
   assert.deepEqual(store.overlay('two', base), base);

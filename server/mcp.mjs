@@ -1412,7 +1412,7 @@ export function createMcp({
       },
       get_preview_url: {
         description:
-          'Get a private read-only preview of the saved page using the installed template/components. Returns a mandatory full-page inspection checklist. Open directly in your browser, scroll in overlapping steps from header to footer to load and inspect every visible section, check nested content, and repeat on desktop/mobile. One viewport screenshot is not a full preview. Developer source overrides require an exported build and are not shown here.',
+          'Get a private read-only preview of the saved page using the installed template/components. Returns a mandatory full-page inspection checklist. Open directly in your browser, scroll in overlapping steps from header to footer to load and inspect every visible section, check nested content, and repeat on desktop/mobile. One viewport screenshot is not a full preview. Developer source overrides are not shown by this tool. In signed-in Studio, open Preview → Developer source to build and inspect them before export.',
         inputSchema: {
           type: 'object',
           properties: { page: { type: 'string', description: 'Page slug' } },
@@ -2233,7 +2233,7 @@ export function createMcp({
         },
         write_source_file: {
           description:
-            'Save a complete project-specific template/component file. Read first; never overwrite unread content. Source edits affect exported builds, not the Studio canvas. Revisions are retained for rollback. No server execution or filesystem access.',
+            'Save a complete project-specific template/component file. Read first; never overwrite unread content. Source edits affect exported builds and Studio Preview → Developer source. Design and Installed version use the installed release. Revisions are retained for rollback. No server execution or filesystem access.',
           inputSchema: {
             type: 'object',
             properties: { ...writeProperties, content: { type: 'string' } },

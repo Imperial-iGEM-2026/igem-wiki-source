@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Monitor, Tablet, Smartphone, ArrowLeft } from 'lucide-react';
 import type { Blocks } from './content';
+import { SourcePreview } from './source-preview-ui';
 import { previewChanges } from './preview-sync';
 
 // Use the publication renderer in its own viewport. This includes generated
@@ -62,6 +63,7 @@ export function StudioPreview({
         ?.querySelectorAll('video,audio')
         .forEach((media) => (media as HTMLMediaElement).pause());
   }, [active]);
+  const [source, setSource] = useState(false);
   const [width, setWidth] = useState(1440);
   return (
     <section
@@ -98,7 +100,13 @@ export function StudioPreview({
           ))}
         </div>
       </div>
-      <div className="studio-preview-viewport">
+      <div className="studio-preview-version" aria-label="Preview version">
+        <button aria-pressed={!source} onClick={() => setSource(false)}>Installed version</button>
+        <button aria-pressed={source} onClick={() => setSource(true)}>Developer source</button>
+        <small>{source ? 'Project source overrides · isolated browser build' : 'Installed Studio components'}</small>
+      </div>
+      {source && active && <SourcePreview data={data} page={page} projectId={projectId} width={width} active={active} />}
+      <div className="studio-preview-viewport" style={source ? {display: 'none'} : undefined}>
         <iframe
           ref={frameRef}
           src="/studio-preview"

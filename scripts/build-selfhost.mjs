@@ -2,6 +2,7 @@ import './build-studio-responsive.mjs';
 import { exportSource } from './export-source.mjs';
 import { publicationRuntime } from './publication-runtime.mjs';
 import { packageUploadHelper } from './package-upload-helper.mjs';
+import { packageSourcePreview } from './package-source-preview.mjs';
 import { packageImageRuntime } from './package-image-runtime.mjs';
 import { build } from 'vite';
 import { mkdir, cp, rename, writeFile } from 'node:fs/promises';
@@ -135,3 +136,6 @@ for (const dir of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
     path.join(out, 'client/assets/pdfjs', dir),
     { recursive: true },
   );
+
+await cp(path.join(root, 'server/source-preview-entry.tsx'), path.join(out, 'server/source-preview-entry.tsx'));
+await packageSourcePreview(root, path.join(out, 'client'));
