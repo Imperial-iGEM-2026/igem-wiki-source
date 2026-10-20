@@ -15,7 +15,7 @@ import {
   ensureTemplateFonts,
   hostedURL,
   publicationSources,
-  safePath,
+  readPublicationSource,
   digest,
   verifyRuntimeAsset,
   uploadFolder,
@@ -194,6 +194,8 @@ async function action(name, data) {
     if (job.team) {
       await ensureTemplateFonts(path.join(job.dir, 'source'), job.rows);
       await save();
+    } else if (['source', 'assets'].every((kind) => job.imported?.includes(kind))) {
+      await action('prepare', {});
     }
     log(
       `Resumed ${job.team || 'import'}: ${(job.rows || []).filter((r) => r.url).length} completed uploads saved.`,
@@ -264,9 +266,7 @@ async function action(name, data) {
       (config.review && config.review !== 'publication/review.json')
     )
       throw Error('Unsupported publication file paths');
-    const content = await jsonFile(safePath(source, config.source));
-    if (content.format !== 'prion-wiki-source' || content.version !== 1)
-      throw Error('Unsupported website source export');
+    const content = await readPublicationSource(source);
     job.team = config.teamSlug;
     job.attributionUrl = config.attributionUrl || '';
     job.rows = await manifest(
@@ -287,7 +287,7 @@ async function action(name, data) {
       ? recordingTodos.length
       : 0;
     await save();
-    await ensureTemplateFonts(source, job.rows);
+    await ensureTemplateFonts(source, job.rows, content);
     await save();
     log(`Ready: ${job.rows.length} media files for ${job.team}.`);
     return;

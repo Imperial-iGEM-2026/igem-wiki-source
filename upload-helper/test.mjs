@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, readFile, unlink } from 'node:fs/promises';
+import { partitionSource } from '../scripts/source-parts.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import {
@@ -403,13 +404,14 @@ await test('GitLab plan creates LICENSE on the review branch when main has none'
   await assert.rejects(sites.plan('test', []), /identity/);
 });
 
-await test('Local HTTP import validates its session, ZIP64 exports, mapping and resume', async (t) => {
+for (const sourceVersion of [1, 2])
+await test(`Local HTTP v${sourceVersion} import validates its session, ZIP64 exports, mapping and resume`, async (t) => {
   const { spawn } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');
   const { zipStream } = await import('../server/export-zip.mjs');
   const root = await mkdtemp(path.join(os.tmpdir(), 'rgel-http-'));
   const child = spawn(process.execPath, ['server.mjs', '--no-browser'], {
-    cwd: fileURLToPath(new URL('.', import.meta.url)),
+    cwd: process.env.HELPER_TEST_ROOT || fileURLToPath(new URL('.', import.meta.url)),
     env: { ...process.env, HELPER_JOBS_DIR: root, HELPER_PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -468,6 +470,10 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
     return { status: r.status, data: await r.json() };
   };
   assert.equal((await call('new', { teamId: '6377' })).status, 200);
+  const contentFiles = partitionSource(
+    { format: 'prion-wiki-source', version: 1, values: { brand: 'Import fixture' } },
+    { force: sourceVersion === 2 },
+  );
   const source = zip([
     [
       'publication/config.json',
@@ -479,7 +485,7 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
         review: 'publication/review.json',
       }),
     ],
-    ['publication/content.json', '{"format":"prion-wiki-source","version":1,"values":{}}'],
+    ...contentFiles.map((file) => [file.path, file.content]),
     ['publication/media-map.json', '{}'],
     ['publication/recording-todos.json', '[{"kind":"video","source":"missing.mp4"}]'],
     [
@@ -503,7 +509,26 @@ await test('Local HTTP import validates its session, ZIP64 exports, mapping and 
     });
     assert.equal(response.status, 200, await response.text());
   }
-  assert.equal((await call('prepare', {})).status, 200);
+  if (sourceVersion === 2) {
+    const importState = (await call('state')).data;
+    const part = contentFiles[1];
+    const partPath = path.join(root, importState.job.id, 'source', part.path);
+    await writeFile(partPath, part.content + ' ');
+    const corrupt = await call('prepare', {});
+    assert.equal(corrupt.status, 400);
+    assert.match(corrupt.data.error, /incomplete or changed/);
+    assert.ok(!(await call('state')).data.job.team);
+    await unlink(partPath);
+    assert.equal((await call('prepare', {})).status, 400);
+    assert.ok(!(await call('state')).data.job.team);
+    await writeFile(partPath, part.content);
+    // Resume the already-extracted import left behind by an older helper.
+    const resumed = await call('resume', { id: importState.job.id });
+    assert.equal(resumed.status, 200, JSON.stringify(resumed.data));
+    assert.equal((await call('state')).data.job.team, 'imperial-college');
+  }
+  const prepared = await call('prepare', {});
+  assert.equal(prepared.status, 200, JSON.stringify(prepared.data));
   const state = (await call('state')).data;
   assert.equal(state.job.rows.length, 1);
   assert.equal(state.job.recordingTodoCount, 1);

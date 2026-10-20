@@ -352,10 +352,13 @@ async function fontCatalog() {
     return import('../scripts/export-media.mjs');
   }
 }
-export async function ensureTemplateFonts(sourceRoot, rows) {
-  const { templateFonts, fontLicenses } = await fontCatalog();
+export async function readPublicationSource(sourceRoot) {
   const { readSource } = await sourceCatalog();
-  const content = await readSource(path.join(sourceRoot, 'publication/content.json'));
+  return readSource(path.join(sourceRoot, 'publication/content.json'));
+}
+export async function ensureTemplateFonts(sourceRoot, rows, validatedContent) {
+  const { templateFonts, fontLicenses } = await fontCatalog();
+  const content = validatedContent || await readPublicationSource(sourceRoot);
   for (const font of templateFonts(content.values || {})) {
     const existing = rows.find((row) => row.source === font.source);
     const metadata = {

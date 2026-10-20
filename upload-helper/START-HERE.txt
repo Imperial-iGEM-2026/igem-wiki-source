@@ -26,6 +26,10 @@ the SAME helper folder and replace files when asked. Keep its jobs folder.
 Start again, choose Continue an earlier upload, sign in, and check remaining
 files. Completed uploads are recovered without uploading them twice.
 
+Version 1.0.26 fixes importing partitioned source ZIPs. Continue an earlier
+upload now completes validation if the old helper stopped after extracting
+both ZIPs. Keep the jobs folder; the existing exports can be reused.
+
 Version 1.0.25 also splits publication/content.json when it is large. Check source
 changes upgrades an existing export automatically; keep the jobs folder and
 reuse its media uploads. The generated content-parts files must accompany the

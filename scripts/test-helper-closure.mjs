@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { extractZip } from '../upload-helper/files.mjs';
 const root = await mkdtemp(path.resolve('work/helper-closure-'));
 await extractZip('selfhost-dist/client/upload-helper.zip',root);
@@ -23,3 +24,8 @@ for(const file of files.filter(f=>f.path.startsWith('scripts/'))) {
 }
 for(const name of ['app/custom-html-block.tsx','app/html-document.ts','app/pdf-reader.css','scripts/pdf-parts.mjs','scripts/image-export.mjs','publication/pdf-parts.json','publication/katex-LICENSE.txt','publication/pdf-processing-LICENSES.txt']) assert.ok(names.has(name),name);
 console.log('PASS: packaged helper publishes all compiler modules, PDF manifest and licences.');
+const imports = spawnSync(process.execPath, ['--test', '--test-name-pattern=Local HTTP', 'upload-helper/test.mjs'], {
+  env: { ...process.env, HELPER_TEST_ROOT: path.join(root, 'regelerate-upload-helper') },
+  stdio: 'inherit',
+});
+assert.equal(imports.status, 0, 'The extracted release helper must import both source formats over HTTP.');
