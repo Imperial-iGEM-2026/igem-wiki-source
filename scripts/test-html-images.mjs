@@ -9,6 +9,7 @@ import {
 } from '../selfhost-dist/server/shared.mjs';
 import { exportMedia } from './export-media.mjs';
 const dir = await mkdtemp(path.resolve('work/html-image-export-'));
+const pdfURL = '/api/media/abcdef-1234.pdf';
 const url = '/api/media/abcdef-1234.jpg';
 const published = 'https://static.igem.wiki/teams/6377/images/html-image.jpg';
 const dynamicKey = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg';
@@ -20,7 +21,7 @@ const values = {
     nodes: [
       {
         ...newNode('html-image', 'html'),
-        html: `<figure><img src="${url}" alt="Sponsor logo"><figcaption>Image in HTML</figcaption></figure>`,
+        html: `<figure><img src="${url}" alt="Sponsor logo"><figcaption>Image in HTML</figcaption></figure><a href="${pdfURL}">Read full handbook</a>`,
         css: `.background{background-image:url("${url}")}`,
         javascript: `const files=['${dynamicKey}'];const img=new Image();img.src='/api/media/'+files[0];document.body.append(img);`,
         minHeight: 300,
@@ -31,6 +32,8 @@ const values = {
 };
 const refs = exportMedia(values);
 assert.equal(refs.get(url), 'image');
+assert.equal(refs.get(pdfURL), 'pdf');
+await writeFile(path.join(dir, 'pdf-parts.json'), JSON.stringify({ [pdfURL]: [{start:1,end:2,source:'/api/media/part-1.pdf'},{start:3,end:4,source:'/api/media/part-2.pdf'}] }));
 assert.equal(refs.get(dynamicURL), 'image');
 await copyFile(
   'public/templates/regelerate/sponsor-logos/neb.jpg',
@@ -43,7 +46,7 @@ await writeFile(
 );
 await writeFile(
   path.join(dir, 'media-map.json'),
-  JSON.stringify({ [url]: published, [dynamicURL]: published }),
+  JSON.stringify({ [url]: published, [dynamicURL]: published, '/api/media/part-1.pdf':'https://static.igem.wiki/teams/6377/part-1.pdf', '/api/media/part-2.pdf':'https://static.igem.wiki/teams/6377/part-2.pdf' }),
 );
 const result = spawnSync(
   process.execPath,
@@ -105,3 +108,12 @@ assert.ok(runtime.includes('userActivation'));
 console.log(
   'PASS: static export includes the sandbox link handler and published route map.',
 );
+
+assert.ok(component.includes('Read full handbook'));
+assert.ok(!component.includes(pdfURL));
+const destination = /href="([^" ]*documents\/pdf-[a-f0-9]+\/)"/.exec(component)?.[1];
+assert.ok(destination, 'Split PDF link must survive with a complete reader destination');
+const reader = await readFile(path.join(dir, 'export/public', destination.replace('/test-team/', ''), 'index.html'), 'utf8');
+assert.ok(reader.includes('part-1.pdf') && reader.includes('part-2.pdf'));
+assert.ok(html.includes('data-custom-html-pdfs='));
+console.log('PASS: custom HTML PDF links survive export and open every partition, not just the first file.');

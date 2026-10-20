@@ -4,6 +4,7 @@ import type { CanvasNode } from './canvas-schema';
 import { htmlDocument, loadHtmlFrame } from './html-document';
 import { localHtmlImages } from './html-image';
 import { followHtmlLink } from './html-navigation';
+import { closeHtmlPdf } from './html-pdf';
 import { watchHtmlFrame } from './html-visibility';
 import { editorImageURL } from './editor-image';
 import { dynamicHtmlImages } from '../scripts/export-media.mjs';
@@ -134,6 +135,7 @@ export function CustomHtmlBlock({
     };
   }, [document, editing, interacting, retry]);
   useEffect(() => {
+    const element = frame.current;
     const receive = (event: MessageEvent) => {
       if (frame.current) followHtmlLink(event, frame.current, setError);
       if (
@@ -144,7 +146,10 @@ export function CustomHtmlBlock({
         setError(event.data.message.slice(0, 500));
     };
     window.addEventListener('message', receive);
-    return () => window.removeEventListener('message', receive);
+    return () => {
+      window.removeEventListener('message', receive);
+      if (element) closeHtmlPdf(element);
+    };
   }, []);
   return (
     <div

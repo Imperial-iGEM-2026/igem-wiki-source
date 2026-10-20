@@ -200,7 +200,9 @@ export function exportMedia(
               ? 'video'
               : /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(source)
                 ? 'audio'
-                : 'image',
+                : /\.pdf$/i.test(source)
+                  ? 'pdf'
+                  : 'image',
             at(key.slice(7), node, 'Custom HTML / CSS / JavaScript'),
           );
         }

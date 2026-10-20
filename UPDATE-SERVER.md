@@ -1,3 +1,11 @@
+## PDFs inside Custom HTML
+
+Install this package and refresh Studio. Custom HTML now has **Upload & insert PDF link** and an option to reuse an uploaded PDF URL. Files remain in media storage; only a short link counts towards the code size. Clicking a PDF link in Preview opens the existing reader with page navigation and complete-document download. Design keeps links non-navigating; open Preview to test them. PDF iframe/object/embed tags remain unsupported by the sandbox.
+
+Export now classifies local PDF references as PDFs rather than images. Links to partitioned PDFs are preserved and open a complete reader, including when opened in a new tab. Prepare a fresh export for this fix. MCP and the built-in assistant explain the URL workflow; reconnect MCP for updated instructions. A third-party agent's upload-network restrictions still require its native upload tools or a browser upload, not a proxy.
+
+Validation: Studio unit tests, Custom HTML media export regression and an Edge browser test for upload, URL reuse, reading and complete-PDF download.
+
 ## Developer-source preview in Studio
 
 Install the complete server package and refresh Studio. Open **Preview → Developer source** to compile the current project's source overrides, imported components, template files and CSS in your browser. **Rebuild source preview** picks up new MCP changes; a notice appears when a newer revision is available. Desktop, tablet and mobile widths remain available. Saved source is combined with the current page draft. Source build errors identify the file and location; **Installed version** remains available.

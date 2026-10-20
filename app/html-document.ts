@@ -28,7 +28,7 @@ const linkBridge = `document.addEventListener('click',function(e){
   if(local){e.preventDefault();local.scrollIntoView();return}
  }
  if(!/^(https?:|mailto:|tel:)/i.test(href)&&/^[a-z][a-z0-9+.-]*:/i.test(href)){e.preventDefault();return}
- e.preventDefault();parent.postMessage({type:'custom-html-link',href:href,newTab:a.target==='_blank'||e.ctrlKey||e.metaKey||e.shiftKey},'*');
+ e.preventDefault();parent.postMessage({type:'custom-html-link',href:href,title:a.textContent,newTab:a.target==='_blank'||e.ctrlKey||e.metaKey||e.shiftKey},'*');
 });`;
 
 /** Serialized before custom scripts, only in Design. Let widgets take their

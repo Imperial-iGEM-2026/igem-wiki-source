@@ -275,3 +275,5 @@ export { referenceIndex, citationToken } from '../app/references';
 export { startReferenceNavigation } from '../app/reference-navigation';
 
 export * from '../app/html-navigation';
+
+export { insertHtmlPdf } from '../app/html-pdf';

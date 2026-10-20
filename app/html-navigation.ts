@@ -1,3 +1,4 @@
+import { openHtmlPdf } from './html-pdf';
 /** Only ordinary hyperlinks can cross the opaque custom HTML boundary. */
 export function htmlLinkDestination(
   href: unknown,
@@ -50,6 +51,17 @@ export function followHtmlLink(
     );
     return;
   }
+  if (
+    event.data.newTab !== true &&
+    openHtmlPdf(
+      frame,
+      href,
+      typeof event.data.title === 'string'
+        ? event.data.title.slice(0, 200)
+        : 'PDF document',
+    )
+  )
+    return;
   const link = document.createElement('a');
   link.href = href;
   if (event.data.newTab === true) link.target = '_blank';

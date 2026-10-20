@@ -2279,3 +2279,9 @@ assert.deepEqual([...E.filterLayerIds(searchLayout,'photo','all')],['parent','pi
 assert.equal(E.filterLayerIds(searchLayout,'missing','all').size,0);
 assert.deepEqual(E.layerBreadcrumb(searchLayout,'child').map(n=>n.id),['parent','child']);
 console.log('PASS: layer search and type filters retain parent context without unrelated siblings.');
+
+const pdfSnippet = E.insertHtmlPdf('<div></div>', '/api/media/abcdef-1234.pdf', 'Read <handbook> & ethics', 5, 5);
+assert.equal(pdfSnippet.html, '<div>\n<a href="/api/media/abcdef-1234.pdf" data-studio-pdf>Read &lt;handbook&gt; &amp; ethics</a>\n</div>');
+for (const url of ['data:application/pdf;base64,AAAA','javascript:alert(1)','https://other.example/file.pdf','/api/media/test.png','/api/media/../secret.pdf'])
+  assert.throws(() => E.insertHtmlPdf('', url, ''), /permanent PDF URL/);
+console.log('PASS: PDF insertion retains short media references, escapes text and rejects invalid URLs.');

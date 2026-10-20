@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mappedRuntime, runtimeImports } from './publication-runtime.mjs';
 import { resolveSource, readSource } from './source-parts.mjs';
 import {
@@ -675,6 +676,17 @@ for (const file of css) {
       issues.push('External stylesheet dependency in ' + file + ': ' + url);
 }
 fontCss = templateFontCss(snapshot.values, mediaMap) + fontCss;
+// Split PDFs need a complete reader destination even when linked from custom HTML.
+const htmlPdfCatalog = {};
+for (const [original, parts] of Object.entries(pdfViewers)) {
+  const slug = 'documents/pdf-' + createHash('sha256').update(original).digest('hex').slice(0, 16);
+  const destination = base + slug + '/';
+  mediaMap[original] = destination;
+  htmlPdfCatalog[destination] = parts;
+  const directory = path.join(output, 'public', slug);
+  await mkdir(directory, { recursive: true });
+  await writeFile(path.join(directory, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF document</title><style>html,body{margin:0;height:100%}.partitioned-pdf{height:100dvh}</style><script type="module" src="${esc(base)}assets/wiki.js"></script></head><body><div class="partitioned-pdf" data-pdf-assets="${esc(base)}assets/pdfjs/" data-pdf-parts="${esc(JSON.stringify(parts))}"><iframe title="PDF document"></iframe></div></body></html>`);
+}
 const htmlLinkRoutes = Object.fromEntries([
   ['/', base],
   ['/home', base],
@@ -734,7 +746,7 @@ for (const page of [undefined, ...wikiPages]) {
     );
     html = html.replace(
       /<a\b[^>]*href="([^"]*)"[^>]*>[\s\S]*?<\/a>/g,
-      (link, href) => (href === esc(original) ? '' : link),
+      (link, href) => (href === esc(original) ? link.replace(`href="${href}"`, `href="${esc(mediaMap[original])}"`) : link),
     );
   }
   // Match full URLs before their relative-path suffixes and replace once.
@@ -805,6 +817,7 @@ for (const page of [undefined, ...wikiPages]) {
   const description = page
     ? data[page.slug + ':summary'].value
     : data.intro.value;
+  const pagePdfCatalog = Object.fromEntries(Object.entries(htmlPdfCatalog).filter(([url]) => html.includes(esc(url))));
   const doc =
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     esc(title) +
@@ -814,7 +827,7 @@ for (const page of [undefined, ...wikiPages]) {
     css
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
-    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-site-search="${esc(searchURL)}" data-site-base="${esc(base)}" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}">` +
+    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-site-search="${esc(searchURL)}" data-site-base="${esc(base)}" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}" data-custom-html-pdfs="${esc(JSON.stringify(pagePdfCatalog))}">` +
     loadingScript +
     html +
     '</body></html>';
