@@ -23,6 +23,12 @@ function SourcePage({
 }) {
   const [current, setCurrent] = useState(page);
   useEffect(() => {
+    if (!editor)
+      window.dispatchEvent(
+        new CustomEvent('source-preview-route', { detail: current }),
+      );
+  }, [current, editor]);
+  useEffect(() => {
     // Older project Home overrides may predate this visitor API. Export starts it
     // in the publication runtime, so keep source preview equivalent as well.
     if (

@@ -24,7 +24,7 @@ const canWrite = name => safePath(name) && (
   (name.startsWith('app/') && editableApp.has(name.slice(4))) ||
   /^(app\/project-components|components\/project)\/[a-zA-Z0-9_/-]+\.(tsx?|jsx?|css|json)$/.test(name)
 );
-export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. Studio Design and Preview automatically use project source overrides in an isolated browser build. Reopen Studio after adding the first source override; use Rebuild when new source is available. Source is never executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
+export const sourceNotice = 'Project source edits are included in the next website-source ZIP and take effect when that source is built and deployed. Studio Design and Preview automatically use project source overrides in an isolated browser build. Studio detects new source revisions and builds them automatically in a browser worker, including the first override. Updates wait for saved edits and an idle editor; failed builds keep the current editor available with Retry. No page reload is needed. Source is never executed on this server. Read get_page and get_page_styles for the project’s current saved content and CSS.';
 
 export function createProjectSource({ db, sourceFile = new URL('./export-source.json', import.meta.url), now = Date.now }) {
   let base, releaseHash;

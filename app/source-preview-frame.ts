@@ -24,8 +24,38 @@ export function sourcePreviewBootstrap(token: string) {
   >();
   let next = 0;
   let editing = false;
+  let dirty = false;
+  let lastInteraction = 0;
+  let pointerDown = false;
+  addEventListener(
+    'pointerdown',
+    () => {
+      pointerDown = true;
+    },
+    true,
+  );
+  for (const name of ['pointerup', 'pointercancel'])
+    addEventListener(
+      name,
+      () => {
+        pointerDown = false;
+        lastInteraction = Date.now();
+      },
+      true,
+    );
+  for (const name of ['pointerdown', 'keydown', 'input'])
+    addEventListener(
+      name,
+      () => {
+        lastInteraction = Date.now();
+      },
+      true,
+    );
   const send = (type: string, data = {}) =>
     parent.postMessage({ type, token, ...data }, '*');
+  addEventListener('source-preview-route', (event) =>
+    send('source-preview-route', { page: (event as CustomEvent).detail }),
+  );
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (input, init = {}) => {
     const address = input instanceof Request ? input.url : String(input);
@@ -90,6 +120,7 @@ export function sourcePreviewBootstrap(token: string) {
     if (editing) send('source-editor-export');
   };
   window.addEventListener('studio-dirty', (event) => {
+    dirty = Boolean((event as CustomEvent).detail);
     if (editing)
       send('source-editor-dirty', {
         dirty: Boolean((event as CustomEvent).detail),
@@ -166,6 +197,42 @@ export function sourcePreviewBootstrap(token: string) {
   addEventListener('message', async (event) => {
     if (event.source !== parent || event.data?.token !== token) return;
     const payload = event.data;
+    if (payload.type === 'source-preview-prepare-update' && loaded) {
+      const focused = document.activeElement;
+      const state = host.__studioCaptureState?.();
+      if (
+        pointerDown ||
+        dirty ||
+        state?.dirty ||
+        uploads.size ||
+        Date.now() - lastInteraction < 1500 ||
+        focused?.matches('input,textarea,select,[contenteditable="true"]') ||
+        document.querySelector('[role="dialog"],dialog[open]')
+      )
+        return;
+      const scrolls = [
+        '.studio-stage',
+        '.studio-outline',
+        '.studio-preview-scroll',
+      ].map((selector) => {
+        const element = document.querySelector(selector);
+        return {
+          selector,
+          top: element?.scrollTop || 0,
+          left: element?.scrollLeft || 0,
+        };
+      });
+      const root = document.getElementById('root');
+      if (root) {
+        root.inert = true;
+        setTimeout(() => {
+          root.inert = false;
+        }, 1000);
+      }
+      send('source-preview-update-ready', {
+        resume: { editor: state, scrolls, top: scrollY, left: scrollX },
+      });
+    }
     if (payload.type === 'source-editor-live-event') {
       streams
         .get(payload.id)
@@ -195,6 +262,7 @@ export function sourcePreviewBootstrap(token: string) {
     if (payload.type === 'source-preview-load' && !loaded) {
       loaded = true;
       editing = Boolean(payload.editor);
+      host.__studioSourceResume = payload.resume;
       if (editing) {
         const preferences = new Map<string, string>(
           Object.entries(payload.preferences || {}).filter(
@@ -287,6 +355,24 @@ export function sourcePreviewBootstrap(token: string) {
         payload.projectId,
         payload.editor,
       );
+      if (payload.resume) {
+        const saved = payload.resume;
+        // React commits asynchronously; restore once its editor/article has mounted.
+        let remaining = 120;
+        const restore = () => {
+          if (
+            !document.querySelector(editing ? '.studio-stage' : 'main') &&
+            --remaining > 0
+          )
+            return requestAnimationFrame(restore);
+          scrollTo(saved.left || 0, saved.top || 0);
+          for (const item of saved.scrolls || []) {
+            const element = document.querySelector(item.selector);
+            element?.scrollTo(item.left, item.top);
+          }
+        };
+        requestAnimationFrame(restore);
+      }
       send('source-preview-loaded');
     }
     if (payload.type === 'source-preview-data' && loaded)

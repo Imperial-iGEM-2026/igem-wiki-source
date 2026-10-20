@@ -408,12 +408,18 @@ export function StudioEditor({
   const [accordionFocus, setAccordionFocus] = useState<{ id: string }>();
   const [insertInside, setInsertInside] = useState(true);
   const revealInserted = useRef<string | null>(null);
-  const [selected, setSelected] = useState<string[]>([]),
+  const [restoredSourceState] = useState(() => {
+    const saved = (window as any).__studioSourceResume?.editor as
+      { selected?: string[]; viewport?: number; zoom?: number; preview?: boolean } | undefined;
+    if ((window as any).__studioSourceResume) delete (window as any).__studioSourceResume.editor;
+    return saved;
+  });
+  const [selected, setSelected] = useState<string[]>(restoredSourceState?.selected || []),
     [panel, updatePanel] = useState<'design' | 'css' | 'header' | 'loading'>('design');
-  const [viewport, setViewport] = useState(1440),
-    [zoom, setZoom] = useState(0.6),
-    [preview, setPreview] = useState(false),
-    [previewOpened, setPreviewOpened] = useState(false),
+  const [viewport, setViewport] = useState(restoredSourceState?.viewport || 1440),
+    [zoom, setZoom] = useState(restoredSourceState?.zoom || 0.6),
+    [preview, setPreview] = useState(Boolean(restoredSourceState?.preview)),
+    [previewOpened, setPreviewOpened] = useState(Boolean(restoredSourceState?.preview)),
     [height, setHeight] = useState(1000);
   const [notice, setNotice] = useState(''),
     [error, setError] = useState(''),
@@ -894,6 +900,10 @@ export function StudioEditor({
 
   const allowUnload = useRef(false);
   const reportDirty = ctx.dirty;
+  useEffect(() => {
+    (window as any).__studioCaptureState = () => ({ dirty, selected, viewport, zoom, preview });
+    return () => { delete (window as any).__studioCaptureState; };
+  }, [dirty, selected, viewport, zoom, preview]);
   useEffect(() => {
     reportDirty(dirty);
     window.dispatchEvent(new CustomEvent('studio-dirty', { detail: dirty }));

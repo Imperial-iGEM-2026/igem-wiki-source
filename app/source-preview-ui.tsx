@@ -16,21 +16,38 @@ import { AiLinkDialog } from './ai-link-dialog';
 import type { Blocks } from './content';
 import { sourcePreviewBootstrap } from './source-preview-frame';
 
-type SourceBundle = {
-  revision: string;
-  modifiedFiles: { path: string; version: number }[];
-  files: Record<string, string>;
-  compiler: { dependencies: string[]; css: Record<string, string> };
-};
-let lastBuild:
-  | {
-      key: string;
-      revision: string;
-      javascript: string;
-      vendor: string;
-      tailwind: string;
-    }
-  | undefined;
+import {
+  compileSource,
+  type SourceBuild,
+  type SourceBundle,
+} from './source-preview-build';
+
+let lastBuild: SourceBuild | undefined;
+export async function warmSourcePreview(
+  projectId: string,
+  signal: AbortSignal,
+) {
+  const request = async (url: string) => {
+    const response = await fetch(url, {
+      signal,
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok)
+      throw Error('Source update request failed: HTTP ' + response.status);
+    return response;
+  };
+  const endpoint =
+    '/api/source-preview?project=' + encodeURIComponent(projectId);
+  const bundle: SourceBundle = await (
+    await request(endpoint + '&files=1')
+  ).json();
+  const built = await compileSource(bundle, projectId, request, signal);
+  const newest: SourceBundle = await (await request(endpoint)).json();
+  if (newest.revision !== built.revision) return false;
+  lastBuild = built;
+  return built.revision;
+}
 export function SourcePreview({
   data,
   page,
@@ -38,6 +55,7 @@ export function SourcePreview({
   width,
   active,
   editor,
+  initialResume,
 }: {
   data: Blocks;
   page: string;
@@ -45,6 +63,7 @@ export function SourcePreview({
   width: number | string;
   active: boolean;
   editor?: { id: string; name: string };
+  initialResume?: unknown;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const latest = useRef({ data, page, projectId, editor });
@@ -64,7 +83,14 @@ export function SourcePreview({
   const [status, setStatus] = useState('Preparing developer source…');
   const [error, setError] = useState('');
   const [revision, setRevision] = useState('');
-  const [stale, setStale] = useState(false);
+  const [backgroundStatus, setBackgroundStatus] = useState('');
+  const [backgroundError, setBackgroundError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const prepared = useRef<SourceBuild | null>(null);
+  const resume = useRef<unknown>(initialResume || null);
+  const applying = useRef(false);
+  const blocked = useRef(false);
+  blocked.current = dirty || projectsOpen || exportOpen || aiPage !== null;
   const connection = useRef<{ token: string; ready: boolean } | null>(null);
   useEffect(() => {
     latest.current = { data, page, projectId, editor };
@@ -83,7 +109,6 @@ export function SourcePreview({
   }, [data, page, projectId]);
   useEffect(() => {
     const abort = new AbortController();
-    let worker: Worker | undefined;
     let disposed = false;
     let inflight = 0;
     const streams = new Map<string, EventSource>();
@@ -116,6 +141,13 @@ export function SourcePreview({
       )
         return;
       const message = event.data;
+      if (
+        !editor &&
+        message.type === 'source-preview-route' &&
+        (message.page === 'home' ||
+          pageCatalog(latest.current.data).some((p) => p.slug === message.page))
+      )
+        latest.current.page = message.page;
       if (
         editor &&
         message.type === 'source-editor-preference' &&
@@ -243,6 +275,21 @@ export function SourcePreview({
           );
       }
 
+      if (
+        message.type === 'source-preview-update-ready' &&
+        prepared.current &&
+        !blocked.current &&
+        !dirtyRef.current &&
+        !document.hidden &&
+        !applying.current
+      ) {
+        resume.current = message.resume;
+        lastBuild = prepared.current;
+        prepared.current = null;
+        applying.current = true;
+        setBackgroundStatus('Applying source update…');
+        setAttempt((v) => v + 1);
+      }
       if (message.type === 'source-preview-ready')
         frame.current?.contentWindow?.postMessage(
           {
@@ -252,6 +299,7 @@ export function SourcePreview({
             vendor,
             tailwind,
             revision: bundle.revision,
+            resume: resume.current,
             ...latest.current,
             preferences: editor
               ? Object.fromEntries(
@@ -267,6 +315,10 @@ export function SourcePreview({
       if (message.type === 'source-preview-loaded') {
         connection.current = { token, ready: true };
         setStatus('');
+        setBackgroundStatus('');
+        setBackgroundError('');
+        applying.current = false;
+        resume.current = null;
         setRevision(bundle.revision);
       }
       if (message.type === 'source-preview-error')
@@ -384,16 +436,17 @@ export function SourcePreview({
     window.addEventListener('message', receive);
     void (async () => {
       setError('');
-      setStale(false);
       setStatus('Loading project source…');
-      bundle = await (await request(endpoint)).json();
+      bundle =
+        applying.current && lastBuild?.key === (projectId || '')
+          ? { revision: lastBuild.revision, modifiedFiles: [] }
+          : await (await request(endpoint)).json();
       const inherited = (window as any).__studioSourceBuild;
       if (!editor && inherited) {
         lastBuild = inherited;
         bundle = { ...bundle, revision: inherited.revision };
       }
       if (
-        (attempt === 0 || (!editor && inherited)) &&
         lastBuild?.key === (projectId || '') &&
         lastBuild.revision === bundle.revision
       ) {
@@ -404,47 +457,14 @@ export function SourcePreview({
         ).json();
         bundle = sourceBundle;
         setStatus('Building developer source in your browser…');
-        worker = new Worker('/assets/source-preview/compiler.js', {
-          type: 'module',
-        });
-        const compiled = new Promise<string>((resolve, reject) => {
-          const timer = setTimeout(
-            () => reject(Error('Source build timed out. Retry the build.')),
-            60000,
-          );
-          worker!.onmessage = (e) => {
-            clearTimeout(timer);
-            if (e.data.ok) resolve(e.data.javascript);
-            else reject(Error(e.data.error));
-          };
-          worker!.onerror = (e) => {
-            clearTimeout(timer);
-            reject(Error(e.message || 'Source compiler could not load'));
-          };
-          worker!.postMessage({
-            files: sourceBundle.files,
-            ...sourceBundle.compiler,
-            wasmURL: new URL(
-              '/assets/source-preview/esbuild.wasm',
-              document.baseURI,
-            ).href,
-          });
-        });
-        [javascript, vendor, tailwind] = await Promise.all([
-          compiled,
-          request('/assets/source-preview/vendor.js').then((r) => r.text()),
-          request('/assets/source-preview/tailwind.js').then((r) => r.text()),
-        ]);
-        worker.terminate();
-        worker = undefined;
-        if (!disposed)
-          lastBuild = {
-            key: projectId || '',
-            revision: bundle.revision,
-            javascript,
-            vendor,
-            tailwind,
-          };
+        const built = await compileSource(
+          sourceBundle,
+          projectId || '',
+          request,
+          abort.signal,
+        );
+        ({ javascript, vendor, tailwind } = built);
+        if (!disposed) lastBuild = built;
       }
       if (disposed || !frame.current) return;
       setStatus('Opening isolated source preview…');
@@ -473,12 +493,10 @@ export function SourcePreview({
         setError(e instanceof Error ? e.message : String(e));
         setStatus('Developer source build failed');
       }
-      worker?.terminate();
     });
     return () => {
       disposed = true;
       abort.abort();
-      worker?.terminate();
       streams.forEach((stream) => stream.close());
       window.removeEventListener('message', receive);
       connection.current = null;
@@ -487,45 +505,143 @@ export function SourcePreview({
   useEffect(() => {
     if (!active || !revision || (window as any).__studioSourceBuild) return;
     const abort = new AbortController();
-    const check = () => {
-      void fetch(
-        '/api/source-preview?project=' + encodeURIComponent(projectId || ''),
-        { signal: abort.signal, credentials: 'same-origin', cache: 'no-store' },
-      )
-        .then((r) => (r.ok ? r.json() : null))
-        .then((v) => {
-          if (v && !abort.signal.aborted)
-            setStale((v as { revision: string }).revision !== revision);
-        })
-        .catch(() => {});
+    const endpoint =
+      '/api/source-preview?project=' + encodeURIComponent(projectId || '');
+    let busy = false;
+    let tried = '';
+    const request = async (url: string) => {
+      const response = await fetch(url, {
+        signal: abort.signal,
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (!response.ok)
+        throw Error('Source update request failed: HTTP ' + response.status);
+      return response;
     };
-    const timer = setInterval(check, 10000);
-    window.addEventListener('focus', check);
+    const check = async () => {
+      if (document.hidden || busy || applying.current || abort.signal.aborted)
+        return;
+      busy = true;
+      try {
+        const metadata: SourceBundle = await (await request(endpoint)).json();
+        if (metadata.revision === revision) {
+          prepared.current = null;
+          setBackgroundStatus('');
+          setBackgroundError('');
+          return;
+        }
+        if (
+          metadata.revision === prepared.current?.revision ||
+          metadata.revision === tried
+        )
+          return;
+        prepared.current = null;
+        tried = metadata.revision;
+        setBackgroundError('');
+        setBackgroundStatus('Building source in the background…');
+        const bundle: SourceBundle = await (
+          await request(endpoint + '&files=1')
+        ).json();
+        tried = bundle.revision;
+        const built = await compileSource(
+          bundle,
+          projectId || '',
+          request,
+          abort.signal,
+        );
+        // Never install a build that was superseded while its worker was running.
+        const newest: SourceBundle = await (await request(endpoint)).json();
+        if (newest.revision !== built.revision) {
+          tried = '';
+          setBackgroundStatus('Newer source changes detected; updating…');
+          return;
+        }
+        if (!abort.signal.aborted) {
+          prepared.current = built;
+          setBackgroundStatus(
+            'Source ready. Waiting for saved edits and an idle editor…',
+          );
+        }
+      } catch (e) {
+        if (!abort.signal.aborted) {
+          setBackgroundStatus(
+            'Source update failed. Your current editor is still available.',
+          );
+          setBackgroundError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        busy = false;
+      }
+    };
+    // Poll only small revision metadata. Source files are fetched once per changed revision.
+    void check();
+    const timer = setInterval(() => void check(), 5000);
+    const focus = () => void check();
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
     return () => {
       abort.abort();
       clearInterval(timer);
-      window.removeEventListener('focus', check);
+      prepared.current = null;
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', focus);
     };
-  }, [active, revision, projectId]);
+  }, [active, revision, projectId, retry]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (
+        !active ||
+        document.hidden ||
+        blocked.current ||
+        dirtyRef.current ||
+        applying.current ||
+        !prepared.current ||
+        !connection.current?.ready
+      )
+        return;
+      frame.current?.contentWindow?.postMessage(
+        {
+          type: 'source-preview-prepare-update',
+          token: connection.current.token,
+        },
+        '*',
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [active]);
   return (
     <div className={editor ? 'studio-source-editor' : 'studio-source-preview'}>
       {status && !error && (
         <EditorLoading title="Building source…" detail={status} />
       )}
-      {(stale || error) && (
-        <output className="studio-source-status">
-          <span>
-            {status}
-            {stale && ' · New source changes available'}
-          </span>
-          <button
-            disabled={dirty}
-            title={dirty ? 'Save your edits before rebuilding' : undefined}
-            onClick={() => setAttempt((v) => v + 1)}
-          >
-            Rebuild source preview
-          </button>
+      {(backgroundStatus || backgroundError || error) && (
+        <output
+          className="studio-source-status"
+          role="status"
+          aria-live="polite"
+        >
+          <span>{backgroundStatus || status}</span>
+          {(backgroundError || error) && (
+            <button
+              disabled={dirty}
+              title={dirty ? 'Save your edits before rebuilding' : undefined}
+              onClick={() => {
+                if (error) {
+                  lastBuild = undefined;
+                  setAttempt((v) => v + 1);
+                } else setRetry((v) => v + 1);
+              }}
+            >
+              Retry source build
+            </button>
+          )}
         </output>
+      )}
+      {backgroundError && (
+        <pre role="alert" className="studio-source-error">
+          {backgroundError}
+        </pre>
       )}
       {error && (
         <pre role="alert" className="studio-source-error">

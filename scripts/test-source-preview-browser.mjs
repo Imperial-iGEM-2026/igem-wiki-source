@@ -89,6 +89,7 @@ const compiler = JSON.parse(
   ),
 );
 const savedRows = new Map();
+let hasOverrides = true;
 let revision = 'first',
   sourceReads = 0;
 const server = createServer(async (req, res) => {
@@ -132,7 +133,7 @@ const server = createServer(async (req, res) => {
       res.end(
         JSON.stringify({
           revision,
-          modifiedFiles: [{ path: 'app/site-header.tsx', version: 1 }],
+          modifiedFiles: hasOverrides ? [{ path: 'app/site-header.tsx', version: 1 }] : [],
           ...(url.searchParams.has('files')
             ? { files: sourceFiles, compiler }
             : {}),
@@ -291,12 +292,13 @@ try {
       .evaluate((e) => e.clientWidth),
     390,
   );
+  sourceFiles['app/project-components/PreviewProbe.tsx'] = sourceFiles['app/project-components/PreviewProbe.tsx'].replace('className="source-probe"', 'className="source-probe" data-auto-build="newer"');
   revision = 'newer';
   await page.evaluate(() => dispatchEvent(new Event('focus')));
-  await page
-    .getByRole('status')
-    .filter({ hasText: 'New source changes available' })
-    .waitFor();
+  await preview.locator('[data-auto-build="newer"]').waitFor({timeout:90000});
+  await preview.getByRole('heading', {name:'Second page',exact:true}).waitFor();
+  assert.equal(await page.locator('iframe[title="Developer source preview"]').evaluate(e=>e.clientWidth),390);
+  console.log('PASS automatic background rebuild preserves preview route and viewport');
   await page.locator('#edit-source').click();
   const editor = page.frameLocator('iframe[title="Website editor"]');
   await editor.getByText('Website Studio',{exact:true}).waitFor();
@@ -346,6 +348,7 @@ try {
   await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Preview demo',exact:true}).waitFor();
   await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Second page',exact:true}).waitFor();
   await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Preview demo',exact:true}).click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('prion-open-pages') || '[]').includes('second'));
   await page.reload();
   await page.locator('#edit-source').click();
   await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Second page',exact:true}).waitFor();
@@ -359,16 +362,56 @@ try {
   await page.getByRole('dialog').waitFor();
   assert.equal(await editor.getByRole('dialog').count(),0, 'Connection approval stays outside project source');
   await page.keyboard.press('Escape');
+  const workingProbe = sourceFiles['app/project-components/PreviewProbe.tsx'];
+  const beforeFailedBuild = await (await page.locator('iframe[title="Website editor"]').elementHandle()).contentFrame();
+  await beforeFailedBuild.evaluate(()=>window.keptEditor=true);
   sourceFiles['app/project-components/PreviewProbe.tsx'] =
     'export function broken( {';
   revision = 'broken';
-  await page
-    .getByRole('button', { name: 'Rebuild source preview', exact: true })
-    .click();
+  await page.evaluate(()=>dispatchEvent(new Event('focus')));
   await page
     .getByRole('alert')
     .filter({ hasText: 'PreviewProbe.tsx' })
-    .waitFor();
+    .waitFor({timeout:90000});
+  assert.equal(await beforeFailedBuild.evaluate(()=>window.keptEditor),true,'Failed build retains the running editor');
+  const readsAfterFailure=sourceReads;
+  await page.evaluate(()=>dispatchEvent(new Event('focus')));
+  await new Promise(r=>setTimeout(r,500));
+  assert.equal(sourceReads,readsAfterFailure,'Failed revision is not repeatedly compiled');
+  sourceFiles['app/project-components/PreviewProbe.tsx']=workingProbe.replace('data-auto-build="newer"','data-auto-build="recovered"');
+  await beforeFailedBuild.evaluate(()=>dispatchEvent(new CustomEvent('studio-dirty',{detail:true})));
+  await page.getByRole('button',{name:'Retry source build',exact:true}).waitFor();
+  // A newer source revision can compile while a draft is dirty, but cannot replace it.
+  revision='recovered';
+  await page.evaluate(()=>dispatchEvent(new Event('focus')));
+  await page.getByRole('status').filter({hasText:'Source ready.'}).waitFor({timeout:90000});
+  assert.equal(await beforeFailedBuild.evaluate(()=>window.keptEditor),true);
+  assert.equal(await editor.locator('[data-auto-build="recovered"]').count(),0);
+  const stateBeforeUpdate=await beforeFailedBuild.evaluate(()=>window.__studioCaptureState());
+  await beforeFailedBuild.evaluate(()=>{document.activeElement?.blur();dispatchEvent(new PointerEvent('pointerdown'));dispatchEvent(new CustomEvent('studio-dirty',{detail:false}))});
+  await new Promise(r=>setTimeout(r,1800));
+  assert.equal(await editor.locator('[data-auto-build="recovered"]').count(),0,'Update waits until pointer drag ends');
+  await beforeFailedBuild.evaluate(()=>dispatchEvent(new PointerEvent('pointerup')));
+  await editor.locator('[data-auto-build="recovered"]').waitFor({timeout:90000});
+  const updatedFrame=await (await page.locator('iframe[title="Website editor"]').elementHandle()).contentFrame();
+  const restoredState=await updatedFrame.evaluate(()=>window.__studioCaptureState());
+  for(const key of ['selected','zoom','viewport','preview']) assert.deepEqual(restoredState[key],stateBeforeUpdate[key],key+' survives source update');
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Preview demo',exact:true}).waitFor();
+  assert.equal(await page.getByRole('alert').count(),0);
+  console.log('PASS broken build retains editor, no retry loop, dirty drafts delay automatic swap and newer source recovers');
+  hasOverrides=false;
+  await page.reload();
+  await page.locator('#edit-source').click();
+  await page.getByText('Website Studio',{exact:true}).waitFor();
+  assert.equal(await page.locator('iframe[title="Website editor"]').count(),0);
+  await page.evaluate(()=>window.outerPageStayed=true);
+  hasOverrides=true;
+  revision='first-override';
+  await page.evaluate(()=>dispatchEvent(new Event('focus')));
+  await editor.locator('[data-auto-build="recovered"]').waitFor({timeout:90000});
+  assert.equal(await page.evaluate(()=>window.outerPageStayed),true,'First source override does not reload the outer page');
+  console.log('PASS first override builds in background and switches installed editor without page reload');
+
   assert.equal(await page.locator('.studio-preview-version').count(), 0);
   console.log(
     'PASS source overrides, imported component, custom CSS, opaque isolation, read-only fetch, internal navigation, responsive width, diagnostics without version chooser',

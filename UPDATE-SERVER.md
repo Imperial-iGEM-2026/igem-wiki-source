@@ -1,3 +1,9 @@
+## Automatic background source builds
+
+Studio now checks for source revisions every five seconds while visible, and on focus. Changed source compiles in a browser worker while the existing editor remains usable. Updates apply after edits are saved and typing, dragging, uploads and dialogs are idle. The current page, open page tabs, selection, viewport, zoom and editor/preview mode are carried into the updated source editor. This also handles the first developer override without reopening Studio. Arbitrary widget state and undo history restart when a new source build mounts.
+
+Failed compilations keep the current editor available and show the file error with **Retry source build**. The same failed revision is not repeatedly compiled; a newer revision is tried automatically. Rapid changes are checked again after compilation so a superseded build is skipped. Source executes only in the isolated browser; no build worker is added to the VPS. Install the complete package and refresh existing Studio tabs once to receive this update. Future source changes need no manual page reload. Export and deployment remain explicit actions.
+
 ## MCP visitor loading animation controls
 
 Standard whole-project MCP links now expose `get_loading_animation` and `update_loading_animation`. Agents can save the exported website’s first-visit animation, uploaded image, display time, message, colours and custom CSS. Updates require the current header version and preserve all other header settings. Page-limited links can read the settings but cannot change them.
