@@ -3,13 +3,14 @@ import { mkdirSync } from 'node:fs';
 import { open, rename, stat, statfs, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { mediaTypes, matchesMedia } from './shared.mjs';
+import { uploadSpaceError } from './upload-space.mjs';
 
 export const mediaChunkBytes = 512 * 1024;
 const lifetime = 24 * 60 * 60 * 1000;
 
 // Pending bytes never enter /api/media or an export. Every operation is scoped
 // to the authorizing link, project and page; completed URLs use normal media.
-export function createMcpMedia({ db, dataDir, environment = {}, fail }) {
+export function createMcpMedia({ db, dataDir, environment = {}, fail, diskSpace = statfs }) {
   const pendingDir = path.join(dataDir, 'mcp-uploads');
   const mediaDir = path.join(dataDir, 'media');
   mkdirSync(pendingDir, { recursive: true, mode: 0o700 });
@@ -74,15 +75,17 @@ export function createMcpMedia({ db, dataDir, environment = {}, fail }) {
       throw fail(413, large && environment.MEDIA_ORIGIN
         ? 'File exceeds the configured server upload limit (minimum 16 bytes).'
         : 'This file must be between 16 bytes and 25 MiB.');
-    const disk = await statfs(mediaDir);
+    const disk = await diskSpace(mediaDir);
     // Count again after asynchronous disk inspection, so simultaneous starts
     // cannot reserve the same space. No await occurs before the insert below.
-    const active = db.prepare('SELECT link_id, size FROM mcp_media_uploads WHERE done=0').all();
+    const active = db.prepare('SELECT link_id, size, received FROM mcp_media_uploads WHERE done=0').all();
     if (active.length >= 64 || active.filter(r => r.link_id === link.id).length >= 8)
       throw fail(429, 'Too many unfinished uploads. Complete or cancel one first.');
-    const reserved = active.reduce((sum, r) => sum + r.size, 0);
-    if (disk.bavail * disk.bsize - reserved - size < Number(environment.MEDIA_MIN_FREE_MIB || 256) * 1024 * 1024)
-      throw fail(507, 'Not enough free server storage for this upload.');
+    // statfs already excludes written chunks. Reserve only bytes still to arrive.
+    const reserved = active.reduce((sum, r) => sum + Math.max(0, r.size - r.received), 0);
+    const spaceError = uploadSpaceError(disk.bavail * disk.bsize, reserved, size,
+      Number(environment.MEDIA_MIN_FREE_MIB || 256));
+    if (spaceError) throw fail(507, spaceError);
     const row = { id: randomUUID(), link_id: link.id, project_id: link.project_id,
       page, name, ext, size, received: 0, done: 0, expires: Date.now() + lifetime };
     db.prepare('INSERT INTO mcp_media_uploads VALUES(?,?,?,?,?,?,?,?,?,?)')

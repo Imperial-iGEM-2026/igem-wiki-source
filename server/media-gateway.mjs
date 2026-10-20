@@ -14,6 +14,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { mediaTypes, matchesMedia } from './shared.mjs';
+import { uploadSpaceError } from './upload-space.mjs';
 
 export function createTicketSigner(
   secret,
@@ -118,11 +119,8 @@ export async function createMediaGateway({
     reserved = 0;
   async function space(size) {
     const disk = await statfs(path.join(dataDir, 'media'));
-    if (disk.bavail * disk.bsize - reserved - size < reserveMiB * 1024 * 1024)
-      throw fail(
-        507,
-        'Not enough free server storage for this upload. Free space and try again.',
-      );
+    const error = uploadSpaceError(disk.bavail * disk.bsize, reserved, size, reserveMiB);
+    if (error) throw fail(507, error);
   }
 
   const readLinks = new Map();

@@ -1,3 +1,11 @@
+## Upload storage diagnostics
+
+The upload guard keeps 256 MiB free by default (`MEDIA_MIN_FREE_MIB`). A rejection does not prove the media library itself is full: the check includes the filesystem's free space and reservations for unfinished uploads. Errors now report all quantities and the additional space needed. MCP uploads reserve only their unwritten bytes; chunks already on disk are no longer counted twice. The safety reserve remains unchanged.
+
+Install this package and retry to get the detailed message. On a default installation, the administrator can inspect usage with `df -h /var/lib/prion` and `sudo du -h --max-depth=1 /var/lib/prion`. Check the configured data directory if it differs. Complete or cancel abandoned uploads through their normal tools. Do not delete media merely because it appears on a backup page; other pages or custom HTML can share the same file. This update does not delete files or free VPS storage automatically.
+
+Validation: simulated partial-upload disk accounting and boundary tests, plus MCP and direct-media regression tests.
+
 ## PDFs inside Custom HTML
 
 Install this package and refresh Studio. Custom HTML now has **Upload & insert PDF link** and an option to reuse an uploaded PDF URL. Files remain in media storage; only a short link counts towards the code size. Clicking a PDF link in Preview opens the existing reader with page navigation and complete-document download. Design keeps links non-navigating; open Preview to test them. PDF iframe/object/embed tags remain unsupported by the sandbox.

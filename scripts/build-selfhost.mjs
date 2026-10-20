@@ -96,6 +96,7 @@ for (const name of [
   'live.mjs',
   'mcp.mjs',
   'mcp-media.mjs',
+  'upload-space.mjs',
   'mcp-section-code.mjs',
   'project-source.mjs',
 ])
