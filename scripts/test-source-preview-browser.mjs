@@ -308,6 +308,13 @@ try {
   await editor.locator('.regel-header-search').click();
   await page.screenshot({path:path.join(dir,'search-click.png')});
   await editor.getByRole('dialog',{name:'Search this website',exact:true}).waitFor({timeout:5000});
+  assert.equal(await editor.locator('dialog:modal').count(),0,'Design search must not enter the browser top layer');
+  const searchBounds=await editor.locator('.website-search dialog').boundingBox();
+  const canvasBounds=await editor.locator('.studio-artboard').boundingBox();
+  const stageBounds=await editor.locator('.studio-stage').boundingBox();
+  assert.ok(searchBounds.x>=Math.max(canvasBounds.x,stageBounds.x)-1);
+  assert.ok(searchBounds.x+searchBounds.width<=Math.min(canvasBounds.x+canvasBounds.width,stageBounds.x+stageBounds.width)+1);
+  assert.ok(searchBounds.y>=stageBounds.y && searchBounds.y+searchBounds.height<=stageBounds.y+stageBounds.height+1,'Search stays in the visible canvas');
   await editor.getByRole('searchbox',{name:'Search pages'}).press('Escape');
   assert.equal(await editor.locator('.source-probe').evaluate(e=>getComputedStyle(e).color),'rgb(111, 22, 155)');
   await editor.getByText('Overview',{exact:true}).click();

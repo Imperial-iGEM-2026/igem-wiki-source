@@ -1,3 +1,7 @@
+## Search stays inside the editor canvas
+
+Opening the project's search button in Design now keeps the dialog and backdrop inside the visible website canvas. Studio's toolbar and side panels remain accessible. The overlay follows canvas zoom, scrolling and panel/viewport resizing, and closes when switching to Preview. Preview and exported websites retain their normal modal search. Install this package and refresh Studio. Verified with browser tests for the developer SVG button, search results, canvas bounds, close/Escape, and preview transitions.
+
 ## Source editor search, page tabs and loading
 
 Design now keeps its search dialog available so the project's existing SVG header-search component can initialize. Its button can open search without canvas selection intercepting the click. Existing animation safeguards are unchanged. Multiple page tabs and panel sizing survive page switches and source rebuilds through an editor-preference bridge. Building source uses the normal Studio loading animation labelled “Building source…”. Install this package and refresh Studio; existing project search overrides do not need to be recreated.

@@ -78,6 +78,34 @@ try{
  await page.screenshot({path:path.join(dir,'search-mobile.png')});
  await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(d=>d.open),false);
  await page.evaluate(()=>window.__cleanup());assert.equal(await page.locator('.website-search').count(),0);
+ // Design uses the same project dialog, bounded to the visible scaled canvas.
+ await page.setViewportSize({width:1200,height:800});
+ await page.setContent('<button id="studio-control" style="position:fixed;left:10px;top:10px">Studio control</button><div class="studio-workspace"><div class="studio-stage" style="position:absolute;left:230px;top:100px;width:700px;height:550px;overflow:auto"><div class="studio-artboard" style="width:1000px;height:1600px;transform:scale(.65);transform-origin:top left"></div></div></div>');
+ await page.addStyleTag({content:await readFile(path.join(dir,'sites-project.css'),'utf8')});
+ await page.addStyleTag({content:'.website-search dialog{width:900px;max-height:90vh;margin:5vh auto;border-radius:28px}'});
+ await page.evaluate(({js,index})=>new Promise((resolve,reject)=>{const url=URL.createObjectURL(new Blob([js],{type:'text/javascript'}));import(url).then(m=>{window.__cleanup=m.startWebsiteSearch(async()=>index,'/',document.body,u=>u,false);window.websiteSearch.open();resolve()}).catch(reject)}),{js,index});
+ const assertContained=async()=>{
+   const bounds=await page.evaluate(()=>{
+     const d=document.querySelector('dialog').getBoundingClientRect(),a=document.querySelector('.studio-artboard').getBoundingClientRect(),s=document.querySelector('.studio-stage').getBoundingClientRect();
+     return {ok:d.left>=Math.max(0,a.left,s.left)-1 && d.right<=Math.min(innerWidth,a.right,s.right)+1 && d.top>=Math.max(0,a.top,s.top)-1 && d.bottom<=Math.min(innerHeight,a.bottom,s.bottom)+1,modal:document.querySelector('dialog').matches(':modal'),chrome:document.elementFromPoint(20,20)?.id};
+   });
+   assert.ok(bounds.ok,'Search fits visible artboard');assert.equal(bounds.modal,false);assert.equal(bounds.chrome,'studio-control');
+ };
+ await assertContained();
+ await page.getByRole('searchbox').fill('workshop');await page.getByRole('link').filter({hasText:'Education'}).waitFor();
+ await page.screenshot({path:path.join(dir,'search-design.png')});
+ await page.evaluate(()=>{document.querySelector('.studio-artboard').style.transform='scale(.4)';document.querySelector('.studio-stage').scrollTop=120;});
+ await page.waitForTimeout(80);await assertContained();
+ await page.setViewportSize({width:650,height:500});await page.waitForTimeout(80);await assertContained();
+ await page.getByRole('button',{name:'Close search'}).click();
+ assert.equal(await page.locator('.website-search-editor-open').count(),0);
+ await page.evaluate(()=>window.websiteSearch.open());await page.getByRole('searchbox').press('Escape');
+ assert.equal(await page.locator('.website-search-editor-open').count(),0);
+ await page.evaluate(()=>window.websiteSearch.open());
+ await page.evaluate(()=>document.querySelector('.studio-workspace').classList.add('studio-workspace-hidden'));
+ await page.waitForTimeout(80);assert.equal(await page.locator('.website-search-editor-open').count(),0,'Preview switch removes editor overlay');
+ await page.evaluate(()=>window.__cleanup());assert.equal(await page.locator('.website-search').count(),0);
+ console.log('PASS: Design search stays in the canvas across zoom, scroll and resize; Studio chrome stays usable; close, Escape and preview switch clean up.');
  await page.evaluate(({js,index})=>new Promise((resolve,reject)=>{const url=URL.createObjectURL(new Blob([js],{type:'text/javascript'}));import(url).then(m=>{let count=0;window.__retry=m.createWebsiteSearch(async()=>{if(!count++)throw Error('offline');return index});resolve()}).catch(reject)}),{js,index});
  await assert.rejects(page.evaluate(()=>window.__retry.search('protein')),/offline/);
  assert.ok((await page.evaluate(()=>window.__retry.search('protein'))).length);

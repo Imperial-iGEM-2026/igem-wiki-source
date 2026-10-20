@@ -79,8 +79,66 @@ export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/',
   const input = container.querySelector('input')!;
   const status = container.querySelector('[role=status]')!;
   const results = container.querySelector('ol')!;
-  const open = () => { if (!dialog.open) dialog.showModal(); input.focus(); };
-  const close = () => dialog.close();
+  // A modal dialog escapes all ancestors into the browser's top layer. In
+  // Design, contain it in the visible artboard instead of covering Studio.
+  let stopPositioning = () => {};
+  let opener: HTMLElement | null = null;
+  const resetOverlay = () => {
+    stopPositioning();
+    stopPositioning = () => {};
+    container.classList.remove('website-search-editor-open');
+    container.removeAttribute('style');
+  };
+  if (!showInterface) {
+    container.classList.add('website-search-editor');
+    container.dataset.studioRuntimeControl = '';
+  }
+  const open = () => {
+    if (dialog.open) { input.focus({ preventScroll: true }); return; }
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (showInterface) dialog.showModal();
+    else {
+      const artboard = document.querySelector<HTMLElement>('.studio-workspace:not(.studio-workspace-hidden) .studio-artboard');
+      const stage = artboard?.closest<HTMLElement>('.studio-stage');
+      if (!artboard || !stage) return;
+      const position = () => {
+        const a = artboard.getBoundingClientRect(), s = stage.getBoundingClientRect();
+        const left = Math.max(0, a.left, s.left), top = Math.max(0, a.top, s.top);
+        const right = Math.min(window.innerWidth, a.right, s.left + stage.clientWidth);
+        const bottom = Math.min(window.innerHeight, a.bottom, s.top + stage.clientHeight);
+        if (right <= left || bottom <= top || stage.closest('.studio-workspace-hidden')) {
+          dialog.close(); resetOverlay(); return false;
+        }
+        Object.assign(container.style, { left: left + 'px', top: top + 'px', width: right - left + 'px', height: bottom - top + 'px' });
+        return true;
+      };
+      if (!position()) return;
+      container.classList.add('website-search-editor-open');
+      dialog.show();
+      const resize = new ResizeObserver(position);
+      resize.observe(stage); resize.observe(artboard);
+      const mutations = new MutationObserver(position);
+      mutations.observe(artboard, { attributes: true, attributeFilter: ['style'] });
+      const workspace = stage.closest('.studio-workspace');
+      if (workspace) mutations.observe(workspace, { attributes: true, attributeFilter: ['class'] });
+      window.addEventListener('resize', position);
+      window.addEventListener('scroll', position, true);
+      stopPositioning = () => {
+        resize.disconnect(); mutations.disconnect();
+        window.removeEventListener('resize', position);
+        window.removeEventListener('scroll', position, true);
+      };
+    }
+    input.focus({ preventScroll: true });
+  };
+  const close = () => { dialog.close(); resetOverlay(); };
+  dialog.addEventListener('close', () => {
+    resetOverlay();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  });
+  container.addEventListener('click', (event) => {
+    if (!showInterface && event.target === container) close();
+  });
   dialog.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); close(); } });
   container.querySelector('.website-search-open')!.addEventListener('click', open);
   let timer: ReturnType<typeof setTimeout>, sequence = 0, alive = true;
@@ -115,7 +173,7 @@ export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/',
   target.websiteSearch = publicAPI;
   return () => {
     stopBridge();
-    alive = false; sequence++; clearTimeout(timer); dialog.close(); container.remove();
+    alive = false; sequence++; clearTimeout(timer); close(); container.remove();
     window.removeEventListener('keydown', shortcut);
     if (target.websiteSearch === publicAPI) delete target.websiteSearch;
   };
