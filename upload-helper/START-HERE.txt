@@ -26,6 +26,15 @@ the SAME helper folder and replace files when asked. Keep its jobs folder.
 Start again, choose Continue an earlier upload, sign in, and check remaining
 files. Completed uploads are recovered without uploading them twice.
 
+Version 1.0.24 fixes GitLab sends: source changes are sent in small batches,
+and errors include the HTTP status and request ID when available. A failed send
+does not mean your login expired. Click Retry / resume GitLab upload after
+resolving the reported problem. After restarting, check source changes first.
+The helper verifies saved progress before retrying and reuses an existing merge
+request. If an older helper already created a branch, open the saved branch link
+to review it; the new helper will not overwrite an unverified older branch.
+An individual source file rejected as too large is named in the error message.
+
 1. Install Node.js 24 LTS from https://nodejs.org if needed.
 2. Extract this ZIP. On Windows, double-click Start-helper.cmd.
    On macOS/Linux, open a terminal here and run: sh start-helper.sh

@@ -6,6 +6,7 @@ import { extractZip } from '../upload-helper/files.mjs';
 const root = await mkdtemp(path.resolve('work/helper-closure-'));
 await extractZip('selfhost-dist/client/upload-helper.zip',root);
 await symlink(path.resolve('upload-helper/node_modules'),path.join(root,'regelerate-upload-helper/node_modules'),'junction');
+await import(pathToFileURL(path.join(root,'regelerate-upload-helper/sites.mjs')));
 const {publicationSources} = await import(pathToFileURL(path.join(root,'regelerate-upload-helper/files.mjs')));
 const source = JSON.parse(await readFile('selfhost-dist/server/export-source.json','utf8'));
 source['publication/pdf-parts.json']='{}';

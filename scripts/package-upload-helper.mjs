@@ -12,6 +12,7 @@ export async function packageUploadHelper(root, destination) {
     'server.mjs',
     'files.mjs',
     'sites.mjs',
+    'gitlab.mjs',
     'cleanup.mjs',
     'index.html',
     'client.js',

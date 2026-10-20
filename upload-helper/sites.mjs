@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { checkGitResponse, publishGitLab } from './gitlab.mjs';
 import path from 'node:path';
 import { copyFile, mkdir, stat, readFile } from 'node:fs/promises';
 import { hostedURL, mergeChanges, uploadFolder, isStaticMediaFolder } from './files.mjs';
@@ -560,42 +561,42 @@ export class OfficialSites {
     const result = await page.evaluate(
       async ({ method, endpoint, body }) => {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
-        const response = await fetch(endpoint, {
-          method,
-          credentials: 'same-origin',
-          redirect: 'error',
-          headers: {
-            Accept: 'application/json',
-            ...(body ? { 'Content-Type': 'application/json' } : {}),
-            ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
-          },
-          ...(body ? { body: JSON.stringify(body) } : {}),
-        });
-        const text = await response.text();
+        let response;
+        let text;
+        try {
+          response = await fetch(endpoint, {
+            method,
+            credentials: 'same-origin',
+            redirect: 'error',
+            signal: AbortSignal.timeout(120000),
+            headers: {
+              Accept: 'application/json',
+              ...(body ? { 'Content-Type': 'application/json' } : {}),
+              ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+            },
+            ...(body ? { body: JSON.stringify(body) } : {}),
+          });
+          text = await response.text();
+        } catch {
+          return { transportError: true };
+        }
         let data;
         try {
           data = JSON.parse(text);
         } catch {
           data = null;
         }
-        return { status: response.status, data };
+        return {
+          status: response.status, data,
+          contentType: response.headers.get('content-type') || '',
+          requestId: response.headers.get('x-request-id') || '',
+        };
       },
       { method, endpoint, body },
     );
-    if ([401, 403].includes(result.status))
-      throw Error(
-        'Sign in to iGEM GitLab with an account allowed to edit this repository.',
-      );
-    if (!result.data && result.status !== 204)
-      throw Error('GitLab returned an unexpected response. Check your login.');
-    if (result.status >= 400 && result.status !== 404)
-      throw Error(
-        'GitLab request failed (' +
-          result.status +
-          '). ' +
-          JSON.stringify(result.data?.message || '').slice(0, 400),
-      );
-    return result;
+    if (result.transportError)
+      throw Error(`GitLab connection timed out, was interrupted, or redirected (${method} ${endpoint.split('?')[0]}). Check the helper’s GitLab tab, then retry. Any pending upload will be verified before continuing.`);
+    return checkGitResponse(result, method, endpoint);
   }
   async plan(team, files) {
     const id = encodeURIComponent('2026/' + team),
@@ -636,38 +637,8 @@ export class OfficialSites {
     }
     return { base, sha, actions: mergeChanges(files, remote) };
   }
-  async commit(plan, branch) {
-    if (!plan.actions.length)
-      return {
-        url: '',
-        message: 'The repository already matches these files.',
-      };
-    const r = await this.git('POST', plan.base + '/repository/commits', {
-      branch,
-      start_sha: plan.sha,
-      commit_message: 'Update reviewed reGELerate wiki source',
-      actions: plan.actions,
-    });
-    if (r.status !== 201)
-      throw Error('GitLab did not confirm the source commit.');
-    const mr = await this.git('POST', plan.base + '/merge_requests', {
-      source_branch: branch,
-      target_branch: 'main',
-      title: 'Update reGELerate wiki',
-      description:
-        'Updated wiki source and verified iGEM media mappings. Includes a CC BY 4.0 LICENSE for original team wiki source and content; third-party material retains its own licences. Upload guides and Markdown files are excluded.',
-      remove_source_branch: true,
-    });
-    if (mr.status !== 201)
-      throw Error(
-        'Source uploaded to ' +
-          branch +
-          ', but the review request was not created. Open the branch in GitLab.',
-      );
-    return {
-      url: mr.data.web_url,
-      message: 'Source uploaded. Review and merge in GitLab to publish.',
-    };
+  async commit(plan, branch, publication, persist) {
+    return publishGitLab(this.git.bind(this), plan, branch, publication, persist, this.log);
   }
   async close() {
     if (this.context) await this.context.browser().close();

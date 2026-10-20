@@ -1,6 +1,7 @@
 const token = document.querySelector('meta[name="helper-session"]').content;
 history.replaceState(null, '', location.pathname);
 const $ = (id) => document.getElementById(id);
+const publicationComplete = (p) => !!(p?.complete || /^https:\/\/gitlab\.igem\.org\/2026\/[^/]+\/-\/merge_requests\/\d+$/.test(p?.url || ''));
 let state,
   formJob = '',
   localWorking = false;
@@ -150,7 +151,9 @@ function updateButtons() {
     b.disabled ||= !state.job?.team;
   $('resume').disabled ||= !state.jobs.length;
   $('publish').disabled =
-    working || !state.proposal || !!state.job?.publication?.attempted;
+    working || !state.proposal || publicationComplete(state.job?.publication);
+  $('publish').textContent = state.job?.publication?.attempted && !publicationComplete(state.job.publication)
+    ? '2. Retry / resume GitLab upload' : '2. Send to GitLab for review';
   const p = state.cleanup;
   $('deleteStorage').disabled =
     working ||
@@ -233,24 +236,28 @@ function renderStatus() {
   }
   $('gitlabStatus').textContent = state.job?.publication?.mediaRemoved
     ? 'Media removed · existing source has broken links'
-    : state.job?.publication?.attempted
-      ? 'Branch created or attempted · check GitLab'
-      : state.proposal
-        ? 'Source checked · ready to send'
-        : 'Website code · not sent yet';
+    : publicationComplete(state.job?.publication)
+      ? 'Source sent · review in GitLab'
+      : state.job?.publication?.attempted
+        ? `Upload incomplete · ${state.job.publication.next || 0} files confirmed`
+        : state.proposal
+          ? 'Source checked · ready to send'
+          : 'Website code · not sent yet';
   const publishHint = !state.job?.team
     ? 'Import your export in step 1 to begin.'
-    : state.job?.publication?.attempted
-      ? 'Already sent or attempted. Open the saved GitLab link below to continue.'
+    : publicationComplete(state.job?.publication)
+      ? 'Open the saved GitLab review link below to continue.'
       : state.busy || localWorking
         ? 'Wait for the current operation to finish.'
         : phase === 'error' && ['review', 'publish'].includes(a.action)
           ? a.message
-          : state.proposal
-            ? `${state.proposal.total} source files checked. Review the list below, then click 2. Send to GitLab for review.`
-            : done < rows.length
-              ? `${rows.length - done} media files still need URLs in step 2. Then sign in to GitLab and click 1. Check source changes.`
-              : 'Sign in to GitLab, then click 1. Check source changes. This enables step 2.';
+          : state.proposal && state.job?.publication?.attempted
+            ? 'Retry / resume checks the saved branch before continuing. Confirmed files are not sent again.'
+            : state.proposal
+              ? `${state.proposal.total} source files checked. Review the list below, then click 2. Send to GitLab for review.`
+              : done < rows.length
+                ? `${rows.length - done} media files still need URLs in step 2. Then sign in to GitLab and click 1. Check source changes.`
+                : 'Sign in to GitLab, then click 1. Check source changes. This enables step 2.';
   if ($('publishHint').textContent !== publishHint)
     $('publishHint').textContent = publishHint;
   $('review').classList.toggle('secondary', !!state.proposal);
@@ -266,9 +273,11 @@ function renderStatus() {
             ? 'Open iGEM Uploads, sign in, then click Upload / check remaining files.'
             : recordings.some((r) => !r.url)
               ? 'Finish any previous recording’s form, open Video Universe’s upload page, then check remaining files.'
-              : state.job?.publication?.attempted
+              : publicationComplete(state.job?.publication)
                 ? 'Open the GitLab link below. Review and merge the request, then check its build.'
-                : 'Review recording details if needed, then open GitLab and complete step 3.';
+                : state.job?.publication?.attempted
+                  ? 'Check source changes if needed, then retry / resume the GitLab upload. Saved progress will be verified first.'
+                  : 'Review recording details if needed, then open GitLab and complete step 3.';
   $('fileSummary').textContent =
     `Files & upload status · ${rows.length - done} remaining`;
   const p = state.cleanup;

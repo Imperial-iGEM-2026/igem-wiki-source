@@ -21,6 +21,7 @@ import {
   uploadFolder,
 } from './files.mjs';
 import { OfficialSites } from './sites.mjs';
+import { publicationComplete } from './gitlab.mjs';
 import {
   scanStorage,
   removeStorage,
@@ -418,19 +419,14 @@ async function action(name, data) {
   }
   if (name === 'publish') {
     if (!proposal) throw Error('Check the source changes first.');
-    if (job.publication?.attempted)
-      throw Error(
-        'An upload was already attempted. Check the saved branch link in GitLab before trying again.',
-      );
+    if (publicationComplete(job.publication))
+      throw Error('This upload is complete. Open its GitLab review link.');
     const branch = 'wiki-upload-' + job.id;
-    job.publication = {
-      attempted: true,
-      branch,
-      url: `https://gitlab.igem.org/2026/${job.team}/-/tree/${branch}`,
-    };
-    await save();
-    const result = await sites.commit(proposal, branch);
-    job.publication = { ...job.publication, ...result };
+    const result = await sites.commit(proposal, branch, job.publication, async (progress) => {
+      job.publication = progress;
+      await save();
+    });
+    job.publication = result;
     await save();
     log(result.message);
     proposal = null;

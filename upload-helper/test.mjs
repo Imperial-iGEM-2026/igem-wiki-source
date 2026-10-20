@@ -312,16 +312,25 @@ await test('Active processing is not refreshed; failed jobs stop with their actu
 await test('GitLab plan creates LICENSE on the review branch when main has none', async () => {
   const calls = [];
   let remoteLicense;
+  let uploaded = false;
   const sites = new OfficialSites();
   sites.git = async (method, url, body) => {
     calls.push({ method, url, body });
-    if (method === 'POST')
+    if (method === 'POST') {
+      if (url.endsWith('/repository/commits')) uploaded = true;
       return {
         status: 201,
         data: url.endsWith('/merge_requests')
           ? { web_url: 'https://gitlab.igem.org/2026/test/-/merge_requests/1' }
           : { id: 'commit' },
       };
+    }
+    if (url.endsWith('/branches/wiki-upload-test'))
+      return uploaded
+        ? { status: 200, data: { commit: { id: 'commit' } } }
+        : { status: 404, data: { message: 'not found' } };
+    if (url.includes('/merge_requests?'))
+      return { status: 200, data: [] };
     if (url.endsWith('/projects/2026%2Ftest'))
       return {
         status: 200,
