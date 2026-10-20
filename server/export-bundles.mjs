@@ -1,3 +1,4 @@
+import { publicationRuntime } from './publication-runtime.mjs';
 import { partitionSource, GIT_FILE_BYTES } from './source-parts.mjs';
 import { createImageValidationCache } from './export-validation-cache.mjs';
 import { downloadExternalAsset } from './export-remote-assets.mjs';
@@ -32,7 +33,6 @@ import { pipeline } from 'node:stream/promises';
 import { zipStream } from './export-zip.mjs';
 import {
   exportMedia,
-  PDF_WORKER_SOURCE,
   mediaFolder,
   templateFonts,
   fontLicenses,
@@ -256,15 +256,11 @@ export function createBundleExports({
           locations,
         );
         const recordingTodos = recordingTasks(media, locations, cleanValues);
-        if ([...media.values()].includes('pdf')) {
-          media.set(PDF_WORKER_SOURCE, 'runtime');
-          locations.set(PDF_WORKER_SOURCE, [
-            {
-              pageTitle: 'PDF reader',
-              layerName: 'PDF.js worker',
-              field: 'JavaScript runtime',
-            },
-          ]);
+        // These lazy modules are shared by the exported application. Upload them
+        // like images so their bytes do not count against the Pages archive.
+        for (const asset of publicationRuntime) {
+          media.set(asset.source, 'runtime');
+          locations.set(asset.source, [{ pageTitle: 'Website runtime', layerName: asset.name, field: 'JavaScript runtime' }]);
         }
         const googleFonts = await prepareGoogleFonts(
           googleFontReferences(

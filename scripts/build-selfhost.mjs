@@ -1,6 +1,6 @@
 import './build-studio-responsive.mjs';
 import { exportSource } from './export-source.mjs';
-import { PDF_WORKER_SOURCE } from './export-media.mjs';
+import { publicationRuntime } from './publication-runtime.mjs';
 import { packageUploadHelper } from './package-upload-helper.mjs';
 import { packageImageRuntime } from './package-image-runtime.mjs';
 import { build } from 'vite';
@@ -47,7 +47,8 @@ await cp(
   { recursive: true },
 );
 await mkdir(path.join(out, 'client/templates/runtime'), { recursive: true });
-await cp(path.join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'), path.join(out, 'client', PDF_WORKER_SOURCE));
+for (const asset of publicationRuntime)
+  await cp(path.join(root, 'node_modules', asset.file), path.join(out, 'client', asset.source));
 await build({
   ...common,
   ssr: { noExternal: true },
@@ -99,6 +100,7 @@ for (const name of [
 ])
   await cp(path.join(root, 'server', name), path.join(out, 'server', name));
 await packageImageRuntime(root, path.join(out, 'server/image-runtime'));
+await cp(path.join(root, 'scripts/publication-runtime.mjs'), path.join(out, 'server/publication-runtime.mjs'));
 await cp(path.join(root, 'scripts/source-parts.mjs'), path.join(out, 'server/source-parts.mjs'));
 await cp(
   path.join(root, 'scripts/export-media.mjs'),

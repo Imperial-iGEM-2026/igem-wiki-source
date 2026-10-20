@@ -24,6 +24,7 @@ export async function packageUploadHelper(root, destination) {
     'compiler/igem.gitlab-ci.yml',
     'compiler/build-igem.mjs',
     'compiler/source-parts.mjs',
+    'compiler/publication-runtime.mjs',
     'compiler/artifact-size.mjs',
     'compiler/share-publication-assets.mjs',
     'compiler/static-runtime.ts',

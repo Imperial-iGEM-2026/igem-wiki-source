@@ -1237,6 +1237,7 @@ await test('Older exports receive the current compiler without publishing review
       'scripts/google-fonts.mjs',
       'scripts/image-export.mjs',
       'scripts/pdf-parts.mjs',
+      'scripts/publication-runtime.mjs',
       'scripts/share-publication-assets.mjs',
       'scripts/source-parts.mjs',
       'scripts/static-runtime.ts',

@@ -1,3 +1,4 @@
+import { mappedRuntime, runtimeImports } from './publication-runtime.mjs';
 import { resolveSource, readSource } from './source-parts.mjs';
 import {
   defaultLoading,
@@ -562,8 +563,16 @@ if (!/^\/[a-z0-9-]+\/$/.test(base))
   issues.push(
     'Set --base to your registered iGEM team URL path for iGEM publication.',
   );
+// Keep complete license texts with the site when distributing standalone runtimes.
+const modelLicenses = [];
+for (const name of ['@google/model-viewer', 'three', 'lit', 'lit-html', 'lit-element', '@lit/reactive-element', '@monogrid/gainmap-js', 'promise-worker-transferable']) {
+  modelLicenses.push(name + '\n' + await readFile(path.join(root, 'node_modules', name, 'LICENSE'), 'utf8'));
+}
+await writeFile(path.join(output, 'public/model-viewer-LICENSES.txt'), modelLicenses.join('\n\n'));
+const uploadedRuntime = mappedRuntime(map);
 await build({
   ...common,
+  plugins: [...(common.plugins || []), runtimeImports(uploadedRuntime)],
   base,
   build: {
     outDir: path.join(output, 'public'),
@@ -631,6 +640,16 @@ if (hostedPdfWorker) {
     kind: 'runtime',
     publishedURL: hostedPdfWorker,
   });
+}
+for (const asset of uploadedRuntime) {
+  if (asset.forward) {
+    // PDF.js constructs decoder filenames at runtime. Keep a tiny forwarding
+    // module at that path; the decoder implementation loads from iGEM instead.
+    await writeFile(path.join(output, 'public', asset.forward),
+      `export { default } from ${JSON.stringify(asset.url)};\n`);
+  }
+  if (asset.source !== PDF_WORKER_SOURCE)
+    assets.push({ source: asset.source, kind: 'runtime', publishedURL: asset.url });
 }
 const css = assetFiles.filter((f) => f.endsWith('.css'));
 for (const file of css) {

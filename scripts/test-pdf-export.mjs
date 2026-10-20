@@ -1,3 +1,4 @@
+import { publicationRuntime } from './publication-runtime.mjs';
 import jpeg from 'jpeg-js';
 import assert from 'node:assert/strict';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
@@ -92,8 +93,12 @@ assert.match(manifest, /pages-1-2.pdf/);
 assert.match(manifest, /pages-3-4.pdf/);
 assert.match(manifest, /pdfjs-6\.4\.299-worker\.js.*runtime/);
 const runtimeFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'assets/assets/runtime'));
-assert.equal(runtimeFiles.length, 1);
-assert.deepEqual(await readFile(path.join(dir, 'assets/assets/runtime', runtimeFiles[0])), await readFile('node_modules/pdfjs-dist/build/pdf.worker.min.mjs'));
+assert.equal(runtimeFiles.length, publicationRuntime.length);
+for (const asset of publicationRuntime) {
+  const file = runtimeFiles.find((name) => name.endsWith(path.basename(asset.source)));
+  assert.ok(file, asset.source);
+  assert.deepEqual(await readFile(path.join(dir, 'assets/assets/runtime', file)), await readFile(path.join('node_modules', asset.file)));
+}
 const imageFolder = path.join(dir, 'assets/assets/images');
 const imageFiles = await (
   await import('node:fs/promises')
@@ -107,6 +112,7 @@ const compressedImage = await readFile(
 assert.ok(compressedImage.length < 9_900_000);
 assert.equal(jpeg.decode(compressedImage).width, 2);
 const map = {
+  ...Object.fromEntries(publicationRuntime.map((asset) => [asset.source, 'https://static.igem.wiki/teams/1/runtime/' + path.basename(asset.source)])),
   [PDF_WORKER_SOURCE]: 'https://static.igem.wiki/teams/1/runtime/pdf-worker.js',
   '/api/media/aacc.jpg': 'https://static.igem.wiki/teams/1/images/photo.jpg',
 };
@@ -160,6 +166,12 @@ assert.ok(!frameSource.includes('/api/media/aacc.jpg'));
 const js = await readFile(path.join(dir, 'render/public/assets/wiki.js'), 'utf8');
 assert.match(js, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);
 await assert.rejects(readFile(path.join(dir, 'render/public/assets/pdf.worker.min.mjs')), { code: 'ENOENT' });
+for (const asset of publicationRuntime) {
+  if (asset.module) assert.ok(js.includes(map[asset.source]), asset.name);
+  if (asset.forward) assert.equal(await readFile(path.join(dir, 'render/public', asset.forward), 'utf8'), `export { default } from ${JSON.stringify(map[asset.source])};\n`);
+}
+const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
+assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)-.*\.js$/.test(name)), publishedFiles.join(', '));
 assert.ok(!html.includes('/api/media/aacc.jpg'));
 assert.ok(!html.includes('<button id="animate">'));
 assert.ok(!html.includes('src="/api/media/aabb.pdf"'));

@@ -1,10 +1,10 @@
-reGELerate Upload Helper 1.0.23
+reGELerate Upload Helper 1.0.27
 
 This version fixes both "Invalid upload folder" and "Unsupported static-media folder" for the PDF reader's
 assets/runtime JavaScript upload. Existing export ZIPs and saved jobs can be reused.
 
 Where your files go
-- iGEM Uploads: images, logos, documents, fonts, 3D files and PDF reader JavaScript.
+- iGEM Uploads: images, logos, documents, fonts, 3D files and website runtime JavaScript.
 - Video Universe: upload video/audio manually, then add HTML embeds in the editor before export. The helper does not process recordings in new exports.
 - iGEM GitLab: website source, after the media URLs are saved.
 The two export ZIPs are imported here, not uploaded as ZIPs to those sites.
@@ -115,3 +115,11 @@ Fonts: DM Sans (normal and italic), Caveat and Libre Caslon Display are bundled
 under SIL OFL 1.1, including original copyright and licence notices. Matching
 template fonts are added automatically to new and resumed uploads, then uploaded
 to iGEM with CSS generated from the returned URLs. System fonts are not copied.
+
+Version 1.0.27 uploads the PDF reader, PDF download library, 3D viewer and PDF
+decoders through iGEM Uploads, just like images. Update Studio and prepare a
+fresh export to include these files in assets/runtime. Import both new ZIPs,
+upload/check remaining files, then Send to GitLab. Keep your media mapping to
+reuse existing uploads. The compiler replaces local imports with the verified
+uploaded URLs, reducing the Pages archive. Older exports still build with local
+libraries when a runtime upload mapping is absent.

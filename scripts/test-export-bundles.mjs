@@ -1,3 +1,4 @@
+import { publicationRuntime } from './publication-runtime.mjs';
 import assert from 'node:assert/strict';
 import { partitionSource } from './source-parts.mjs';
 import { request as httpRequest } from 'node:http';
@@ -317,7 +318,7 @@ try {
   assert.equal(plan.downloads.length, 2);
   assert.equal(
     plan.downloads.find((entry) => entry.key === 'assets').files,
-    32,
+    32 + publicationRuntime.length,
   );
   assert.deepEqual(plan.recordingTodos, []);
   await save(project, 'brand', 'Newer unsnapshotted brand', 1);
@@ -352,7 +353,7 @@ with zipfile.ZipFile(root/'01-website-source.zip') as z:
  assert b'SPDX-License-Identifier: CC-BY-4.0' in z.read('LICENSE')
  z.extractall(root/'source')
 with zipfile.ZipFile(root/'02-static-assets.zip') as z:
- assert all(n.startswith(('assets/logos/', 'assets/fonts/', 'assets/icons/')) for n in z.namelist() if n.startswith('assets/'))
+ assert all(n.startswith(('assets/logos/', 'assets/fonts/', 'assets/icons/', 'assets/runtime/')) for n in z.namelist() if n.startswith('assets/'))
  assert sum(n.endswith('.ttf') for n in z.namelist()) == 4
  assert sum(n.endswith('-OFL.txt') for n in z.namelist()) == 3
  rows=list(csv.DictReader(io.StringIO(z.read('upload-manifest.csv').decode())))
