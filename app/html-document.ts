@@ -44,7 +44,7 @@ export function htmlDocument(
  * This lets nested HTTPS players retain their own origins without granting
  * custom code access to the editor. Never substitute srcdoc or a blob URL.
  */
-export function htmlFrameURL(
+function htmlFrameDocument(
   source: string,
   pageURL: string,
   images: Record<string, string> = {},
@@ -63,15 +63,91 @@ export function htmlFrameURL(
           `img-src https: data: ${url.origin};`,
         )
       : source;
+  return content
+    .replace('<style>', base + '<style>')
+    .replace(
+      '<script>',
+      `<script>(${htmlVisibilityBridge.toString()})();${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
+    );
+}
+
+export function htmlFrameURL(
+  source: string,
+  pageURL: string,
+  images: Record<string, string> = {},
+) {
   return (
     'data:text/html;charset=utf-8,' +
-    encodeURIComponent(
-      content
-        .replace('<style>', base + '<style>')
-        .replace(
-          '<script>',
-          `<script>(${htmlVisibilityBridge.toString()})();${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
-        ),
-    )
+    encodeURIComponent(htmlFrameDocument(source, pageURL, images))
   );
+}
+
+/** Runs in a tiny opaque data document. Image-rich HTML travels as a message,
+ * not a navigation URL, which Chromium can silently refuse when oversized. */
+function htmlDocumentReceiver(token: string) {
+  const receive = (event: MessageEvent) => {
+    if (
+      event.source !== parent ||
+      event.data?.type !== 'custom-html-document' ||
+      event.data.token !== token ||
+      typeof event.data.html !== 'string'
+    )
+      return;
+    window.removeEventListener('message', receive);
+    document.open();
+    // Parse the complete document (CSP before scripts) in this disposable opaque
+    // frame. innerHTML would not execute its scripts; srcdoc/blob changes origin.
+    // oxlint-disable-next-line typescript/no-deprecated -- Deliberate one-use sandbox document initialization.
+    document.write(event.data.html);
+    document.close();
+  };
+  window.addEventListener('message', receive);
+  parent.postMessage({ type: 'custom-html-document-ready', token }, '*');
+}
+
+const pendingDocuments = new WeakMap<HTMLIFrameElement, () => void>();
+export function loadHtmlFrame(
+  frame: HTMLIFrameElement,
+  source: string,
+  pageURL: string,
+  images: Record<string, string> = {},
+) {
+  pendingDocuments.get(frame)?.();
+  const html = htmlFrameDocument(source, pageURL, images);
+  if (html.length <= 128 * 1024) {
+    frame.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    return () => {};
+  }
+  const token = crypto.randomUUID();
+  const stop = () => {
+    window.removeEventListener('message', ready);
+    if (pendingDocuments.get(frame) === stop) pendingDocuments.delete(frame);
+  };
+  const ready = (event: MessageEvent) => {
+    if (
+      event.source !== frame.contentWindow ||
+      event.data?.type !== 'custom-html-document-ready' ||
+      event.data.token !== token
+    )
+      return;
+    stop();
+    frame.contentWindow?.postMessage(
+      { type: 'custom-html-document', token, html },
+      '*',
+    );
+  };
+  window.addEventListener('message', ready);
+  pendingDocuments.set(frame, stop);
+  // Only this fixed bootstrap runs before the supplied document's CSP is parsed.
+  // Never use srcdoc/blob: allow-same-origin must retain a unique opaque origin.
+  frame.src =
+    'data:text/html;charset=utf-8,' +
+    encodeURIComponent(
+      '<!doctype html><meta charset="utf-8"><script>(' +
+        htmlDocumentReceiver.toString() +
+        ')(' +
+        JSON.stringify(token) +
+        ')</script>',
+    );
+  return stop;
 }

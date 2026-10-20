@@ -17,7 +17,7 @@ startReferenceNavigation();
 import { startPdfParts } from '../app/pdf-parts-viewer';
 startPdfParts();
 
-import { htmlFrameURL } from '../app/html-document';
+import { loadHtmlFrame } from '../app/html-document';
 import { followHtmlLink } from '../app/html-navigation';
 import { watchHtmlFrame } from '../app/html-visibility';
 const htmlRoutes = JSON.parse(document.body.dataset.customHtmlRoutes || '{}');
@@ -65,11 +65,7 @@ for (const frame of document.querySelectorAll<HTMLIFrameElement>(
               return text;
             }),
           );
-          frame.src = htmlFrameURL(
-            parts.join(''),
-            document.baseURI,
-            htmlImages,
-          );
+          loadHtmlFrame(frame, parts.join(''), document.baseURI, htmlImages);
         })
         .catch(() => {
           const error = document.createElement('output');
@@ -79,7 +75,8 @@ for (const frame of document.querySelectorAll<HTMLIFrameElement>(
           frame.parentElement?.appendChild(error);
         });
     } else
-      frame.src = htmlFrameURL(
+      loadHtmlFrame(
+        frame,
         frame.dataset.htmlDocument || '',
         document.baseURI,
         htmlImages,

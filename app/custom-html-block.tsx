@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CanvasNode } from './canvas-schema';
-import { htmlDocument, htmlFrameURL } from './html-document';
+import { htmlDocument, loadHtmlFrame } from './html-document';
 import { localHtmlImages } from './html-image';
 import { followHtmlLink } from './html-navigation';
 import { watchHtmlFrame } from './html-visibility';
@@ -38,6 +38,7 @@ export function CustomHtmlBlock({
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    let stopDocument: (() => void) | undefined;
     const base = window.document.baseURI;
     const images = new Map(
       [...localHtmlImages(document, base)].map(([ref, url]) => [
@@ -111,7 +112,7 @@ export function CustomHtmlBlock({
       for (const reference of dynamicHtmlImages(document))
         if (replacements.has(reference))
           imageMap[reference] = replacements.get(reference)!;
-      frame.current.src = htmlFrameURL(resolved, base, imageMap);
+      stopDocument = loadHtmlFrame(frame.current, resolved, base, imageMap);
       setError(
         failures.length
           ? `Could not load uploaded image: ${failures.join(', ')}. Retry loading; HTTP 404 means the file is missing, while 401/403 means sign-in is needed.`
@@ -125,6 +126,7 @@ export function CustomHtmlBlock({
       : undefined;
     return () => {
       stop?.();
+      stopDocument?.();
       active = false;
       controller.abort();
     };
