@@ -1,3 +1,9 @@
+## MCP visitor loading animation controls
+
+Standard whole-project MCP links now expose `get_loading_animation` and `update_loading_animation`. Agents can save the exported website’s first-visit animation, uploaded image, display time, message, colours and custom CSS. Updates require the current header version and preserve all other header settings. Page-limited links can read the settings but cannot change them.
+
+Install the complete server package and reconnect MCP to discover the tools. Read the settings, then patch `enabled: true`, `frequency: "first"`, `animation: "custom"`, `customCss: ""`, the actual uploaded image URL, `duration: 3400` and `timeout: 5000` for the reported use case. The image must already be uploaded; these tools do not invent or upload its bytes. Use Studio’s **Pages → Loading animation → Preview animation** to replay without consuming the visitor flag. Prepare a fresh export after saving. First visit remembers the browser, while once per session remains the default; reduced-motion preferences skip the animation.
+
 ## Selectable visitor colour assistance
 
 Preview and published websites now include a Colours chooser with Original, High contrast, Protan, Deutan, Tritan and Grayscale presets, a 0–100% media strength control, a labelled sample and reset. Mode and strength persist per project/site. Existing toggle buttons restore the last active preset. Custom HTML can open the chooser or supply its own editable select/range controls; the API is documented in STATIC-EXPORT.md and advertised through MCP.

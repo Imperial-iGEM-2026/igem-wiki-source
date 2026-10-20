@@ -186,6 +186,10 @@ try {
   assert.ok(init.capabilities.tools);
   assert.ok(init.capabilities.prompts);
   assert.match(init.instructions, /get_site_overview/);
+  assert.match(
+    init.instructions,
+    /get_loading_animation and update_loading_animation/,
+  );
   assert.match(init.instructions, /Do not hotlink third-party image URLs/);
   assert.match(init.instructions, /Keep newly added images local to Studio/);
   assert.match(init.instructions, /ENTIRE page/);
@@ -293,6 +297,117 @@ try {
     /Results/,
   );
 
+  // Standard MCP can configure the exported entrance animation without source access.
+  const headerBefore = (
+    await (await api('/api/content', null, project)).json()
+  ).rows.find((r) => r.id === 'site:header');
+  const loadingBefore = await call(key, 'get_loading_animation', {});
+  assert.equal(loadingBefore.canEdit, true);
+  assert.equal(loadingBefore.settings.frequency, 'session');
+  await rejects(
+    call(key, 'update_loading_animation', { settings: { enabled: true } }),
+    /ifVersion/,
+  );
+  const loadingSaved = await call(key, 'update_loading_animation', {
+    ifVersion: loadingBefore.version,
+    settings: {
+      enabled: true,
+      frequency: 'first',
+      animation: 'custom',
+      customCss: '',
+      image: '/templates/notebook-purple/favicon.svg',
+      duration: 3400,
+      timeout: 5000,
+    },
+  });
+  assert.equal(loadingSaved.settings.duration, 3400);
+  assert.equal(loadingSaved.settings.frequency, 'first');
+  assert.ok(loadingSaved.version > loadingBefore.version);
+  assert.deepEqual(
+    (await call(key, 'get_site_overview', {})).loadingAnimation.settings,
+    loadingSaved.settings,
+  );
+  const headerAfter = (
+    await (await api('/api/content', null, project)).json()
+  ).rows.find((r) => r.id === 'site:header');
+  const { loading: _oldLoading, ...otherBefore } = JSON.parse(
+    headerBefore?.value || '{}',
+  );
+  const { loading: _newLoading, ...otherAfter } = JSON.parse(headerAfter.value);
+  assert.deepEqual(
+    otherAfter,
+    otherBefore,
+    'loading update preserves every other header field',
+  );
+  await rejects(
+    call(key, 'update_loading_animation', {
+      ifVersion: loadingBefore.version,
+      settings: { enabled: false },
+    }),
+    /Conflict/,
+  );
+  for (const settings of [
+    { nope: true },
+    { duration: 5001 },
+    { timeout: 1000 },
+    { frequency: 'once' },
+    { image: 'javascript:alert(1)' },
+    { customCss: '@import "bad";' },
+    { enabled: 'true' },
+    {},
+  ]) {
+    await rejects(
+      call(key, 'update_loading_animation', {
+        ifVersion: loadingSaved.version,
+        settings,
+      }),
+      /Invalid|non-empty/,
+    );
+  }
+  assert.equal(
+    (await call(key, 'get_loading_animation', {})).version,
+    loadingSaved.version,
+  );
+  // An editor changing unrelated header settings invalidates the MCP read as well.
+  assert.equal(
+    (
+      await api(
+        '/api/content',
+        {
+          id: 'site:header',
+          version: headerAfter.version,
+          value: JSON.stringify({
+            ...JSON.parse(headerAfter.value),
+            name: 'New team name',
+          }),
+        },
+        project,
+      )
+    ).status,
+    200,
+  );
+  await rejects(
+    call(key, 'update_loading_animation', {
+      ifVersion: loadingSaved.version,
+      settings: { message: 'Hello' },
+    }),
+    /Conflict/,
+  );
+  const loadingFresh = await call(key, 'get_loading_animation', {});
+  const loadingPatched = await call(key, 'update_loading_animation', {
+    ifVersion: loadingFresh.version,
+    settings: { message: 'Hello' },
+  });
+  assert.equal(loadingPatched.settings.image, loadingSaved.settings.image);
+  assert.equal(loadingPatched.settings.duration, 3400);
+  const finalHeader = (
+    await (await api('/api/content', null, project)).json()
+  ).rows.find((r) => r.id === 'site:header');
+  assert.equal(JSON.parse(finalHeader.value).name, 'New team name');
+  console.log(
+    'PASS: standard MCP loading settings, first-visit timing, partial patches, header preservation and concurrent-edit conflicts.',
+  );
+
   // Menu editing: new pages go where they are asked; groups can be created.
   await call(key, 'create_page', {
     title: 'Lab journal',
@@ -367,6 +482,16 @@ try {
   });
   assert.equal(note.status, 202);
   const { tools } = await rpc(key, 'tools/list', {});
+  assert.equal(
+    tools.find((t) => t.name === 'get_loading_animation').annotations
+      .readOnlyHint,
+    true,
+  );
+  assert.deepEqual(
+    tools.find((t) => t.name === 'update_loading_animation').inputSchema
+      .required,
+    ['settings', 'ifVersion'],
+  );
   for (const name of [
     'upload_media',
     'start_media_upload',
@@ -394,7 +519,13 @@ try {
   assert.ok(pages.some((p) => p.slug === 'home'));
   let home = await call(key, 'get_page', { page: 'home' });
   assert.ok(home.linkTargets.length);
-  assert.ok(home.linkTargets.every(target=>target.href==='/#'+target.anchor && target.anchor.startsWith('section-')));
+  assert.ok(
+    home.linkTargets.every(
+      (target) =>
+        target.href === '/#' + target.anchor &&
+        target.anchor.startsWith('section-'),
+    ),
+  );
   const template = home.sections.find(
     (s) => s.kind === 'template' && s.texts?.length && s.region === 'main',
   );
@@ -515,8 +646,11 @@ try {
   );
   await call(key, 'delete_section', { page: 'home', id: positionedHtml });
 
-  await call(key, 'style_element', { page: 'home', selector: h1.selector,
-    styles: { width: '400px', 'max-width': '100%', 'box-sizing': 'border-box' } });
+  await call(key, 'style_element', {
+    page: 'home',
+    selector: h1.selector,
+    styles: { width: '400px', 'max-width': '100%', 'box-sizing': 'border-box' },
+  });
   const resizedText = (await call(key, 'get_page', { page: 'home' })).customCss;
   assert.match(resizedText, /width: 400px/);
   assert.match(resizedText, /max-width: 100%/);
@@ -968,6 +1102,17 @@ try {
     )
   ).json();
   const scopedKey = new URL(scoped.url).searchParams.get('key');
+  assert.equal(
+    (await call(scopedKey, 'get_loading_animation', {})).canEdit,
+    false,
+  );
+  await rejects(
+    call(scopedKey, 'update_loading_animation', {
+      ifVersion: loadingPatched.version,
+      settings: { enabled: false },
+    }),
+    /whole-project/,
+  );
   assert.equal(
     (await call(scopedKey, 'get_project_template', {})).appearance.id,
     'regelerate',
@@ -1824,13 +1969,31 @@ try {
     const devKey = new URL(dev.url).searchParams.get('key');
     for (let attempt = 0; attempt < 2; attempt++) {
       const listing = await call(devKey, 'list_source_files', {});
-      for (const filePath of ['app/[slug]/page.tsx', 'app/site-header.tsx', 'app/site-search.ts', '.gitlab-ci.yml']) {
-        assert.ok(listing.files.some(file => file.path === filePath), filePath);
-        const listedFile = await call(devKey, 'read_source_file', { path: filePath });
+      for (const filePath of [
+        'app/[slug]/page.tsx',
+        'app/site-header.tsx',
+        'app/site-search.ts',
+        '.gitlab-ci.yml',
+      ]) {
+        assert.ok(
+          listing.files.some((file) => file.path === filePath),
+          filePath,
+        );
+        const listedFile = await call(devKey, 'read_source_file', {
+          path: filePath,
+        });
         assert.equal(listedFile.exists, true);
       }
-      assert.equal(listing.files.find(file => file.path === 'app/[slug]/page.tsx').editable, false);
-      assert.equal(listing.files.find(file => file.path === 'app/site-header.tsx').editable, true);
+      assert.equal(
+        listing.files.find((file) => file.path === 'app/[slug]/page.tsx')
+          .editable,
+        false,
+      );
+      assert.equal(
+        listing.files.find((file) => file.path === 'app/site-header.tsx')
+          .editable,
+        true,
+      );
     }
     const devInit = await rpc(devKey, 'initialize', {});
     assert.match(devInit.instructions, /Do not create or start a local proxy/);
@@ -1914,10 +2077,16 @@ try {
       lockToken: lease.lockToken,
       ttlSeconds: 60,
     });
-    const previewBefore = await (await api('/api/source-preview', null, project)).json();
+    const previewBefore = await (
+      await api('/api/source-preview', null, project)
+    ).json();
     assert.equal(previewBefore.files, undefined);
     const written = await call(devKey, 'write_source_file', edit);
-    const previewResponse = await api('/api/source-preview?files=1', null, project);
+    const previewResponse = await api(
+      '/api/source-preview?files=1',
+      null,
+      project,
+    );
     assert.equal(previewResponse.status, 200);
     const sourcePreview = await previewResponse.json();
     assert.notEqual(sourcePreview.revision, previewBefore.revision);
@@ -1925,9 +2094,20 @@ try {
     assert.ok(sourcePreview.files['server/source-preview-entry.tsx']);
     assert.ok(sourcePreview.compiler.dependencies.includes('react'));
     assert.equal(sourcePreview.files['server/app.mjs'], undefined);
-    assert.equal((await api('/api/source-preview?files=1', null, project, 'invalid')).status, 401);
-    assert.equal((await api('/api/source-preview?files=1', null, 'missing-project')).status, 404);
-    assert.equal((await api('/api/source-preview', {files:true}, project)).status, 404);
+    assert.equal(
+      (await api('/api/source-preview?files=1', null, project, 'invalid'))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await api('/api/source-preview?files=1', null, 'missing-project'))
+        .status,
+      404,
+    );
+    assert.equal(
+      (await api('/api/source-preview', { files: true }, project)).status,
+      404,
+    );
     await rejects(call(devKey, 'write_source_file', edit), /conflict/);
     await rejects(
       call(devKey, 'read_source_file', { path: '../mcp-link.key' }),
@@ -1975,19 +2155,64 @@ try {
   }
 
   // Standard links may add independent images to text and arrange overlap.
-  const imageText = await call(key, 'add_section', {page:'home',kind:'text',heading:'Image container',body:'Retain this text.'});
-  const imageA = await call(key, 'add_section', {page:'home',kind:'image',heading:'First image',src:'https://example.org/a.png',inside:imageText.id});
-  const imageB = await call(key, 'add_section', {page:'home',kind:'image',heading:'Second image',src:'https://example.org/b.png',inside:imageText.id});
-  await call(key, 'update_section', {page:'home',id:imageA.id,changes:{zIndex:4}});
-  await call(key, 'update_section', {page:'home',id:imageB.id,changes:{zIndex:-1}});
-  const imagePage = await call(key,'get_page',{page:'home'});
-  assert.equal(imagePage.sections.find(s=>s.id===imageA.id).zIndex,4);
-  assert.equal(imagePage.sections.find(s=>s.id===imageB.id).parentId,imageText.id);
-  const imageSelector = imagePage.sections.find(s=>s.id===imageA.id).selectors.image;
-  assert.match(imageSelector,/img:nth-of-type/);
-  await call(key,'style_element',{page:'home',selector:imageSelector,styles:{width:'420px','max-width':'none',height:'auto','max-height':'none'}});
+  const imageText = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'text',
+    heading: 'Image container',
+    body: 'Retain this text.',
+  });
+  const imageA = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'image',
+    heading: 'First image',
+    src: 'https://example.org/a.png',
+    inside: imageText.id,
+  });
+  const imageB = await call(key, 'add_section', {
+    page: 'home',
+    kind: 'image',
+    heading: 'Second image',
+    src: 'https://example.org/b.png',
+    inside: imageText.id,
+  });
+  await call(key, 'update_section', {
+    page: 'home',
+    id: imageA.id,
+    changes: { zIndex: 4 },
+  });
+  await call(key, 'update_section', {
+    page: 'home',
+    id: imageB.id,
+    changes: { zIndex: -1 },
+  });
+  const imagePage = await call(key, 'get_page', { page: 'home' });
+  assert.equal(imagePage.sections.find((s) => s.id === imageA.id).zIndex, 4);
+  assert.equal(
+    imagePage.sections.find((s) => s.id === imageB.id).parentId,
+    imageText.id,
+  );
+  const imageSelector = imagePage.sections.find((s) => s.id === imageA.id)
+    .selectors.image;
+  assert.match(imageSelector, /img:nth-of-type/);
+  await call(key, 'style_element', {
+    page: 'home',
+    selector: imageSelector,
+    styles: {
+      width: '420px',
+      'max-width': 'none',
+      height: 'auto',
+      'max-height': 'none',
+    },
+  });
 
-  await rejects(call(key,'update_section',{page:'home',id:imageB.id,changes:{zIndex:0.5}}),/not valid/);
+  await rejects(
+    call(key, 'update_section', {
+      page: 'home',
+      id: imageB.id,
+      changes: { zIndex: 0.5 },
+    }),
+    /not valid/,
+  );
   const revCode = await call(key, 'add_section', {
     page: 'home',
     heading: 'Revocation target',

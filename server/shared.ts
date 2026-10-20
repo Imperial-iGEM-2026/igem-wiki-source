@@ -32,7 +32,8 @@ export {
   pageCatalog,
 } from '../app/custom-pages';
 
-export { validHeader } from '../app/header-schema';
+export { validHeader, HEADER_FIELD } from '../app/header-schema';
+export { defaultLoading, validLoading } from '../app/site-loading';
 export { pageLayers } from '../app/template-transform';
 export { extractChrome, applyChrome, sameChrome } from '../app/chrome-sync';
 export { outlineLayer, customSelectors } from '../app/template-outline';

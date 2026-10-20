@@ -23,6 +23,10 @@ import {
 } from './mcp-section-code.mjs';
 import { sourceNotice } from './project-source.mjs';
 import {
+  HEADER_FIELD,
+  validHeader,
+  defaultLoading,
+  validLoading,
   sectionLinkTargets,
   cssError,
   emptyLayout,
@@ -835,7 +839,12 @@ export function createMcp({
             'Saved section headings; independent of the original content template.',
         },
         customCss: layout.customCss || '',
-        linkTargets: sectionLinkTargets(siteData(), slug, layout).map(target => ({ ...target, href: (slug === 'home' ? '/' : '/' + slug) + '#' + target.anchor })),
+        linkTargets: sectionLinkTargets(siteData(), slug, layout).map(
+          (target) => ({
+            ...target,
+            href: (slug === 'home' ? '/' : '/' + slug) + '#' + target.anchor,
+          }),
+        ),
         sections: layout.order.map((id) => {
           const n = layout.nodes.find((item) => item.id === id);
           if (n.kind !== 'template')
@@ -901,6 +910,38 @@ export function createMcp({
         customSections: custom,
         templateTexts: fields.length,
         editedTemplateTexts: edited,
+      };
+    }
+    function loadingState() {
+      const row = project.select.get(HEADER_FIELD);
+      let header;
+      try {
+        header = JSON.parse(
+          row?.value ?? project.defaults()[HEADER_FIELD] ?? '{}',
+        );
+      } catch {
+        /* Report invalid saved data rather than replacing the header. */
+      }
+      if (!validHeader(header))
+        throw fail(
+          400,
+          'The saved website header is invalid. Repair it in Studio before changing the loading animation.',
+        );
+      return {
+        row,
+        header,
+        settings: { ...defaultLoading, ...header.loading },
+      };
+    }
+    function loadingInfo() {
+      const { row, settings } = loadingState();
+      return {
+        settings,
+        version: row?.version || 0,
+        canEdit: !link.page,
+        scope: 'project',
+        instructions:
+          'Use update_loading_animation with this version. Standard whole-project links can save these settings; Developer access is not required. Saved settings apply to the live website and future exports. Prepare a fresh export to update an already exported website. session means once per browser tab/session; first remembers this browser using localStorage; always replays each page visit. Studio Pages → Loading animation → Preview animation replays without consuming the visitor flag. Reduced-motion preferences skip the animation.',
       };
     }
     function saveMenu(next, ifVersion) {
@@ -1264,6 +1305,144 @@ export function createMcp({
           return projectTemplate(args.includeStyles === true);
         },
       },
+      get_loading_animation: {
+        description:
+          'Read the project-wide visitor loading animation, effective defaults, header version and edit permission. This is the animation shown when visitors enter the exported website, not Studio’s own loading screen.',
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        },
+        run(args) {
+          if (Object.keys(args).length)
+            throw fail(400, 'get_loading_animation takes no arguments.');
+          return loadingInfo();
+        },
+      },
+      update_loading_animation: {
+        description:
+          'Save a partial patch to the project-wide visitor loading animation, preserving other header settings. Available to standard whole-project MCP links; page-limited links cannot edit global settings. First read get_loading_animation and pass its version as ifVersion. For an uploaded animated image on the first visit use enabled:true, frequency:"first", animation:"custom", image:the uploaded media URL, duration:3400 and timeout:5000. Empty customCss with custom animation displays the image without an extra preset effect. Use upload_media/list_media for an actual image URL, never invent one. Prepare a fresh export after saving.',
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ifVersion: {
+              type: 'integer',
+              minimum: 0,
+              description: 'Header version returned by get_loading_animation.',
+            },
+            settings: {
+              type: 'object',
+              additionalProperties: false,
+              minProperties: 1,
+              properties: {
+                enabled: { type: 'boolean' },
+                frequency: {
+                  type: 'string',
+                  enum: ['session', 'first', 'always'],
+                },
+                animation: {
+                  type: 'string',
+                  enum: ['pulse', 'spin', 'dots', 'custom'],
+                },
+                image: {
+                  type: 'string',
+                  maxLength: 2048,
+                  description:
+                    'Uploaded image URL, or empty string to remove it. Prefer Studio media library URLs.',
+                },
+                message: { type: 'string', maxLength: 160 },
+                background: { type: 'string', pattern: '^#[a-fA-F0-9]{6}$' },
+                color: { type: 'string', pattern: '^#[a-fA-F0-9]{6}$' },
+                duration: {
+                  type: 'number',
+                  minimum: 0,
+                  maximum: 5000,
+                  description: 'Minimum display time in milliseconds.',
+                },
+                timeout: {
+                  type: 'number',
+                  minimum: 1000,
+                  maximum: 10000,
+                  description:
+                    'Maximum wait in milliseconds, at least duration.',
+                },
+                customCss: {
+                  type: 'string',
+                  maxLength: 8000,
+                  description:
+                    'Animation CSS; no url(), @import or closing style tags.',
+                },
+              },
+            },
+          },
+          required: ['settings', 'ifVersion'],
+          additionalProperties: false,
+        },
+        run(args) {
+          if (link.page)
+            throw fail(
+              403,
+              'Loading animation is project-wide. Use a whole-project MCP link to edit it.',
+            );
+          const { settings, ifVersion } = args;
+          if (
+            Object.keys(args).some(
+              (key) => !['settings', 'ifVersion'].includes(key),
+            ) ||
+            !Number.isSafeInteger(ifVersion) ||
+            ifVersion < 0
+          )
+            throw fail(
+              400,
+              'Pass settings and a non-negative integer ifVersion from get_loading_animation.',
+            );
+          if (
+            !settings ||
+            typeof settings !== 'object' ||
+            Array.isArray(settings) ||
+            !Object.keys(settings).length
+          )
+            throw fail(
+              400,
+              'settings must be a non-empty loading animation patch.',
+            );
+          const current = loadingState();
+          if ((current.row?.version || 0) !== ifVersion)
+            throw fail(
+              409,
+              'Conflict: the header or loading animation changed. Read get_loading_animation and retry.',
+            );
+          const next = { ...current.settings, ...settings };
+          if (!validLoading(next))
+            throw fail(
+              400,
+              'Invalid loading animation settings. Check supported fields, image URL, colours, CSS and timing: duration 0–5000 ms; timeout 1000–10000 ms and at least duration.',
+            );
+          const value = JSON.stringify({ ...current.header, loading: next });
+          const result = current.row
+            ? project.update.run(value, author, HEADER_FIELD, ifVersion)
+            : project.insert.run(HEADER_FIELD, value, author);
+          if (!result.changes)
+            throw fail(
+              409,
+              'Conflict: the header or loading animation changed. Read get_loading_animation and retry.',
+            );
+          live.changed(project.id, [HEADER_FIELD], '');
+          return { ok: true, ...loadingInfo() };
+        },
+      },
       get_site_overview: {
         description:
           'Call this first. Returns the project name, the team’s brief for AI assistants, your task, what you may edit, the header menu (groups of pages), every page with its purpose on an iGEM wiki and whether it still has untouched template content, and the recommended workflow.',
@@ -1290,6 +1469,7 @@ export function createMcp({
                 : 'Source tools require a separately approved Developer link created in Studio.',
             template: project.templateId || 'classic',
             projectTemplate: projectTemplate(),
+            loadingAnimation: loadingInfo(),
             teamBrief:
               brief() ||
               'No brief yet. Ask the user for the project facts you need (organism, goal, results, team) rather than guessing.',
@@ -1321,6 +1501,7 @@ export function createMcp({
               'Read the brief and your task; ask the user if essential facts are missing.',
               'get_page for each page you will change.',
               'get_project_template to inspect the current appearance; includeStyles=true returns template CSS.',
+              'get_loading_animation / update_loading_animation configure the exported website’s visitor entrance animation, including first visit only, uploaded image and minimum display time. Standard whole-project access is sufficient; preserve the returned version and prepare a fresh export after saving.',
               'get_page_styles before styling a page: shared, template and page CSS plus section style settings in one read-only response.',
               'Replace template placeholder text with update_text; add new sections with add_section.',
               'Keep headings short and informative: they form the page index.',
@@ -2309,6 +2490,7 @@ export function createMcp({
     }
     const instructions = [
       baseRules,
+      'Visitor loading animations are configurable through get_loading_animation and update_loading_animation with standard whole-project access. These settings are included in future exports; no source edit or browser workaround is needed. Read the current version before saving and use the real uploaded image URL.',
       link.mode === 'developer'
         ? 'Developer access approved by the user. Start with get_source_status and list_source_files. Before each source edit, acquire_source_lock, then read_source_file; pass lockToken, ifVersion and ifBaseHash on write/replace/restore. Renew the lease before expiry while working, and release it when done. If locked by someone else, report the owner/expiry and work on a different file; do not repeatedly retry or overwrite. Separate developers should use separate named links. ' +
           sourceNotice
