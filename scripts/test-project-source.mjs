@@ -5,11 +5,22 @@ import path from 'node:path';
 import { createProjectSource } from '../server/project-source.mjs';
 const dir = mkdtempSync(path.resolve('work/source-test-'));
 const sourceFile = path.join(dir, 'source.json');
-const base = { 'app/page-index.css': 'nav { color: blue; }', 'app/luca-template.json': '{"id":"luca"}', 'scripts/build-igem.mjs': 'build()', 'package.json': '{}' };
+const base = { 'app/page-index.css': 'nav { color: blue; }', 'app/luca-template.json': '{"id":"luca"}', 'scripts/build-igem.mjs': 'build()', 'package.json': '{}',
+  'app/[slug]/page.tsx': 'export default () => null;',
+  'app/[[...path]]/page.tsx': 'export default () => null;',
+  '.gitlab-ci.yml': 'image: node', '.gitignore': '/node_modules/' };
 writeFileSync(sourceFile, JSON.stringify(base));
 const db = new DatabaseSync(path.join(dir, 'test.sqlite'));
 try {
   const store = createProjectSource({ db, sourceFile });
+  // Route filenames in the release catalog must not break the entire listing.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const listed = store.list('one');
+    assert.deepEqual(listed.map(file => file.path), Object.keys(base).sort());
+    for (const file of listed) assert.equal(store.read('one', { path: file.path }).content, base[file.path]);
+  }
+  assert.equal(store.read('one', { path: 'app/[slug]/page.tsx' }).editable, false);
+  assert.throws(() => store.acquire('one', {}, { path: 'app/[slug]/page.tsx' }), /read-only/);
   const owner = { id: 'ada', name: 'Ada dev', approvedBy: 'Ada', expiresAt: Date.now() + 86400000 };
   const tokens = new Map();
   const locked = args => {
@@ -23,7 +34,7 @@ try {
   assert.equal(store.overlay('one', base)[first.path], args.content);
   assert.deepEqual(store.overlay('two', base), base);
   assert.throws(() => store.write('one', 'Ada', locked(args), owner), /conflict/);
-  for (const name of ['../secret', '/etc/passwd', 'C:/secret', 'app/../secret', 'app\\page-index.css', 'app/%2e%2e/secret', 'server/app.mjs', '.env'])
+  for (const name of ['../secret', '/etc/passwd', 'C:/secret', 'app/../secret', 'app/[slug]/../../secret', 'app/[slug]//page.tsx', 'app/./[slug]/page.tsx', 'app\\page-index.css', 'app/%2e%2e/secret', 'server/app.mjs', '.env'])
     assert.throws(() => store.read('one', { path: name }), /path|available/);
   const pkg = store.read('one', { path: 'package.json' });
   assert.throws(() => store.write('one', 'Ada', { ...args, path: pkg.path, ifVersion: pkg.version, ifBaseHash: pkg.baseHash }), /Only wiki/);

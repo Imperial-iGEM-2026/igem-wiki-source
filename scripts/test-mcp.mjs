@@ -1822,6 +1822,16 @@ try {
       'grant is single use',
     );
     const devKey = new URL(dev.url).searchParams.get('key');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const listing = await call(devKey, 'list_source_files', {});
+      for (const filePath of ['app/[slug]/page.tsx', 'app/site-header.tsx', 'app/site-search.ts', '.gitlab-ci.yml']) {
+        assert.ok(listing.files.some(file => file.path === filePath), filePath);
+        const listedFile = await call(devKey, 'read_source_file', { path: filePath });
+        assert.equal(listedFile.exists, true);
+      }
+      assert.equal(listing.files.find(file => file.path === 'app/[slug]/page.tsx').editable, false);
+      assert.equal(listing.files.find(file => file.path === 'app/site-header.tsx').editable, true);
+    }
     const devInit = await rpc(devKey, 'initialize', {});
     assert.match(devInit.instructions, /Do not create or start a local proxy/);
     assert.match(devInit.instructions, /Do not hotlink third-party image URLs/);

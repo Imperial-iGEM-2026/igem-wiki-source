@@ -15,8 +15,10 @@ const editableApp = new Set([
   'page-index.js', 'page-index.css', 'section-navigator.js', 'section-position.js',
   'purple-interactions.js', 'motion-loop.js', 'reference-navigation.ts',
 ]);
+// Brackets are literal route filename characters (e.g. app/[slug]/page.tsx),
+// never glob patterns. Reads still require membership in the release allowlist.
 const safePath = name => typeof name === 'string' &&
-  /^[a-zA-Z0-9_./-]+$/.test(name) &&
+  /^[a-zA-Z0-9_./[\]-]+$/.test(name) &&
   name.split('/').every(part => part && part !== '.' && part !== '..');
 const canWrite = name => safePath(name) && (
   (name.startsWith('app/') && editableApp.has(name.slice(4))) ||

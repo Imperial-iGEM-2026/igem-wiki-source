@@ -31,6 +31,32 @@ const linkBridge = `document.addEventListener('click',function(e){
  e.preventDefault();parent.postMessage({type:'custom-html-link',href:href,newTab:a.target==='_blank'||e.ctrlKey||e.metaKey||e.shiftKey},'*');
 });`;
 
+/** Serialized before custom scripts, only in Design. Let widgets take their
+ * authored reduced-motion branch instead of waiting for scroll reveals.
+ * Never force opacity/display: intentionally hidden controls must stay hidden. */
+function htmlDesignBridge() {
+  document.documentElement.setAttribute('data-studio-design', '');
+  const matchMedia = window.matchMedia.bind(window);
+  window.matchMedia = (query) =>
+    matchMedia(
+      query
+        .replace(
+          /\(prefers-reduced-motion\s*:\s*no-preference\)/gi,
+          '(width < 0px)',
+        )
+        .replace(
+          /\(prefers-reduced-motion(?:\s*:\s*reduce)?\)/gi,
+          '(min-width: 0px)',
+        ),
+    );
+  const style = document.createElement('style');
+  style.textContent =
+    'html[data-studio-design],html[data-studio-design]::before,html[data-studio-design]::after,html[data-studio-design] *,html[data-studio-design] *::before,html[data-studio-design] *::after{' +
+    'transition-duration:0s!important;transition-delay:0s!important;' +
+    'animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;animation-fill-mode:both!important;animation-timeline:auto!important;animation-range:normal!important}';
+  document.head.appendChild(style);
+}
+
 /** This document is only mounted in an opaque-origin sandbox, never in the page DOM. */
 export function htmlDocument(
   node: Pick<CanvasNode, 'html' | 'css' | 'javascript'>,
@@ -48,6 +74,7 @@ function htmlFrameDocument(
   source: string,
   pageURL: string,
   images: Record<string, string> = {},
+  design = false,
 ) {
   const url = new URL(pageURL);
   // Relative assets need the path, never private preview keys or credentials.
@@ -67,7 +94,7 @@ function htmlFrameDocument(
     .replace('<style>', base + '<style>')
     .replace(
       '<script>',
-      `<script>(${htmlVisibilityBridge.toString()})();${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
+      `<script>(${htmlVisibilityBridge.toString()})();${design ? '(' + htmlDesignBridge.toString() + ')();' : ''}${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
     );
 }
 
@@ -111,9 +138,10 @@ export function loadHtmlFrame(
   source: string,
   pageURL: string,
   images: Record<string, string> = {},
+  design = false,
 ) {
   pendingDocuments.get(frame)?.();
-  const html = htmlFrameDocument(source, pageURL, images);
+  const html = htmlFrameDocument(source, pageURL, images, design);
   if (html.length <= 128 * 1024) {
     frame.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
     return () => {};

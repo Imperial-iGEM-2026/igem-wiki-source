@@ -112,7 +112,9 @@ export function CustomHtmlBlock({
       for (const reference of dynamicHtmlImages(document))
         if (replacements.has(reference))
           imageMap[reference] = replacements.get(reference)!;
-      stopDocument = loadHtmlFrame(frame.current, resolved, base, imageMap);
+      stopDocument = loadHtmlFrame(
+        frame.current, resolved, base, imageMap, editing && !interacting,
+      );
       setError(
         failures.length
           ? `Could not load uploaded image: ${failures.join(', ')}. Retry loading; HTTP 404 means the file is missing, while 401/403 means sign-in is needed.`
@@ -130,7 +132,7 @@ export function CustomHtmlBlock({
       active = false;
       controller.abort();
     };
-  }, [document, editing, retry]);
+  }, [document, editing, interacting, retry]);
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (frame.current) followHtmlLink(event, frame.current, setError);
