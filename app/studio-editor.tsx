@@ -88,6 +88,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { StudioPages, StudioPageTabs } from './studio-pages';
+import { studioStorage } from './studio-storage';
 import { pickDesignTarget, type DesignTarget } from './studio-target';
 import {
   ContextMenu,
@@ -299,25 +300,6 @@ function PeerSelections({
 }
 // Set when jumping to a teammate on another page; read after it opens.
 const PEER_FOCUS = 'prion-peer-focus';
-const studioStorage = {
-  getItem(key: string) {
-    try {
-      return typeof window === 'undefined'
-        ? null
-        : window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem(key: string, value: string) {
-    try {
-      if (typeof window !== 'undefined')
-        window.localStorage.setItem(key, value);
-    } catch {
-      /* Workspace sizing remains usable when storage is disabled. */
-    }
-  },
-};
 const mediaKinds: string[] = [
   'image',
   'video',

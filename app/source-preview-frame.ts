@@ -195,6 +195,27 @@ export function sourcePreviewBootstrap(token: string) {
     if (payload.type === 'source-preview-load' && !loaded) {
       loaded = true;
       editing = Boolean(payload.editor);
+      if (editing) {
+        const preferences = new Map<string, string>(
+          Object.entries(payload.preferences || {}).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string',
+          ),
+        );
+        const keys = Object.keys(payload.preferences || {});
+        host.__studioPreferences = {
+          getItem: (key: string) => preferences.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            if (
+              !keys.includes(key) ||
+              typeof value !== 'string' ||
+              value.length > 16384
+            )
+              return;
+            preferences.set(key, value);
+            send('source-editor-preference', { key, value });
+          },
+        };
+      }
       host.__studioSourceBuild = {
         key: payload.projectId || '',
         revision: payload.revision,

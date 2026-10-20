@@ -61,7 +61,7 @@ export function useCanvasObjectMove(options: MoveOptions) {
       const clicked = e.target as Element;
       if (
         clicked.closest(
-          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor,[data-page-index-host],[data-html-interaction-control]',
+          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,.field-editor,[data-page-index-host],[data-html-interaction-control],[data-studio-runtime-control],.regel-header-search',
         )
       )
         return;
@@ -198,7 +198,7 @@ export function useCanvasObjectMove(options: MoveOptions) {
         event.ctrlKey ||
         event.metaKey ||
         (event.target as Element).closest(
-          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,[data-html-interaction-control]',
+          'input,textarea,select,[contenteditable=true],.studio-section-handle,.studio-resize,[data-html-interaction-control],[data-studio-runtime-control],.regel-header-search',
         )
       )
         return;

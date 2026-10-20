@@ -1,5 +1,13 @@
 /** Lightweight, CSS-only loading artwork: no timers or render loop. */
-export function EditorLoading({ workspace = false }: { workspace?: boolean }) {
+export function EditorLoading({
+  workspace = false,
+  title,
+  detail,
+}: {
+  workspace?: boolean;
+  title?: string;
+  detail?: string;
+}) {
   return (
     <output
       className="editor-loading-screen"
@@ -19,11 +27,14 @@ export function EditorLoading({ workspace = false }: { workspace?: boolean }) {
           </div>
           <span className="editor-loading-label">assembling possibilities</span>
         </div>
-        <h1>{workspace ? 'Opening your workspace' : 'Opening editor'}</h1>
+        <h1>
+          {title || (workspace ? 'Opening your workspace' : 'Opening editor')}
+        </h1>
         <p>
-          {workspace
-            ? 'Getting your projects ready.'
-            : 'Preparing your canvas and tools.'}
+          {detail ||
+            (workspace
+              ? 'Getting your projects ready.'
+              : 'Preparing your canvas and tools.')}
         </p>
         <div className="editor-loading-pulse" aria-hidden="true">
           <i />

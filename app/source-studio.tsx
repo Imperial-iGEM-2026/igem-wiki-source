@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Home from './home';
 import { SourcePreview } from './source-preview-ui';
+import { EditorLoading } from './editor-loading';
 
 /** Choose once before mounting an editor. Never replace a dirty editor on a poll. */
 export function SourceStudio(props: React.ComponentProps<typeof Home>) {
@@ -33,7 +34,13 @@ export function SourceStudio(props: React.ComponentProps<typeof Home>) {
       });
     return () => abort.abort();
   }, [props.projectId, attempt]);
-  if (state === 'checking') return <p role="status">Loading website editor…</p>;
+  if (state === 'checking')
+    return (
+      <EditorLoading
+        title="Building source…"
+        detail="Checking project source."
+      />
+    );
   if (state === 'error')
     return (
       <div role="alert">

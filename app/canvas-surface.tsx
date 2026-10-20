@@ -506,7 +506,7 @@ export function CanvasSurface({
                 const target = e.target as HTMLElement;
                 if (
                   target.closest(
-                    '[data-citation-link],.modern-pdf-reader,[data-page-index-host],[data-html-interaction-control]',
+                    '[data-citation-link],.modern-pdf-reader,[data-page-index-host],[data-html-interaction-control],[data-studio-runtime-control],.regel-header-search',
                   )
                 )
                   return;

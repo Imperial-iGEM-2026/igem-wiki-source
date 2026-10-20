@@ -71,7 +71,10 @@ export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/',
   const container = document.createElement('div');
   container.className = 'website-search';
   container.innerHTML = '<button type="button" class="website-search-open" aria-label="Search this website">⌕ Search</button><dialog aria-label="Search this website"><form method="dialog"><strong>Search this website</strong><button aria-label="Close search">✕</button></form><input type="search" aria-label="Search pages" placeholder="Search pages and sections…" maxlength="200"><p role="status">Type to search this project.</p><ol></ol></dialog>';
-  if (showInterface) host.appendChild(container);
+  // Keep the API/dialog mounted in Design so project header enhancements can
+  // attach their own search button. Only the default floating trigger is hidden.
+  host.appendChild(container);
+  (container.querySelector('.website-search-open') as HTMLButtonElement).hidden = !showInterface;
   const dialog = container.querySelector('dialog')!;
   const input = container.querySelector('input')!;
   const status = container.querySelector('[role=status]')!;

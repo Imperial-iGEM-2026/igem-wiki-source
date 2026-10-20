@@ -1,3 +1,7 @@
+## Source editor search, page tabs and loading
+
+Design now keeps its search dialog available so the project's existing SVG header-search component can initialize. Its button can open search without canvas selection intercepting the click. Existing animation safeguards are unchanged. Multiple page tabs and panel sizing survive page switches and source rebuilds through an editor-preference bridge. Building source uses the normal Studio loading animation labelled “Building source…”. Install this package and refresh Studio; existing project search overrides do not need to be recreated.
+
 ## Editing presence panel
 
 Long names and email addresses now truncate inside the “Editing now” panel without pushing the Go/Show actions outside it. Hover a row to read its full name and location. The panel fits narrow screens and scrolls vertically for long lists. The top bar explicitly counts editing sessions: one person can have several pages open. Install this package and refresh Studio to use the fix.

@@ -24,7 +24,7 @@ import{templateDefaults}from'/app/templates';import{customDefaults}from'/app/cus
 import'/app/globals.css';import'/app/studio-polish.css';
 const pages=JSON.stringify([{slug:'demo',title:'Preview demo'},{slug:'second',title:'Second page'}]);
 const values={...templateDefaults('blank'),...customDefaults(pages),'pages:custom':pages};
-for(const [slug,title] of [['demo','Preview demo'],['second','Second page']]){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=title;values['layout:'+slug]=JSON.stringify(l)};const layout=JSON.parse(values['layout:demo']);const widget={...newNode('widget','html'),parentId:CUSTOM_CONTENT,minHeight:140,html:'<button id="counter">0</button>',javascript:"document.getElementById('counter').onclick=e=>e.target.textContent=String(Number(e.target.textContent)+1)"};const searchWidget={...newNode('search-widget','html'),parentId:CUSTOM_CONTENT,name:'Editable search',html:'',css:'',javascript:'',minHeight:320};layout.nodes.push(widget,searchWidget);layout.order.push(widget.id,searchWidget.id);values['layout:demo']=JSON.stringify(layout);
+for(const [slug,title] of [['demo','Preview demo'],['second','Second page']]){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=title;values['layout:'+slug]=JSON.stringify(l)};const layout=JSON.parse(values['layout:demo']);const header={...newNode('fixture-header','section'),name:'Site header',minHeight:80};const brand={...newNode('fixture-brand','text'),parentId:header.id,title:'Fixture header'};layout.nodes.push(header,brand);layout.order.unshift(header.id,brand.id);const widget={...newNode('widget','html'),parentId:CUSTOM_CONTENT,minHeight:140,html:'<button id="counter">0</button>',javascript:"document.getElementById('counter').onclick=e=>e.target.textContent=String(Number(e.target.textContent)+1)"};const searchWidget={...newNode('search-widget','html'),parentId:CUSTOM_CONTENT,name:'Editable search',html:'',css:'',javascript:'',minHeight:320};layout.nodes.push(widget,searchWidget);layout.order.push(widget.id,searchWidget.id);values['layout:demo']=JSON.stringify(layout);
 for(let i=0;i<36;i++)values['unused:'+i]='x'.repeat(80000);
 const initial=Object.fromEntries(Object.entries(values).map(([k,value])=>[k,{value,version:1,author:''}]));
 function App(){const[data,setData]=useState(initial),[active,setActive]=useState(true),[page,setPage]=useState('demo'),[project,setProject]=useState('one'),[editor,setEditor]=useState(false);if(editor)return <SourceStudio projectId='one' user={{id:'test-user',name:'Test user'}} startEditing initialData={data} wiki={{slug:'demo',title:'Preview demo'}}/>;return <><button id='edit-source' onClick={()=>setEditor(true)}>Edit project source</button><button id="open" onClick={()=>setActive(true)}>Open preview</button><button id="draft" onClick={()=>setData(d=>{const l=JSON.parse(d['layout:demo'].value);l.nodes.find(n=>n.id==='custom-intro').title='Updated draft';return {...d,'layout:demo':{value:JSON.stringify(l),version:2,author:''}}})}>Edit draft</button><button id="delete" onClick={()=>setData(d=>{const n={...d};delete n['unused:0'];return n})}>Delete row</button><button id="page" onClick={()=>setPage('second')}>Second page</button><button id="project" onClick={()=>setProject('two')}>Other project</button><StudioPreview data={data} active={active} projectId={project} page={page} onClose={()=>setActive(false)}/></>};createRoot(document.getElementById('root')).render(<App/>);`,
@@ -64,6 +64,24 @@ sourceFiles['app/home.tsx'] =
   );
 sourceFiles['app/globals.css'] +=
   '\n.source-probe{display:block;color:rgb(111,22,155);padding:13px}';
+// Match the existing project's enhancement: it needs the search dialog in the
+// document before its shared template initializer can add the header button.
+sourceFiles['app/project-components/header-search.js'] = `
+export function startHeaderSearch(root){
+  let button;
+  const sync=()=>{const host=root.querySelector('[data-site-header] > .canvas-children');
+    if(!host || !document.querySelector('.website-search-open'))return;
+    if(button?.isConnected)return;
+    button=document.createElement('button');button.className='regel-header-search';
+    button.type='button';button.setAttribute('aria-label','Search this website');
+    button.innerHTML='<svg width="24" height="24"><circle cx="10" cy="10" r="6" fill="none" stroke="currentColor"/></svg>';
+    button.onclick=()=>window.websiteSearch.open();host.appendChild(button);
+  };
+  const observer=new MutationObserver(sync);observer.observe(root,{childList:true,subtree:true});sync();
+  return()=>{observer.disconnect();button?.remove()};
+}`;
+sourceFiles['app/template-motion.js'] = "import {startHeaderSearch} from './project-components/header-search.js';\n"+
+  sourceFiles['app/template-motion.js'].replace('cleanups=[','cleanups=[startHeaderSearch(root),');
 const compiler = JSON.parse(
   await readFile(
     'selfhost-dist/client/assets/source-preview/manifest.json',
@@ -146,7 +164,9 @@ const server = createServer(async (req, res) => {
           'dist',
           url.pathname === '/studio-preview'
             ? 'server/preview.html'
-            : url.pathname,
+            : ['/demo', '/second'].includes(url.pathname)
+              ? relative + '/index.html'
+              : url.pathname,
         );
     res.setHeader(
       'Content-Type',
@@ -282,6 +302,13 @@ try {
   await editor.getByText('Website Studio',{exact:true}).waitFor();
   await page.screenshot({path:path.join(dir,'source-editor.png')});
   assert.equal(await editor.locator('.studio-source-status').count(),0);
+  await editor.locator('.regel-header-search').waitFor();
+  console.log('PASS header SVG visible inside Design');
+  assert.equal(await editor.locator('.website-search-open').isVisible(),false,'Default floating trigger stays hidden in Design');
+  await editor.locator('.regel-header-search').click();
+  await page.screenshot({path:path.join(dir,'search-click.png')});
+  await editor.getByRole('dialog',{name:'Search this website',exact:true}).waitFor({timeout:5000});
+  await editor.getByRole('searchbox',{name:'Search pages'}).press('Escape');
   assert.equal(await editor.locator('.source-probe').evaluate(e=>getComputedStyle(e).color),'rgb(111, 22, 155)');
   await editor.getByText('Overview',{exact:true}).click();
   await editor.getByLabel('Heading',{exact:true}).fill('Saved in source editor');
@@ -306,6 +333,20 @@ try {
   assert.equal(await ef.evaluate(async()=>{try{await fetch('/api/projects',{method:'POST',body:'{}'});return false}catch{return true}}),true);
   console.log('PASS source editor selection, edit, save, matching nested preview and protected APIs');
   await editor.getByRole('button',{name:'Back to editor',exact:true}).click();
+
+  await editor.getByRole('button',{name:'Browse all pages',exact:true}).click();
+  await editor.locator('.studio-pages').getByRole('button',{name:'Second page',exact:true}).click();
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Preview demo',exact:true}).waitFor();
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Second page',exact:true}).waitFor();
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Preview demo',exact:true}).click();
+  await page.reload();
+  await page.locator('#edit-source').click();
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Second page',exact:true}).waitFor();
+  await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Close Second page tab',exact:true}).click();
+  assert.equal(await editor.getByRole('navigation',{name:'Open pages'}).getByRole('button',{name:'Second page',exact:true}).count(),0);
+  const preferences=await page.evaluate(()=>JSON.parse(localStorage.getItem('prion-open-pages')));
+  assert.ok(preferences.includes('demo') && !preferences.includes('second'),'Parent stores page tabs across source rebuild/reload');
+  console.log('PASS developer SVG search in Design and multiple page tabs across navigation');
 
   await editor.getByRole('button',{name:'Connect AI',exact:true}).click();
   await page.getByRole('dialog').waitFor();

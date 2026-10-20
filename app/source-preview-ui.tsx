@@ -1,4 +1,6 @@
 import { StudioProjects } from './studio-projects';
+import { studioPreferenceKeys, studioStorage } from './studio-storage';
+import { EditorLoading } from './editor-loading';
 import {
   Dialog,
   DialogContent,
@@ -114,6 +116,15 @@ export function SourcePreview({
       )
         return;
       const message = event.data;
+      if (
+        editor &&
+        message.type === 'source-editor-preference' &&
+        studioPreferenceKeys.includes(message.key) &&
+        typeof message.value === 'string' &&
+        message.value.length <= 16384
+      ) {
+        studioStorage.setItem(message.key, message.value);
+      }
       if (
         editor &&
         message.type === 'source-editor-projects' &&
@@ -242,6 +253,14 @@ export function SourcePreview({
             tailwind,
             revision: bundle.revision,
             ...latest.current,
+            preferences: editor
+              ? Object.fromEntries(
+                  studioPreferenceKeys.map((key) => [
+                    key,
+                    studioStorage.getItem(key),
+                  ]),
+                )
+              : {},
           },
           '*',
         );
@@ -490,7 +509,10 @@ export function SourcePreview({
   }, [active, revision, projectId]);
   return (
     <div className={editor ? 'studio-source-editor' : 'studio-source-preview'}>
-      {(status || stale || error) && (
+      {status && !error && (
+        <EditorLoading title="Building source…" detail={status} />
+      )}
+      {(stale || error) && (
         <output className="studio-source-status">
           <span>
             {status}
