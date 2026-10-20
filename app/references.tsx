@@ -1,3 +1,4 @@
+import { LinkedText } from './text-links';
 import { createContext, useContext } from 'react';
 import type { CanvasLayout, ReferenceEntry } from './canvas-schema';
 export type ReferenceTarget = { number: number; text: string; anchor: string };
@@ -86,7 +87,7 @@ export function CitationText({ text }: { text: string }) {
   let start = 0;
   for (const match of text.matchAll(pattern)) {
     if (!match[2]) continue;
-    children.push(text.slice(start, match.index));
+    children.push(<LinkedText key={"text-" + match.index} text={text.slice(start, match.index)} />);
     const target = index[match[2]];
     children.push(
       target ? (
@@ -112,6 +113,6 @@ export function CitationText({ text }: { text: string }) {
     );
     start = match.index! + match[0].length;
   }
-  children.push(text.slice(start));
+  children.push(<LinkedText key="last-text" text={text.slice(start)} />);
   return <>{children}</>;
 }

@@ -2205,3 +2205,9 @@ body:has(.studio-chat-history) [data-slot='dialog-overlay'] {
 .studio .studio-equation-preview > span {
   color: var(--studio-muted);
 }
+
+.studio-text-link-panel{padding:12px;border:1px solid #ddd8ee;border-radius:10px;background:#faf8ff;display:grid;gap:10px}
+.studio-link-editor select{width:100%;min-height:36px;border:1px solid #d7d4e0;border-radius:8px;background:#fff;color:#302b40;padding:6px 10px;font:inherit}
+
+.studio-text-dialog{max-height:calc(100dvh - 32px);overflow-y:auto}
+.studio-text-dialog.studio-text-link-open textarea{height:min(28vh,240px);min-height:120px}

@@ -1,3 +1,4 @@
+import type { SectionLinkTarget } from './section-link-targets';
 import { useId, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import {
@@ -15,6 +16,7 @@ export function LinkEditor({
   disabled = false,
   label = 'Link destination',
   optional = true,
+  sections,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -22,6 +24,7 @@ export function LinkEditor({
   disabled?: boolean;
   label?: string;
   optional?: boolean;
+  sections?: (href: string) => SectionLinkTarget[];
 }) {
   const id = useId();
   const [url, setUrl] = useState(value);
@@ -32,6 +35,8 @@ export function LinkEditor({
     setUrl(value);
     setError('');
   }
+  const pageValue = value.split('#')[0];
+  const sectionOptions = sections && pages.some(p => p[0] === pageValue) ? sections(pageValue) : [];
   function apply() {
     const next = url.trim();
     if ((next || !optional) && !safeLink(next)) {
@@ -65,7 +70,7 @@ export function LinkEditor({
       </label>
       <div className="studio-link-actions">
         <Select
-          value={pages.some((p) => p[0] === value) ? value : ''}
+          value={pages.some((p) => p[0] === pageValue) ? pageValue : ''}
           disabled={disabled}
           onValueChange={(v) => {
             if (v) {
@@ -80,7 +85,7 @@ export function LinkEditor({
             className="studio-select"
           >
             <SelectValue placeholder="Choose a page">
-              {pages.find((p) => p[0] === value)?.[1] || 'Choose a page'}
+              {pages.find((p) => p[0] === pageValue)?.[1] || 'Choose a page'}
             </SelectValue>
           </SelectTrigger>
           <SelectContent
@@ -102,6 +107,16 @@ export function LinkEditor({
           Set link
         </button>
       </div>
+      {sections && pages.some(p => p[0] === pageValue) && (
+        <label className="studio-field"><span>Section on this page</span>
+          <select aria-label="Choose a page section" disabled={disabled} value={value.split('#')[1] || ''}
+            onChange={event => { const next=pageValue+(event.target.value ? '#'+event.target.value : ''); setUrl(next); setError(''); onChange(next); }}>
+            <option value="">Top of page</option>
+            {value.includes('#') && !sectionOptions.some(s=>s.anchor===value.split('#')[1]) && <option value={value.split('#')[1]}>Custom or unavailable section</option>}
+            {sectionOptions.map(section=><option key={section.anchor} value={section.anchor}>{section.label}</option>)}
+          </select>
+        </label>
+      )}
       {optional && value && (
         <button
           type="button"

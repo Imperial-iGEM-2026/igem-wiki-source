@@ -70,3 +70,6 @@ export {
 } from '../scripts/image-export.mjs';
 
 export { buildSearchIndex } from '../app/site-search-index';
+
+export { sectionLinkTargets } from '../app/section-link-targets';
+export { sectionAnchor } from '../app/section-links';

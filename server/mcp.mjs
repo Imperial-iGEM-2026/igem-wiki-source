@@ -23,6 +23,7 @@ import {
 } from './mcp-section-code.mjs';
 import { sourceNotice } from './project-source.mjs';
 import {
+  sectionLinkTargets,
   cssError,
   emptyLayout,
   materialize,
@@ -832,6 +833,7 @@ export function createMcp({
             'Saved section headings; independent of the original content template.',
         },
         customCss: layout.customCss || '',
+        linkTargets: sectionLinkTargets(siteData(), slug, layout).map(target => ({ ...target, href: (slug === 'home' ? '/' : '/' + slug) + '#' + target.anchor })),
         sections: layout.order.map((id) => {
           const n = layout.nodes.find((item) => item.id === id);
           if (n.kind !== 'template')
@@ -1482,7 +1484,7 @@ export function createMcp({
       },
       update_text: {
         description:
-          "Replace one text field of a template section (fieldId from get_page's texts). Plain text only.",
+          "Replace one text field of a template section (fieldId from get_page's texts). Plain text with optional Markdown links: [label](/page#section-id). Use linkTargets from get_page on the destination page; never invent section IDs.",
         inputSchema: {
           type: 'object',
           properties: {

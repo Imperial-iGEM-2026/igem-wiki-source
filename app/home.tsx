@@ -1,5 +1,7 @@
 'use client';
 
+import { sectionLinkTargets, sectionLinkPages } from './section-link-targets';
+import { startSectionLinks, revealSection } from './section-links';
 import { startWebsiteSearch } from './site-search';
 import { defaultLoading, startSiteLoading } from './site-loading';
 import { parseHeader } from './header-schema';
@@ -280,6 +282,7 @@ export default function Home({
     });
   }
   useEffect(() => startReferenceNavigation(), []);
+  useEffect(() => editing ? undefined : startSectionLinks(), [editing]);
   function begin(id: Field) {
     if (active && draft !== data[active].value) {
       setError('Save or cancel your current edit first.');
@@ -367,18 +370,16 @@ export default function Home({
     return () => window.removeEventListener('popstate', navigateBack);
   }, [publication, editing, data]);
   useEffect(() => {
-    if (editing) return;
+    if (editing || publication) return;
     const frame = requestAnimationFrame(() => {
       if (location.hash) {
         try {
-          document
-            .getElementById(decodeURIComponent(location.hash.slice(1)))
-            ?.scrollIntoView();
+          revealSection(location.hash);
         } catch {}
       } else window.scrollTo(0, 0);
     });
     return () => cancelAnimationFrame(frame);
-  }, [wiki?.slug, editing]);
+  }, [wiki?.slug, editing, publication]);
   const template = templateFor(data);
   const selected = topics.find((t) => t.id === modal);
   return (
@@ -502,9 +503,7 @@ export default function Home({
               if (slug === (wiki?.slug || 'home')) {
                 if (href.includes('#')) {
                   try {
-                    document
-                      .getElementById(decodeURIComponent(href.split('#')[1]))
-                      ?.scrollIntoView();
+                    revealSection('#'+href.split('#')[1]);
                   } catch {}
                 } else window.scrollTo(0, 0);
               }
@@ -888,6 +887,8 @@ export default function Home({
         )}
       </div>
       <TextEditDialog
+        pages={sectionLinkPages(data)}
+        sections={href=>sectionLinkTargets(data,href.slice(1)||'home')}
         open={Boolean(active)}
         value={draft}
         onChange={setDraft}

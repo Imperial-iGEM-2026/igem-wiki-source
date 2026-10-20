@@ -1,5 +1,6 @@
 'use client';
 
+import { sectionAnchor } from './section-links';
 import { isSiteHeader, normalizeHeaderCss } from './site-header-layer';
 import { ReferenceContext, referenceIndex } from './references';
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
@@ -420,6 +421,7 @@ export function CanvasSurface({
             }
           : {})}
         key={id}
+        id={sectionAnchor(id)}
         data-layer-id={id}
         data-layer-kind={n.kind}
         data-page-index-grid={

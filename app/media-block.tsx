@@ -1,3 +1,4 @@
+import { sectionAnchor } from './section-links';
 'use client';
 import { useEffect, useRef, useState, createElement } from 'react';
 import type { ReactNode } from 'react';
@@ -108,6 +109,7 @@ export function MediaBlock({
           {(node.items || []).map((item) => (
             <details
               key={item.id}
+              id={sectionAnchor(node.id, item.id)}
               className="accordion-item"
               data-item-id={item.id}
               open={item.open || openItems.includes(item.id) || undefined}

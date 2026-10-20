@@ -1,5 +1,6 @@
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 'use client';
+import { sectionLinkTargets, sectionLinkPages } from './section-link-targets';
 import { editorImageURL } from './editor-image';
 import { LoadingControls } from './loading-controls';
 import { copiedPage } from './custom-pages';
@@ -4505,10 +4506,8 @@ export function StudioEditor({
                                   ''
                                 : node?.linkTo || ''
                             }
-                            pages={studioPages.map((p) => [
-                              p.slug === 'home' ? '/' : '/' + p.slug,
-                              p.title,
-                            ])}
+                            sections={href => { const slug=href.slice(1)||'home'; return sectionLinkTargets(ctx.data,slug,slug===page ? current : undefined); }}
+                            pages={sectionLinkPages(ctx.data)}
                             onChange={(href) => {
                               if (target?.linkKey && node)
                                 edit(
@@ -5213,6 +5212,8 @@ export function StudioEditor({
         />
       )}
       <TextEditDialog
+        pages={sectionLinkPages(ctx.data)}
+        sections={href=>{const slug=href.slice(1)||'home';return sectionLinkTargets(ctx.data,slug,slug===page ? current : undefined);}}
         open={Boolean(elementText) && !inlineText}
         value={elementText?.value || ''}
         maxLength={

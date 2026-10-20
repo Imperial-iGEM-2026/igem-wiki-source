@@ -1,4 +1,7 @@
-reGELerate Upload Helper 1.0.28
+reGELerate Upload Helper 1.0.29
+
+Version 1.0.29 includes the section-link navigation runtime. Use a fresh Studio
+export for stable section anchors and clickable links in saved text.
 
 Version 1.0.28 supports the project's generated search index. Prepare fresh
 ZIPs after installing the matching Studio server. Upload the search JS under

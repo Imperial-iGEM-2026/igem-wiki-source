@@ -319,7 +319,7 @@ export async function publicationSources(sourceRoot) {
     if (existing) existing.content = content;
     else files.push({ path: target, content });
   }
-  for (const name of ['site-search.ts', 'site-search.css', 'site-search-index.ts']) {
+  for (const name of ['site-search.ts', 'site-search.css', 'site-search-index.ts', 'section-links.ts']) {
     let content;
     try { content = await readFile(new URL('./search/' + name, import.meta.url), 'utf8'); }
     catch (error) {

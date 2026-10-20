@@ -393,6 +393,8 @@ try {
   const { pages } = await call(key, 'list_pages', {});
   assert.ok(pages.some((p) => p.slug === 'home'));
   let home = await call(key, 'get_page', { page: 'home' });
+  assert.ok(home.linkTargets.length);
+  assert.ok(home.linkTargets.every(target=>target.href==='/#'+target.anchor && target.anchor.startsWith('section-')));
   const template = home.sections.find(
     (s) => s.kind === 'template' && s.texts?.length && s.region === 'main',
   );

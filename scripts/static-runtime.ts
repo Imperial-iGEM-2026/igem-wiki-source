@@ -1,3 +1,5 @@
+import { startSectionLinks } from '../app/section-links';
+startSectionLinks();
 import { startWebsiteSearch } from '../app/site-search';
 const searchURL = document.body.dataset.siteSearch;
 if (searchURL) startWebsiteSearch(async () => (await import(/* @vite-ignore */ searchURL)).default, document.body.dataset.siteBase || '/');

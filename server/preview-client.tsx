@@ -1,3 +1,4 @@
+import { revealSection } from '../app/section-links';
 import { createRoot } from 'react-dom/client';
 import { memo, useEffect, useState, useRef, useMemo } from 'react';
 import Home from '../app/home';
@@ -78,9 +79,7 @@ function Preview({
             const hash = href.split('#')[1];
             if (hash) {
               try {
-                document
-                  .getElementById(decodeURIComponent(hash))
-                  ?.scrollIntoView();
+                revealSection('#'+hash);
               } catch {}
             } else window.scrollTo(0, 0);
           });

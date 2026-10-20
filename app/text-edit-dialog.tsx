@@ -1,3 +1,6 @@
+import { LinkEditor } from './link-editor';
+import { insertTextLink } from './text-links';
+import type { SectionLinkTarget } from './section-link-targets';
 import { useRef, useState } from 'react';
 import {
   Dialog,
@@ -17,6 +20,8 @@ export function TextEditDialog({
   error,
   maxLength = 12000,
   conflict,
+  pages = [],
+  sections,
 }: {
   open: boolean;
   value: string;
@@ -26,10 +31,16 @@ export function TextEditDialog({
   busy?: boolean;
   error?: string;
   maxLength?: number;
+  pages?: [string,string][];
+  sections?: (href:string) => SectionLinkTarget[];
   conflict?: { latest: string; onRebase: () => void };
 }) {
   const [expanded, setExpanded] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const selection = useRef({start:0,end:0});
+  const [linkOpen,setLinkOpen]=useState(false), [link,setLink]=useState(''), [linkError,setLinkError]=useState('');
+  const [previousOpen,setPreviousOpen]=useState(open);
+  if(previousOpen!==open){setPreviousOpen(open);setLinkOpen(false);setLink('');setLinkError('');}
   return (
     <Dialog
       open={open}
@@ -40,7 +51,7 @@ export function TextEditDialog({
       <DialogContent
         className={
           'studio-dialog studio-text-dialog' +
-          (expanded ? ' studio-text-expanded' : '')
+          (expanded ? ' studio-text-expanded' : '') + (linkOpen ? ' studio-text-link-open' : '')
         }
         initialFocus={input}
         showCloseButton={!busy}
@@ -49,7 +60,7 @@ export function TextEditDialog({
           <Type size={20} /> Edit text
         </DialogTitle>
         <DialogDescription>
-          Change this text without changing its link or styling.
+          Edit text, or select words and choose Link selected text to link to a page or section.
         </DialogDescription>
         <button
           className="studio-text-expand"
@@ -68,6 +79,7 @@ export function TextEditDialog({
           maxLength={maxLength}
           disabled={busy}
           spellCheck
+          onSelect={event => { if(document.activeElement===event.currentTarget) selection.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd}; }}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Escape' && !busy && !e.nativeEvent.isComposing) {
@@ -86,6 +98,19 @@ export function TextEditDialog({
             e.stopPropagation();
           }}
         />
+        <button type="button" disabled={busy} onClick={()=>{ if(!linkOpen && input.current) selection.current={start:input.current.selectionStart,end:input.current.selectionEnd}; setLinkOpen(v=>!v); setLinkError(''); }}>Link selected text</button>
+        {linkOpen && <div className="studio-text-link-panel">
+          <LinkEditor value={link} onChange={setLink} pages={pages} sections={sections} disabled={busy} optional={false}/>
+          <button type="button" disabled={busy || !link} onClick={()=>{
+            const {start,end}=selection.current;
+            if(end<=start){setLinkError('Select the words you want to link in the text above.');return;}
+            const next=insertTextLink(value,start,end,link);
+            if(next===value){setLinkError('Select text within one paragraph and choose a valid destination.');return;}
+            if(next.length>maxLength){setLinkError('This link would exceed the text length limit.');return;}
+            onChange(next);setLinkOpen(false);setLinkError('');requestAnimationFrame(()=>input.current?.focus());
+          }}>Insert link</button>
+          {linkError && <p role="alert">{linkError}</p>}
+        </div>}
         <div className="studio-text-meta">
           <span>Ctrl / ⌘ + Enter to save</span>
           <span>

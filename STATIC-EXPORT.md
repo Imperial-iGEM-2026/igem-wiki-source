@@ -268,3 +268,12 @@ const results = await window.websiteSearch.search('streptavidin', { limit: 10 })
 For the Studio-hosted website, authenticated `GET /api/search-index?project=<project-id>` returns `{ version: 1, documents: [{ id, page, title, text }] }`. It uses the existing project/authentication boundary and only saved content. This endpoint is not needed after static export.
 
 Run `node scripts/test-site-search.mjs` for reproducible ranking, exclusion, accent/CJK, keyboard, retry and lazy-loading checks. An optional second argument can point to a local saved-values JSON snapshot for the Imperial project relevance regression; private content is not committed with the tests.
+
+
+## Links to sections on other pages
+
+Open the text editor (choose **Expand editor** from the on-canvas editor), select the words, then choose **Link selected text**. Choose a website page, choose its section or collapsible subsection, press **Insert link**, then **Save text**. Existing link/button settings also offer the section picker. Links are saved as `[label](/page#section-id)` in plain text and rendered as normal anchors. Select words within one paragraph; code spans and unsafe URLs remain literal.
+
+Section fragments use persistent layer/item IDs, so renaming or reordering a destination does not break its link. Hidden/deleted sections and removed pages are absent from the picker. Deleting and recreating a destination creates a new ID and requires updating its links. All templates use the same anchors without requiring a page index/sidebar. A Custom HTML block is a destination as a whole; headings inside its isolated frame are not individual targets.
+
+Preview and live navigation reveal collapsed ancestors, scroll to the destination and briefly highlight it (respecting reduced-motion preferences). Export rewrites the page path to the team's prefix while preserving its fragment. MCP `get_page.linkTargets` returns each available `{ anchor, label, href }`; use these URLs with `update_text`, section bodies or button links instead of guessing IDs. Install the new server and prepare fresh exports to deploy new anchors. Upload helper 1.0.29 carries the section navigation dependency when upgrading older source ZIPs; older ZIPs need a fresh export for the full feature.

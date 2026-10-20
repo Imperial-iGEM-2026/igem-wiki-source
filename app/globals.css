@@ -2687,3 +2687,5 @@ footer
 
 /* Keep negative stacking levels inside their canvas, above page backgrounds. */
 .page-canvas, .canvas-children { isolation: isolate; }
+
+a[data-text-link]{text-decoration:underline;text-underline-offset:3px}

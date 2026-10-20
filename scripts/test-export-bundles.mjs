@@ -230,7 +230,7 @@ try {
       {
         id: 'export-item',
         title: 'Export subsection',
-        body: 'Original subsection text.',
+        body: 'Original subsection text. [Linked section](/#section-export-accordion--item-export-item)',
       },
     ],
   };
@@ -458,6 +458,8 @@ print('ZIP64 CRC, source isolation and frozen snapshot passed')`;
     path.join(checkout, 'igem-build/public/index.html'),
     'utf8',
   );
+  assert.ok(exportedHome.includes('id="section-export-accordion--item-export-item"'));
+  assert.ok(exportedHome.includes('href="/imperial-college/#section-export-accordion--item-export-item"'));
   const searchManifest=JSON.parse(await readFile(path.join(publication,'search.json'),'utf8'));
   assert.ok(exportedHome.includes('data-site-search="'+map[searchManifest.source]+'"'));
   assert.ok(!(await (await import('node:fs/promises')).readdir(path.join(checkout,'igem-build/public/assets'))).some(name=>/^search-[a-f0-9]{64}/.test(name)),'Search index belongs on the static host, not the Pages artifact');
