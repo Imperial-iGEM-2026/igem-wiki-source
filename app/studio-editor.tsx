@@ -2271,10 +2271,11 @@ export function StudioEditor({
               <Popover>
                 <PopoverTrigger
                   className="studio-presence-count"
+                  title="Open editor and AI sessions; a person may have several pages open"
                   disabled={!projectPeers.length}
                 >
                   {projectPeers.length
-                    ? `${projectPeers.length} editing` +
+                    ? `${projectPeers.length} editing session${projectPeers.length === 1 ? '' : 's'}` +
                       (pagePeers.length ? ` · ${pagePeers.length} here` : '')
                     : 'Only you editing'}
                 </PopoverTrigger>
@@ -2287,7 +2288,11 @@ export function StudioEditor({
                   <ul>
                     {projectPeers.map((peer) => (
                       <li key={peer.id}>
-                        <button type="button" onClick={() => goToPeer(peer)}>
+                        <button
+                          type="button"
+                          title={peerLabel(peer)}
+                          onClick={() => goToPeer(peer)}
+                        >
                           <i style={{ background: peer.color }}>
                             {peer.name.slice(0, 1).toUpperCase()}
                           </i>

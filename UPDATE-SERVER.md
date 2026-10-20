@@ -1,3 +1,9 @@
+## Editing presence panel
+
+Long names and email addresses now truncate inside the “Editing now” panel without pushing the Go/Show actions outside it. Hover a row to read its full name and location. The panel fits narrow screens and scrolls vertically for long lists. The top bar explicitly counts editing sessions: one person can have several pages open. Install this package and refresh Studio to use the fix.
+
+Validation: browser layout and navigation checks at desktop, tablet and 320px viewport widths.
+
 ## Website preview and colour accessibility
 
 Design and Preview now use the project's developer source automatically whenever overrides exist. The installed/source selector and completed-build status strip have been removed. Selection, editing, saving and preview run against the same project components. New source revisions show a rebuild notice; save drafts before rebuilding. Reopen Studio after creating the first source override. Source-check/build errors remain visible; Studio does not silently present the installed release as the website result. Install the package, refresh Studio and reopen Preview.

@@ -1982,7 +1982,10 @@ body:has(.studio-chat-history) [data-slot='dialog-overlay'] {
   cursor: default;
 }
 .studio-presence-list {
-  width: 300px;
+  box-sizing: border-box;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(560px, calc(100dvh - 24px), var(--available-height, 560px));
+  overflow: hidden;
   padding: 10px;
   color-scheme: light;
   font:
@@ -1999,16 +2002,25 @@ body:has(.studio-chat-history) [data-slot='dialog-overlay'] {
 }
 .studio-presence-list ul {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.studio-presence-list li {
+  min-width: 0;
+}
 .studio-presence-list button {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-width: 0;
   padding: 7px 8px;
   border: 0;
   border-radius: 8px;
@@ -2020,6 +2032,10 @@ body:has(.studio-chat-history) [data-slot='dialog-overlay'] {
 }
 .studio-presence-list button:hover {
   background: var(--studio-accent-soft);
+}
+.studio-presence-list button:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: -2px;
 }
 .studio-presence-list i {
   display: grid;
