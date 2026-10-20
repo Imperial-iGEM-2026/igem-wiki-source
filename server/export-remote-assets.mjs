@@ -8,6 +8,14 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+
+// Compatibility profiles, not browser sessions: no cookies or login state.
+const requestProfiles = [
+  { name: 'Chrome', agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' },
+  { name: 'Firefox', agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0' },
+  { name: 'Studio', agent: 'Website-Studio-Export/1.0' },
+];
 
 const blocked = new BlockList();
 for (const [address, prefix] of [
@@ -50,6 +58,8 @@ export async function downloadExternalAsset(source, directory, {
     (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, options, callback),
   maxBytes = 128 * 1024 * 1024,
   timeoutMs = 120_000,
+  retryDelayMs = 500,
+  onRetry = () => {},
 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -57,7 +67,8 @@ export async function downloadExternalAsset(source, directory, {
   try {
     const decoded = source.replace(/&amp;/gi, '&');
     let url = new URL(decoded.startsWith('//') ? 'https:' + decoded : decoded);
-    for (let redirects = 0; redirects <= 5; redirects++) {
+    let redirects = 0, profile = 0;
+    for (;;) {
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
           (url.port && url.port !== (url.protocol === 'https:' ? '443' : '80')))
         throw Error('Use a public HTTP(S) asset URL without credentials or a custom port.');
@@ -80,7 +91,12 @@ export async function downloadExternalAsset(source, directory, {
           lookup: (_host, options, callback) => options.all
             ? callback(null, records)
             : callback(null, records[0].address, records[0].family),
-          headers: { 'user-agent': 'Website-Studio-Export/1.0', accept: '*/*', 'accept-encoding': 'identity' },
+          headers: {
+            'user-agent': requestProfiles[profile].agent,
+            accept: '*/*',
+            'accept-language': 'en-GB,en;q=0.9',
+            'accept-encoding': 'identity',
+          },
         }, resolve);
         req.on('error', reject);
         req.end();
@@ -90,11 +106,19 @@ export async function downloadExternalAsset(source, directory, {
         if (!response.headers.location || redirects === 5)
           throw Error('Too many redirects or a redirect without a destination.');
         url = new URL(response.headers.location, url);
+        redirects++;
+        continue;
+      }
+      if (response.statusCode === 403 && profile < requestProfiles.length - 1) {
+        response.destroy();
+        profile++;
+        onRetry({ attempt: profile + 1, total: requestProfiles.length, profile: requestProfiles[profile].name });
+        await delay(retryDelayMs * profile, undefined, { signal: controller.signal });
         continue;
       }
       if (response.statusCode !== 200) {
         response.destroy();
-        throw Error(`The image/file host returned HTTP ${response.statusCode}.`);
+        throw Error(`The image/file host returned HTTP ${response.statusCode}.${profile ? ` Tried ${profile + 1} request profiles; the host may require a browser session.` : ''}`);
       }
       const type = String(response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       const suffix = extensions.get(type) || path.extname(url.pathname).toLowerCase();

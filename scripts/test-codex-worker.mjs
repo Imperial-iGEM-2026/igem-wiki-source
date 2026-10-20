@@ -25,6 +25,7 @@ if (responseSchema.properties.css) {
 }
 let input = ''; for await (const chunk of process.stdin) input += chunk;
 if (!input.includes('Latest design request')) process.exit(4);
+if (!input.includes('Do not hotlink third-party images') || !input.includes('upload the original to Studio')) process.exit(11);
 if (input.includes('user-A-only') && input.includes('user-B-only')) process.exit(10);
 if (process.env.PRION_TEST_MODE === 'image') {
   const image = args[args.indexOf('--image') + 1];

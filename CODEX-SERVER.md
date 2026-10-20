@@ -1,3 +1,5 @@
+Image authoring guidance: both the built-in assistant and MCP Standard/Developer instructions require newly inserted images to use existing Studio media/template assets or uploaded original files. Agents should not hotlink third-party image URLs in image elements, custom HTML, CSS or photo arrays. If the original is unavailable, ask the user to upload it. Do not invent media bytes or create proxies. Existing working media is preserved unless a change is requested, and Video Universe recording embeds remain supported. Reconnect MCP after a server update to load the revised instructions.
+
 # Codex-powered page assistant on Ubuntu
 
 This optional worker extends Assistant from CSS proposals to page content, layers, links and responsive styling. It runs Codex CLI on your server and uses OpenAI for inference. The browser has no API key. The existing Cloudflare Access login still protects generation and saves; no Tunnel is required.

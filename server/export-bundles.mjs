@@ -320,7 +320,13 @@ export function createBundleExports({
                 total: media.size,
               });
               tempDir ||= await mkdtemp(path.join(tmpdir(), 'prion-external-export-'));
-              local = await remoteDownloader(source, tempDir);
+              local = await remoteDownloader(source, tempDir, {
+                onRetry: ({ attempt, total, profile }) => onProgress({
+                  message: `Retrying external file (${attempt}/${total}, ${profile}): ${source}`,
+                  completed: localFiles.size,
+                  total: media.size,
+                }),
+              });
             }
             localFiles.set(source, local);
           } catch (error) {

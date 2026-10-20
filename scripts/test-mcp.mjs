@@ -186,6 +186,8 @@ try {
   assert.ok(init.capabilities.tools);
   assert.ok(init.capabilities.prompts);
   assert.match(init.instructions, /get_site_overview/);
+  assert.match(init.instructions, /Do not hotlink third-party image URLs/);
+  assert.match(init.instructions, /Keep newly added images local to Studio/);
   assert.match(init.instructions, /ENTIRE page/);
   assert.match(init.instructions, /overlapping steps/);
   assert.match(init.instructions, /partial check/);
@@ -538,7 +540,7 @@ try {
       ['Can I reuse it?', true],
     ],
   );
-  assert.ok(faqNode.items.every((i) => /^item-/.test(i.id)));
+  assert.ok(faqNode.items.every((i) => i.id.startsWith('item-')));
   assert.equal(faqNode.selectors.items.length, 2);
   assert.equal(
     faqNode.selectors.items[1].summary,
@@ -1820,6 +1822,7 @@ try {
     const devKey = new URL(dev.url).searchParams.get('key');
     const devInit = await rpc(devKey, 'initialize', {});
     assert.match(devInit.instructions, /Do not create or start a local proxy/);
+    assert.match(devInit.instructions, /Do not hotlink third-party image URLs/);
     assert.match(devInit.instructions, /acquire_source_lock/);
     assert.ok(
       (await rpc(devKey, 'tools/list', {})).tools.some(

@@ -11,8 +11,18 @@ import { createBundleExports } from '../selfhost-dist/server/export-bundles.mjs'
 const directory = await mkdtemp(path.resolve('work/export-remote-assets-'));
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><circle cx="20" cy="20" r="18"/></svg>';
 let requests = 0;
+const attempts = [];
 const server = createServer((req, res) => {
   requests++;
+  attempts.push({ url: req.url, agent: req.headers['user-agent'] });
+  if (req.url === '/retry.svg' && req.headers['user-agent'] !== 'Website-Studio-Export/1.0')
+    return res.writeHead(403).end();
+  if (req.url === '/forbidden.svg') return res.writeHead(403).end();
+  if (req.url === '/auth.svg') return res.writeHead(401).end();
+  if (req.url === '/limited.svg') return res.writeHead(429).end();
+  if (req.url === '/retry-private') return req.headers['user-agent'].includes('Chrome/')
+    ? res.writeHead(403).end()
+    : res.writeHead(302, { location: 'http://127.0.0.1/secret.svg' }).end();
   if (req.url === '/redirect') return res.writeHead(302, { location: '/image.svg' }).end();
   if (req.url === '/private') return res.writeHead(302, { location: 'http://127.0.0.1/secret.svg' }).end();
   if (req.url === '/loop') return res.writeHead(302, { location: '/loop' }).end();
@@ -28,6 +38,7 @@ const server = createServer((req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const options = {
+  retryDelayMs: 0,
   lookup: async () => [{ address: '93.184.216.34', family: 4 }],
   request(url, opts, callback) {
     opts.lookup(url.hostname, { all: true }, (err, records) => {
@@ -66,6 +77,31 @@ try {
   await assert.rejects(download('https://photos.example/large.svg', directory, { maxBytes: 100 }), /size limit/);
   await assert.rejects(download('https://photos.example/slow.svg', directory, { timeoutMs: 50 }), /timed out/);
   assert.equal((await readdir(directory)).length, 1, 'failed partial downloads are removed');
+  const notices = [];
+  const retried = await download('https://photos.example/retry.svg', directory, {
+    onRetry: event => notices.push(event),
+  });
+  assert.equal(await readFile(retried.file, 'utf8'), svg);
+  const profiles = attempts.filter(x => x.url === '/retry.svg').map(x => x.agent);
+  assert.equal(profiles.length, 3);
+  assert.match(profiles[0], /Chrome\//);
+  assert.match(profiles[1], /Firefox\//);
+  assert.equal(profiles[2], 'Website-Studio-Export/1.0');
+  assert.deepEqual(notices.map(x => [x.attempt, x.total]), [[2, 3], [3, 3]]);
+  await assert.rejects(download('https://photos.example/forbidden.svg'), /HTTP 403.*Tried 3/);
+  assert.equal(attempts.filter(x => x.url === '/forbidden.svg').length, 3);
+  for (const [route, status] of [['auth.svg', 401], ['limited.svg', 429]]) {
+    await assert.rejects(download('https://photos.example/' + route), new RegExp(`HTTP ${status}`));
+    assert.equal(attempts.filter(x => x.url === '/' + route).length, 1);
+  }
+  await assert.rejects(download('https://photos.example/retry-private'), /not a public internet address/);
+  assert.equal(attempts.filter(x => x.url === '/retry-private').length, 2);
+  const countBeforeTimeout = requests;
+  await assert.rejects(download('https://photos.example/forbidden.svg', directory, {
+    retryDelayMs: 1000, timeoutMs: 100,
+  }), /timed out/);
+  assert.equal(requests, countBeforeTimeout + 1, 'shared timeout cancels retry backoff');
+  assert.equal((await readdir(directory)).length, 2, 'rejected retries leave no partial files');
 
   const image = 'https://photos.example/image.svg';
   const widget = 'https://photos.example/photo-without-extension?size=large&amp;v=1';
