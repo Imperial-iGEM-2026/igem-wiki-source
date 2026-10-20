@@ -39,6 +39,14 @@ await build({
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/api/search-index') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ version: 1, documents: [
+        { id: 'demo', page: 'demo', title: 'Preview demo', text: 'Draft workshop' },
+        { id: 'second', page: 'second', title: 'Second page', text: 'Other page' },
+      ] }));
+      return;
+    }
     const file = path.join(
       dir,
       'dist',
@@ -156,8 +164,33 @@ try {
   await frame.waitForFunction(
     () => window.previewMessages.at(-1)?.type === 'prion-preview-data',
   );
+  // Search is appended to document.body, outside the React preview root.
+  // It must navigate the existing snapshot, never load a protected live page
+  // into the preview iframe (which Cloudflare refuses to embed).
+  const previewURL = frame.url();
+  const initializations = await frame.evaluate(() => window.previewMessages.length);
+  for (const [query, destination, keyboard] of [
+    ['workshop', 'Updated draft', false],
+    ['workshop', 'Updated draft', false],
+    ['second', 'Second page', true],
+    ['workshop', 'Updated draft', true],
+  ]) {
+    await preview.getByRole('button', { name: 'Search this website', exact: true }).click();
+    await preview.getByRole('searchbox', { name: 'Search pages' }).fill(query);
+    const result = preview.locator('.website-search ol a').first();
+    await result.waitFor();
+    if (keyboard) {
+      await result.focus();
+      await page.keyboard.press('Enter');
+    } else await result.click();
+    await preview.getByRole('heading', { name: destination, exact: true }).waitFor();
+    assert.equal(frame.url(), previewURL, 'Search must not navigate the iframe document');
+    assert.equal(await frame.evaluate(() => window.previewMessages.length), initializations);
+    assert.equal(await preview.locator('.website-search dialog[open]').count(), 0);
+  }
+  await page.screenshot({ path: path.join(dir, 'search-navigation.png') });
   console.log(
-    'PASS: unchanged reopen preserves widget state; draft delta, deletion, mobile viewport, iframe reload, page and project switching.',
+    'PASS: unchanged reopen preserves widget state; draft delta, deletion, mobile viewport, iframe reload, page/project switching, and repeated mouse/keyboard search navigation within Preview.',
   );
   console.log(
     JSON.stringify({

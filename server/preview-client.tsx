@@ -53,39 +53,40 @@ function Preview({
     )
       void import('@google/model-viewer');
   }, [data, current]);
+  useEffect(() => {
+    // Search dialogs and custom template controls can live outside React's root.
+    // Handle their links in this document too, without leaving the preview frame.
+    const navigate = (event: MouseEvent) => {
+      const link = event.target instanceof Element
+        ? event.target.closest('a')
+        : null;
+      const href = link?.getAttribute('href');
+      if (
+        event.defaultPrevented || !href ||
+        link?.hasAttribute('download') ||
+        (link?.target && link.target !== '_self') ||
+        event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+        event.button !== 0
+      ) return;
+      let url: URL;
+      try { url = new URL(href, location.href); } catch { return; }
+      if (url.origin !== location.origin) return;
+      const slug = url.pathname.replace(/^\/+|\/+$/g, '') || 'home';
+      if (slug !== 'home' && !pages.some((p) => p.slug === slug)) return;
+      event.preventDefault();
+      setCurrent(slug);
+      requestAnimationFrame(() => {
+        if (url.hash) revealSection(url.hash);
+        else window.scrollTo(0, 0);
+      });
+    };
+    // Bubble phase lets a result close its dialog and respects widget handlers
+    // that already consumed a click. Modified/new-tab/download links stay native.
+    document.addEventListener('click', navigate);
+    return () => document.removeEventListener('click', navigate);
+  }, [pages]);
   return (
-    <div
-      onClickCapture={(e) => {
-        const link = (e.target as Element).closest('a');
-        const href = link?.getAttribute('href');
-        if (
-          !href?.startsWith('/') ||
-          href.startsWith('//') ||
-          link?.hasAttribute('download') ||
-          link?.target === '_blank' ||
-          e.metaKey ||
-          e.ctrlKey ||
-          e.shiftKey ||
-          e.altKey ||
-          e.button !== 0
-        )
-          return;
-        const slug = href.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '') || 'home';
-        if (slug === 'home' || pages.some((p) => p.slug === slug)) {
-          e.preventDefault();
-          e.stopPropagation();
-          setCurrent(slug);
-          requestAnimationFrame(() => {
-            const hash = href.split('#')[1];
-            if (hash) {
-              try {
-                revealSection('#'+hash);
-              } catch {}
-            } else window.scrollTo(0, 0);
-          });
-        }
-      }}
-    >
+    <div>
       <PreviewHome
         key={current}
         user={null}
