@@ -3,6 +3,7 @@ import type { CanvasNode } from './canvas-schema';
 import { htmlVisibilityBridge } from './html-visibility';
 import { htmlImageBridge } from './html-image';
 import { htmlAccessibilityBridge } from './site-accessibility';
+import { createColorPresentation } from './site-color-filters';
 
 export const htmlExample = {
   html: '<button class="orbit" aria-label="Change animation speed"><span></span><span></span><span></span></button>\n<p>Click to change the rhythm</p>',
@@ -96,7 +97,7 @@ function htmlFrameDocument(
     .replace('<style>', base + '<style>')
     .replace(
       '<script>',
-      `<script>(${htmlVisibilityBridge.toString()})();(${htmlAccessibilityBridge.toString()})();(${htmlSearchBridge.toString()})();${design ? '(' + htmlDesignBridge.toString() + ')();' : ''}${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
+      `<script>(${htmlVisibilityBridge.toString()})();(${htmlAccessibilityBridge.toString()})(${createColorPresentation.toString()});(${htmlSearchBridge.toString()})();${design ? '(' + htmlDesignBridge.toString() + ')();' : ''}${Object.keys(images).length ? '(' + htmlImageBridge.toString() + ')(' + JSON.stringify(images).replace(/</g, '\\u003c') + ');' : ''}</script><script>`,
     );
 }
 

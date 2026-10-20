@@ -1,3 +1,11 @@
+## Selectable visitor colour assistance
+
+Preview and published websites now include a Colours chooser with Original, High contrast, Protan, Deutan, Tritan and Grayscale presets, a 0–100% media strength control, a labelled sample and reset. Mode and strength persist per project/site. Existing toggle buttons restore the last active preset. Custom HTML can open the chooser or supply its own editable select/range controls; the API is documented in STATIC-EXPORT.md and advertised through MCP.
+
+The presets provide optional visual assistance, not clinical correction or simulation. Matrix filters apply to images, SVG, canvas and PDFs; video/player/plugin surfaces use a simpler CSS adjustment for browser compatibility. The readable text palette remains enabled at zero media strength. Original restores the authored appearance. Install the server package, refresh Studio, then prepare a fresh export for the live website.
+
+Browser validation covers distinct rendered pixels for every mode across media, PDFs and Custom HTML, zero strength, default restoration, keyboard controls, mobile layout, reset, reload persistence and invalid-message rejection.
+
 ## Media contrast in accessibility mode
 
 The existing high-contrast toggle now includes photos, SVG logos/figures, native videos, embedded video players, canvas plots and PDF readers. The PDF reader passes the filter through its isolated style boundary. Custom HTML applies it inside the sandbox, avoiding double filtering. Default restores original colours without rewriting media. Existing `data-preserve-colors` exclusions remain available for colour-critical material; mark CSS-background logos with `data-website-media`.

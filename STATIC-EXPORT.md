@@ -281,22 +281,46 @@ Preview and live navigation reveal collapsed ancestors, scroll to the destinatio
 
 ## Colour accessibility API
 
-Preview and exported websites provide a visitor-side API (no server call):
+Preview and exported websites include a **Colours** button with a preset selector, filter strength slider, labelled comparison sample and reset button. Choices are saved per website/project; Preview is separate from the live website.
 
 ```js
-window.websiteAccessibility.setColorMode('high-contrast');
-window.websiteAccessibility.setColorMode('default');
-window.websiteAccessibility.toggleColorMode();
-window.websiteAccessibility.getColorMode();
+const colours = window.websiteAccessibility;
+colours.openSettings();
+colours.getColorModes(); // value/label pairs
+colours.setColorMode('protanopia'); // or deuteranopia, tritanopia, grayscale
+colours.setColorStrength(0.65); // 0–1, visual strength, not clinical severity
+colours.getColorMode();
+colours.getColorStrength();
+colours.setColorMode('high-contrast');
+colours.setColorMode('default'); // restore authored appearance
+colours.toggleColorMode(); // off / last selected active preset
 ```
 
-Add a keyboard-accessible control in the header or Custom HTML:
+Modes: `default`, `high-contrast`, `protanopia` (Protan red–green assistance), `deuteranopia` (Deutan red–green assistance), `tritanopia` (Tritan blue–yellow assistance) and `grayscale`. All active modes use the readable interface palette: dark text, white surfaces, blue underlined links and a brown focus outline. The strength control adjusts media filtering, not text contrast. Zero strength restores original media colours while keeping the readable interface palette.
+
+Use normal editable HTML in a header or Custom HTML block:
 
 ```html
-<button type="button" data-website-color-toggle aria-pressed="false">High contrast colours</button>
+<button type="button" data-website-color-settings>Colour preferences</button>
+<button type="button" data-website-color-toggle aria-pressed="false">Toggle colour assistance</button>
+<label>Preset
+  <select data-website-color-mode>
+    <option value="default">Original colours</option>
+    <option value="high-contrast">High contrast</option>
+    <option value="protanopia">Protan assistance</option>
+    <option value="deuteranopia">Deutan assistance</option>
+    <option value="tritanopia">Tritan assistance</option>
+    <option value="grayscale">Grayscale</option>
+  </select>
+</label>
+<label>Strength <input data-website-color-strength type="range" min="0" max="100" step="5"></label>
 ```
 
-High contrast uses dark text, white surfaces, blue underlined links and a brown focus outline. Preference is saved locally per website/project; Preview is separate from the live website. Default restores authored styles. Media receives a CSS `contrast(1.25)` filter: photos, SVG logos/figures, native videos, embedded players, canvas plots, and PDF readers (including their isolated shadow content). Custom HTML receives the media rules inside its frame so the filter is applied once. Mark a CSS-background logo or other custom media surface with `data-website-media`; do not mark its individual children too. Set `--website-a11y-media-filter` in page CSS to customize the filter. Place `data-preserve-colors` on a colour-critical media element or container to preserve its entire subtree, including Custom HTML frames. Default removes the accessibility filter and restores authored styles without altering any media file. Chart code may listen for `website:colormodechange` with `{ mode, palette }` in `event.detail`. Use labels, patterns or shapes as well as colour for scientific meaning; contrast enhancement is not a personalised correction for every type of colour-vision deficiency and does not by itself make diagrams, third-party embeds or PDF content accessible. Custom HTML receives changes through its existing isolated-frame boundary without access to editor data.
+Custom HTML supports the same API and controls through the existing frame bridge without access to editor data. State changes are asynchronous there. `website:colormodechange` includes `{ mode, strength, palette }` for custom charts. A project that supplies its own settings button can hide the default launcher with `.website-color-launcher { display:none!important }`.
+
+Images, SVG logos/figures, canvas plots and PDFs use the chosen filter. Protan/Deutan/Tritan presets redistribute estimated lost colour signal into other channels with an adjustable linear-RGB matrix; they are assistance heuristics, not colour-blindness simulations or medically validated corrections. The underlying simulation data comes from [Machado, Oliveira & Fernandes (2009)](https://doi.org/10.1109/TVCG.2009.113), also [tabulated in colorspacious](https://github.com/njsmith/colorspacious/blob/master/colorspacious/cvd.py). Native videos, external video frames and plugin embeds use a simpler hue/saturation approximation because some browsers ignore SVG reference filters on these surfaces. High contrast uses up to `contrast(1.25)`; grayscale uses adjustable desaturation.
+
+Custom HTML applies the filter inside its sandbox once, and the PDF reader passes it through its isolated style boundary. Mark a CSS-background logo or other custom media surface with `data-website-media`; do not mark individual children too. Use `data-preserve-colors` on colour-critical media or a container to preserve that subtree, including Custom HTML. Turning assistance off restores authored styles without rewriting files. No per-frame JavaScript pixel processing or external filter service is used. Labels, patterns and shapes remain necessary wherever colour conveys meaning; visitors should choose the preset and strength that help them.
 
 Studio Design and Preview use the project source when overrides exist. There is no installed/source version selector. The full editor runs in an isolated browser document, preserving layer selection, resizing, content editing and project-scoped saves. Preview reuses that same build. Connection management, export downloads and file uploads remain in the trusted parent. Reopen Studio after adding the first override; rebuild source after saving edits when a newer revision is available. Source-check/build failures are shown rather than silently replacing the website view with older components. Build-script/server changes and new npm dependencies still require a real build/deployment.
 
