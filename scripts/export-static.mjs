@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mappedRuntime, runtimeImports, pdfWorkerModule } from './publication-runtime.mjs';
+import { mappedRuntime, runtimeImports } from './publication-runtime.mjs';
 import { resolveSource, readSource } from './source-parts.mjs';
 import { publicationValues } from './publication-pages.mjs';
 import {
@@ -623,9 +623,6 @@ const loadingScript = loading.enabled
   : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
-const hostedWasm = uploadedRuntime.filter((asset) => asset.binary);
-if (hostedWasm.length && !hostedPdfWorker)
-  throw Error('Upload and map the PDF worker together with its WebAssembly files.');
 if (hostedPdfWorker) {
   if (
     typeof hostedPdfWorker !== 'string' ||
@@ -637,16 +634,13 @@ if (hostedPdfWorker) {
     );
   // The worker is a self-contained ES module. PDF.js wraps a cross-origin worker
   // in a blob module; no relative module dependencies need URL rewriting.
-  const workerTarget = hostedWasm.length ? base + 'assets/pdf-worker-remote.mjs' : hostedPdfWorker;
-  if (hostedWasm.length)
-    await writeFile(path.join(output, 'public/assets/pdf-worker-remote.mjs'), pdfWorkerModule(hostedPdfWorker, hostedWasm, base));
   let rewritten = false;
   for (const file of assetFiles.filter((name) => name.endsWith('.js'))) {
     const target = path.join(output, 'public/assets', file);
     const original = await readFile(target, 'utf8');
     const from = base + 'assets/pdf.worker.min.mjs';
     if (original.includes(from)) {
-      await writeFile(target, original.replaceAll(from, workerTarget));
+      await writeFile(target, original.replaceAll(from, hostedPdfWorker));
       rewritten = true;
     }
   }
@@ -662,8 +656,6 @@ if (hostedPdfWorker) {
   });
 }
 for (const asset of uploadedRuntime) {
-  if (asset.binary)
-    await unlink(path.join(output, 'public', asset.binary));
   if (asset.forward) {
     // PDF.js constructs decoder filenames at runtime. Keep a tiny forwarding
     // module at that path; the decoder implementation loads from iGEM instead.

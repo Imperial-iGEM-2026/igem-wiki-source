@@ -79,7 +79,7 @@ if (result.status === 0) {
   try {
     const size = await logArtifactSize(local(arg('out', 'igem-build')));
     if (budget && size.compressedEstimate > budget) {
-      console.error(`Pages archive estimate exceeds the configured ${budget}-byte budget. Prepare a fresh export, upload its JavaScript and WebAssembly files from assets/runtime just like images and include the helper's media mapping. Backup/test/scratch pages are excluded automatically. If the complete mapping is already included, inspect the largest remaining files above. This budget is configurable and is not a verified iGEM server limit.`);
+      console.error(`Pages archive estimate exceeds the configured ${budget}-byte budget. Prepare a fresh export, upload its JavaScript files from assets/runtime just like images and include the helper's media mapping. Backup/test/scratch pages are excluded automatically. If the complete mapping is already included, inspect the largest remaining files above. This budget is configurable and is not a verified iGEM server limit.`);
       process.exitCode = 2;
     }
   } catch (error) {

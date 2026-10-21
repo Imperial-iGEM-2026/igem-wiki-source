@@ -169,14 +169,15 @@ const js = await readFile(path.join(dir, 'render/public/assets/wiki.js'), 'utf8'
 const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
 const allJs = (await Promise.all(publishedFiles.filter(name => /\.m?js$/.test(name)).map(name => readFile(path.join(dir, 'render/public/assets', name), 'utf8')))).join('\n');
 assert.match(allJs, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);
-assert.match(allJs, /\/example\/assets\/pdf-worker-remote.mjs/);
+assert.ok(!allJs.includes('pdf-worker-remote.mjs'));
+assert.ok(!manifest.includes('.wasm'));
+assert.ok(!runtimeFiles.some(name => name.endsWith('.wasm')));
+for (const name of ['openjpeg', 'jbig2', 'qcms_bg']) {
+  assert.deepEqual(await readFile(path.join(dir, 'render/public/assets/pdfjs/wasm', name + '.wasm')), await readFile('node_modules/pdfjs-dist/wasm/' + name + '.wasm'));
+}
 await assert.rejects(readFile(path.join(dir, 'render/public/assets/pdf.worker.min.mjs')), { code: 'ENOENT' });
 for (const asset of publicationRuntime) {
   if (asset.module) assert.ok(allJs.includes(map[asset.source]), asset.name);
-  if (asset.binary) {
-    await assert.rejects(readFile(path.join(dir, 'render/public', asset.binary)), { code: 'ENOENT' });
-    assert.ok(allJs.includes(map[asset.source]), asset.name);
-  }
   if (asset.forward) assert.equal(await readFile(path.join(dir, 'render/public', asset.forward), 'utf8'), `export { default } from ${JSON.stringify(map[asset.source])};\n`);
 }
 assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)-[A-Za-z0-9_-]+\.js$/.test(name) && !name.startsWith('pdf-parts-viewer-')), publishedFiles.join(', '));

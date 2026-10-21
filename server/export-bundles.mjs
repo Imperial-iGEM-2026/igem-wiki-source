@@ -274,7 +274,7 @@ export function createBundleExports({
         // like images so their bytes do not count against the Pages archive.
         for (const asset of publicationRuntime) {
           media.set(asset.source, 'runtime');
-          locations.set(asset.source, [{ pageTitle: 'Website runtime', layerName: asset.name, field: asset.binary ? 'WebAssembly runtime' : 'JavaScript runtime' }]);
+          locations.set(asset.source, [{ pageTitle: 'Website runtime', layerName: asset.name, field: 'JavaScript runtime' }]);
         }
         const googleFonts = await prepareGoogleFonts(
           googleFontReferences(
