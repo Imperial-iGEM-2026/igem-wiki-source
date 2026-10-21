@@ -166,7 +166,7 @@ const frameSource = (await Promise.all(sharedParts.map(async (part) => typeof pa
 assert.match(frameSource, /Animation works/);
 assert.ok(!frameSource.includes('/api/media/aacc.jpg'));
 const runtimePath = html.match(/<script type="module" src="([^"]+)"/)[1];
-assert.match(runtimePath, /\/assets\/wiki-[\w-]+\.js$/);
+assert.ok(runtimePath.endsWith('/assets/wiki.js'));
 const js = await readFile(path.join(dir, 'render/public', runtimePath.slice('/example/'.length)), 'utf8');
 const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
 const allJs = (await Promise.all(publishedFiles.filter(name => /\.m?js$/.test(name)).map(name => readFile(path.join(dir, 'render/public/assets', name), 'utf8')))).join('\n');
@@ -182,7 +182,7 @@ for (const asset of publicationRuntime) {
   if (asset.module) assert.ok(allJs.includes(map[asset.source]), asset.name);
   if (asset.forward) assert.equal(await readFile(path.join(dir, 'render/public', asset.forward), 'utf8'), `export { default } from ${JSON.stringify(map[asset.source])};\n`);
 }
-assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)-[A-Za-z0-9_-]+\.js$/.test(name) && !name.startsWith('pdf-parts-viewer-')), publishedFiles.join(', '));
+assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)(?:-[A-Za-z0-9_-]+)?\.js$/.test(name) && !name.startsWith('pdf-parts-viewer')), publishedFiles.join(', '));
 assert.ok(!html.includes('/api/media/aacc.jpg'));
 assert.ok(!html.includes('<button id="animate">'));
 assert.ok(!html.includes('src="/api/media/aabb.pdf"'));

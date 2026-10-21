@@ -192,7 +192,7 @@ export function repositoryFile(name) {
     ].includes(name) ||
     (/^(app|components|hooks|lib)\/.*\.(ts|tsx|js|css|json)$/.test(name) &&
       !name.startsWith('app/api/')) ||
-    /^scripts\/(build-igem|source-parts|publication-runtime|publication-pages|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
+    /^scripts\/(build-igem|source-parts|publication-cache|publication-runtime|publication-pages|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
       name,
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||
@@ -292,6 +292,7 @@ export async function publicationSources(sourceRoot) {
     'build-igem.mjs',
     'source-parts.mjs',
     'publication-runtime.mjs',
+    'publication-cache.mjs',
     'artifact-size.mjs',
     'share-publication-assets.mjs',
     'static-runtime.ts',
@@ -321,7 +322,7 @@ export async function publicationSources(sourceRoot) {
     if (existing) existing.content = content;
     else files.push({ path: target, content });
   }
-  for (const name of ['site-search.ts', 'site-search.css', 'site-search-index.ts', 'section-links.ts']) {
+  for (const name of ['export-cache-worker.js', 'export-cache-client.js', 'site-search.ts', 'site-search.css', 'site-search-index.ts', 'section-links.ts']) {
     let content;
     try { content = await readFile(new URL('./search/' + name, import.meta.url), 'utf8'); }
     catch (error) {

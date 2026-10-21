@@ -28,6 +28,7 @@ export async function exportSource(root) {
     'scripts/build-igem.mjs',
     'scripts/source-parts.mjs',
     'scripts/publication-runtime.mjs',
+    'scripts/publication-cache.mjs',
     'scripts/publication-pages.mjs',
     'scripts/artifact-size.mjs',
     'scripts/share-publication-assets.mjs',

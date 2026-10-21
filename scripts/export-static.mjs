@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { writePublicationCache } from './publication-cache.mjs';
 import { mappedRuntime, runtimeImports } from './publication-runtime.mjs';
 import { resolveSource, readSource } from './source-parts.mjs';
 import { publicationValues } from './publication-pages.mjs';
@@ -84,12 +85,13 @@ if (
 const map = option('media-map')
   ? JSON.parse(await readFile(option('media-map'), 'utf8'))
   : {};
-let searchURL = '';
+let searchURL = '', searchHash = '';
 if (snapshot.format === 'prion-wiki-source') {
   try {
     const search = JSON.parse(await readFile(path.join(path.dirname(source), 'search.json'), 'utf8'));
     if (search.version !== 1 || !/^\/templates\/runtime\/search-[a-f0-9]{64}\.js$/.test(search.source)) throw Error('Invalid project search manifest.');
     searchURL = map[search.source];
+    searchHash = search.source.match(/search-([a-f0-9]{64})/)[1];
     if (typeof searchURL !== 'string' || !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(searchURL) || searchURL.includes('YOUR-TEAM'))
       throw Error('Upload the project search index from assets/runtime and include its iGEM URL in the media mapping.');
   } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -584,9 +586,6 @@ for (const name of ['@google/model-viewer', 'three', 'lit', 'lit-html', 'lit-ele
 }
 await writeFile(path.join(output, 'public/model-viewer-LICENSES.txt'), modelLicenses.join('\n\n'));
 const uploadedRuntime = mappedRuntime(map);
-// iGEM caches assets across deployments. Include the bundle hash and media-map
-// version: worker URLs and font/media URLs are rewritten after Vite's build.
-const assetMapVersion = createHash('sha256').update(JSON.stringify(map)).digest('hex').slice(0, 12);
 await build({
   ...common,
   plugins: [...(common.plugins || []), runtimeImports(uploadedRuntime)],
@@ -598,9 +597,9 @@ await build({
     rolldownOptions: {
       input: path.join(root, 'scripts/static-runtime.ts'),
       output: {
-        entryFileNames: `assets/wiki-[hash]-${assetMapVersion}.js`,
-        chunkFileNames: `assets/[name]-[hash]-${assetMapVersion}.js`,
-        assetFileNames: `assets/[name]-[hash]-${assetMapVersion}[extname]`,
+        entryFileNames: 'assets/wiki.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
       },
     },
   },
@@ -625,7 +624,7 @@ const loadingScript = loading.enabled
   ? `<script src="${base}assets/site-loading.js"></script>`
   : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
-const runtimeFile = assetFiles.find((name) => /^wiki-[\w-]+\.js$/.test(name));
+const runtimeFile = assetFiles.find((name) => /^wiki\.js$/.test(name));
 if (!runtimeFile) throw Error('The exported website runtime was not generated.');
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
 if (hostedPdfWorker) {
@@ -865,6 +864,12 @@ await copyFile(
   path.join(output, 'public/index.html'),
   path.join(output, 'public/404.html'),
 );
+const externalCacheAssets = await Promise.all(uploadedRuntime.map(async asset => {
+  const bytes = await readFile(path.join(root, 'node_modules', asset.file));
+  return {url:asset.url, sha256:createHash('sha256').update(bytes).digest('hex'), bytes:bytes.length};
+}));
+if (searchURL) externalCacheAssets.push({url:searchURL, sha256:searchHash});
+await writePublicationCache(path.join(output, 'public'), base, externalCacheAssets);
 const report = {
   exportedAt: snapshot.exportedAt,
   compiledAt: new Date().toISOString(),

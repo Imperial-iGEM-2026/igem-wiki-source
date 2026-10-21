@@ -8,9 +8,11 @@ const unescapeAttribute = (value) => value.replace(/&(amp|quot|#x27|#39|lt|gt);/
   (_, entity) => ({ amp: '&', quot: '"', '#x27': "'", '#39': "'", lt: '<', gt: '>' })[entity]);
 
 export function sharedPublicationAssets(output, base) {
-  const pending = new Map();
+  const pending = new Map(), styles = new Map();
   const store = (text, extension) => {
-    const name = createHash('sha256').update(text).digest('hex') + extension;
+    const digest = createHash('sha256').update(text).digest('hex');
+    if (extension === '.css' && !styles.has(digest)) styles.set(digest, 'style-' + (styles.size + 1) + '.css');
+    const name = extension === '.css' ? styles.get(digest) : digest + extension;
     pending.set(name, text);
     return `${base}assets/shared/${name}`;
   };
