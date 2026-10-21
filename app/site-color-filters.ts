@@ -90,12 +90,80 @@ export function createColorPresentation() {
   const mount = () => document.body.appendChild(svg);
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount, { once: true });
+  // Many widgets use CSS background images rather than <img>. Discover these
+  // in bounded batches, including images added later; never scan on scroll.
+  let enabled = false;
+  let scheduled = 0;
+  const pending = new Set<Element>();
+  const marked = new Set<Element>();
+  const inspect = () => {
+    scheduled = 0;
+    let remaining = 100;
+    for (const element of pending) {
+      pending.delete(element);
+      if (
+        element.isConnected &&
+        !element.closest('[data-preserve-colors]') &&
+        element instanceof HTMLElement
+      ) {
+        const image = getComputedStyle(element).backgroundImage;
+        if (/url\(/i.test(image)) {
+          element.setAttribute('data-website-auto-media', '');
+          marked.add(element);
+        } else if (marked.delete(element))
+          element.removeAttribute('data-website-auto-media');
+      }
+      if (--remaining === 0) break;
+    }
+    if (pending.size && enabled) scheduled = requestAnimationFrame(inspect);
+  };
+  const enqueue = (node: Node, descendants = false) => {
+    if (
+      !(node instanceof Element) ||
+      !document.body?.contains(node) ||
+      node.closest('[data-preserve-colors]')
+    )
+      return;
+    pending.add(node);
+    if (descendants)
+      for (const element of node.querySelectorAll('*')) pending.add(element);
+    if (!scheduled && enabled) scheduled = requestAnimationFrame(inspect);
+  };
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === 'attributes') enqueue(record.target);
+      else for (const node of record.addedNodes) enqueue(node, true);
+    }
+    for (const element of marked)
+      if (!element.isConnected) marked.delete(element);
+  });
+  const watch = () => {
+    if (!enabled || !document.body) return;
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
+    enqueue(document.body, true);
+  };
+  const unwatch = () => {
+    observer.disconnect();
+    cancelAnimationFrame(scheduled);
+    scheduled = 0;
+    pending.clear();
+    for (const element of marked)
+      element.removeAttribute('data-website-auto-media');
+    marked.clear();
+  };
+  document.addEventListener('DOMContentLoaded', watch, { once: true });
   return {
     apply(state: {
       mode: string;
       strength: number;
       styles: string;
       matrix: number[] | null;
+      chartPalette?: { color: string }[];
     }) {
       document.documentElement.dataset.websiteColorMode = state.mode;
       const amount = state.strength;
@@ -118,7 +186,13 @@ export function createColorPresentation() {
         state.styles +
         (state.mode === 'default'
           ? ''
-          : `\nhtml{--website-a11y-media-filter:${effect};--website-a11y-embedded-filter:${embeddedEffect}}`);
+          : `\nhtml{--website-a11y-media-filter:${effect};--website-a11y-embedded-filter:${embeddedEffect};${(state.chartPalette || []).map((item, index) => `--website-chart-series-${index + 1}:${item.color}`).join(';')}}`);
+      const active = state.mode !== 'default';
+      if (enabled !== active) {
+        enabled = active;
+        if (active) watch();
+        else unwatch();
+      }
       document
         .querySelectorAll('[data-website-color-toggle]')
         .forEach((button) =>
@@ -149,6 +223,9 @@ export function createColorPresentation() {
         });
     },
     destroy() {
+      enabled = false;
+      unwatch();
+      document.removeEventListener('DOMContentLoaded', watch);
       document.removeEventListener('DOMContentLoaded', mount);
       style.remove();
       svg.remove();

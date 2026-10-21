@@ -296,7 +296,7 @@ colours.setColorMode('default'); // restore authored appearance
 colours.toggleColorMode(); // off / last selected active preset
 ```
 
-Modes: `default`, `high-contrast`, `protanopia` (Protan red–green assistance), `deuteranopia` (Deutan red–green assistance), `tritanopia` (Tritan blue–yellow assistance) and `grayscale`. All active modes use the readable interface palette: dark text, white surfaces, blue underlined links and a brown focus outline. The strength control adjusts media filtering, not text contrast. Zero strength restores original media colours while keeping the readable interface palette.
+Modes: `default`, `high-contrast`, `protanopia` (Protan red–green assistance), `deuteranopia` (Deutan red–green assistance), `tritanopia` (Tritan blue–yellow assistance) and `grayscale`. Only High contrast changes interface text/surfaces to the readable palette; Protan, Deutan, Tritan and Grayscale preserve authored text and backgrounds. No preset repaints every div/span white. The strength control adjusts media filtering, not High contrast text treatment. Zero strength restores original media colours.
 
 Use normal editable HTML in a header or Custom HTML block:
 
@@ -316,11 +316,11 @@ Use normal editable HTML in a header or Custom HTML block:
 <label>Strength <input data-website-color-strength type="range" min="0" max="100" step="5"></label>
 ```
 
-Custom HTML supports the same API and controls through the existing frame bridge without access to editor data. State changes are asynchronous there. `website:colormodechange` includes `{ mode, strength, palette }` for custom charts. A project that supplies its own settings button can hide the default launcher with `.website-color-launcher { display:none!important }`.
+Custom HTML supports the same API and controls through the existing frame bridge without access to editor data. State changes are asynchronous there. `website:colormodechange` includes `{ mode, strength, palette, chartPalette }` for custom charts. A project that supplies its own settings button can hide the default launcher with `.website-color-launcher { display:none!important }`.
 
 Images, SVG logos/figures, canvas plots and PDFs use the chosen filter. Protan/Deutan/Tritan presets redistribute estimated lost colour signal into other channels with an adjustable linear-RGB matrix; they are assistance heuristics, not colour-blindness simulations or medically validated corrections. The underlying simulation data comes from [Machado, Oliveira & Fernandes (2009)](https://doi.org/10.1109/TVCG.2009.113), also [tabulated in colorspacious](https://github.com/njsmith/colorspacious/blob/master/colorspacious/cvd.py). Native videos, external video frames and plugin embeds use a simpler hue/saturation approximation because some browsers ignore SVG reference filters on these surfaces. High contrast uses up to `contrast(1.25)`; grayscale uses adjustable desaturation.
 
-Custom HTML applies the filter inside its sandbox once, and the PDF reader passes it through its isolated style boundary. Mark a CSS-background logo or other custom media surface with `data-website-media`; do not mark individual children too. Use `data-preserve-colors` on colour-critical media or a container to preserve that subtree, including Custom HTML. Turning assistance off restores authored styles without rewriting files. No per-frame JavaScript pixel processing or external filter service is used. Labels, patterns and shapes remain necessary wherever colour conveys meaning; visitors should choose the preset and strength that help them.
+Custom HTML applies the filter inside its sandbox once, and the PDF reader passes it through its isolated style boundary. CSS background images are discovered automatically, including dynamically added images, in bounded batches without scroll scans. You can also mark an explicit media surface with `data-website-media`; do not mark individual children too. Assistance uses a CSS cascade layer to take precedence over ordinary widget filter rules without changing authored styles. Inline `filter:...!important` can still override it; remove that declaration if it blocks assistance. Use `data-preserve-colors` on colour-critical media or a container to preserve that subtree, including Custom HTML. Turning assistance off restores authored styles without rewriting files. No per-frame JavaScript pixel processing or external filter service is used. Labels, patterns and shapes remain necessary wherever colour conveys meaning; visitors should choose the preset and strength that help them.
 
 Studio Design and Preview use the project source when overrides exist. There is no installed/source version selector. The full editor runs in an isolated browser document, preserving layer selection, resizing, content editing and project-scoped saves. Preview reuses that same build. Connection management, export downloads and file uploads remain in the trusted parent. Studio checks revisions every five seconds while visible and on focus, and builds changed source in a browser worker while the current editor stays usable. This includes the first override. Updates wait for saved edits and idle controls; failed builds retain the working editor and offer Retry. Page tabs, route, selection, zoom, viewport and editor/preview mode are restored; arbitrary widget state and undo history restart when the new build mounts. Build-script/server changes and new npm dependencies still require a real build/deployment.
 
@@ -330,3 +330,19 @@ Source editors preserve open page tabs and panel sizing through a bounded editor
 
 
 Custom HTML can call `await window.websiteSearch.search(query)` to receive up to 20 result objects (`title`, `excerpt`, `url`, `page`, `score`). An empty Custom HTML block offers **Insert editable search interface**: its HTML, CSS and JavaScript remain ordinary editable fields and its block uses the normal size/position controls. Select **Interact** to try the form in Design, or use Preview. Query access is read-only; the sandbox gets no authenticated fetch capability. Render result strings with `textContent` and use ordinary links for navigation. The built-in search dialog remains a runtime component, not a page layer; this optional interface does not replace an existing developer search design.
+
+
+### Custom HTML charts in colour assistance
+
+Mark the whole chart `<div data-website-chart>...</div>` so its bars, labels, legend and background remain together and receive one filter. `role="img"` and common Recharts, Plotly, Highcharts and Vega containers are also recognised. Nested SVG/canvas/images are not filtered again. Arbitrary HTML charts need an explicit marker; the runtime cannot safely infer the meaning of coloured divs.
+
+For charts that redraw themselves, use `data-website-chart="palette"` to preserve the plot and prevent double filtering. `window.websiteAccessibility.getChartPalette()` returns six `{ color, dash, marker }` series styles. The colours have at least 3:1 contrast against white; pair them with labels, distinct dash patterns or markers. They do not guarantee that every pair is distinguishable, especially on other backgrounds. CSS variables `--website-chart-series-1` through `--website-chart-series-6` are available while assistance is active, and removed in Original mode. Supply authored fallback colours in `var()`.
+
+```js
+window.addEventListener('website:colormodechange', ({ detail }) => {
+  // Your chart implementation supplies redrawChart and originalSeries.
+  redrawChart(detail.mode === 'default' ? originalSeries : detail.chartPalette);
+});
+```
+
+Custom HTML receives the first state asynchronously: listen for the event before drawing with the palette; `getChartPalette()` returns an empty list until that state arrives. Palette redraw is opt-in and independent of media filter strength. Restore the original chart in Default mode. Keep labels and non-colour cues: see [W3C guidance on colour and patterns](https://www.w3.org/WAI/WCAG21/Techniques/general/G111).

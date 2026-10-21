@@ -1,3 +1,11 @@
+## Custom HTML colour assistance and panel dismissal
+
+The Colours panel now closes explicitly with its × button, Escape or an outside click, including Studio's sandboxed source preview. It no longer depends on form submission permission. Focus returns to the opener; dragging a slider outside the panel does not dismiss it.
+
+Colour presets preserve authored widget backgrounds instead of painting divs and spans white. High contrast remains a separate interface treatment. Images inside Custom HTML and CSS background images receive assistance; later-added backgrounds are detected in bounded batches without scroll scans. Charts marked `data-website-chart`, role="img", or recognised chart-library containers keep their bars, labels and background together and are filtered once. Opt-in chart palette/dash/marker APIs are documented in STATIC-EXPORT.md and exposed through MCP guidance.
+
+Browser checks cover actual rendered pixels for photos, CSS backgrounds, HTML/SVG charts, video and PDFs; original restoration, zero strength, preserved-colour exclusions, dynamic backgrounds, widget filter CSS and sandboxed panel dismissal. Install the complete package and refresh Studio once. Prepare a fresh export to update the published website. No media re-upload or server configuration change is needed.
+
 ## Automatic background source builds
 
 Studio now checks for source revisions every five seconds while visible, and on focus. Changed source compiles in a browser worker while the existing editor remains usable. Updates apply after edits are saved and typing, dragging, uploads and dialogs are idle. The current page, open page tabs, selection, viewport, zoom and editor/preview mode are carried into the updated source editor. This also handles the first developer override without reopening Studio. Arbitrary widget state and undo history restart when a new source build mounts.
@@ -14,7 +22,7 @@ Install the complete server package and reconnect MCP to discover the tools. Rea
 
 Preview and published websites now include a Colours chooser with Original, High contrast, Protan, Deutan, Tritan and Grayscale presets, a 0–100% media strength control, a labelled sample and reset. Mode and strength persist per project/site. Existing toggle buttons restore the last active preset. Custom HTML can open the chooser or supply its own editable select/range controls; the API is documented in STATIC-EXPORT.md and advertised through MCP.
 
-The presets provide optional visual assistance, not clinical correction or simulation. Matrix filters apply to images, SVG, canvas and PDFs; video/player/plugin surfaces use a simpler CSS adjustment for browser compatibility. The readable text palette remains enabled at zero media strength. Original restores the authored appearance. Install the server package, refresh Studio, then prepare a fresh export for the live website.
+The presets provide optional visual assistance, not clinical correction or simulation. Matrix filters apply to images, SVG, canvas and PDFs; video/player/plugin surfaces use a simpler CSS adjustment for browser compatibility. In High contrast, the readable text palette remains enabled at zero media strength. Original restores the authored appearance. Install the server package, refresh Studio, then prepare a fresh export for the live website.
 
 Browser validation covers distinct rendered pixels for every mode across media, PDFs and Custom HTML, zero strength, default restoration, keyboard controls, mobile layout, reset, reload persistence and invalid-message rejection.
 

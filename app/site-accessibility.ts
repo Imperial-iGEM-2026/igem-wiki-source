@@ -15,22 +15,46 @@ export const accessiblePalette = {
   focus: '#9c3f00',
   border: '#667085',
 };
-// Recolour interface surfaces and enhance media contrast without rewriting files.
-// Authors may preserve a colour-critical subtree with data-preserve-colors.
-export const accessibilityStyles = `
-html[data-website-color-mode]:not([data-website-color-mode="default"]) { color-scheme:light; --website-a11y-background:#fff; --website-a11y-text:#172033; --website-a11y-link:#0047ab; --website-a11y-focus:#9c3f00; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(body,main,header,footer,nav,article,section,aside,div,p,span,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,ul,ol,li,form,label,details,summary,dialog,blockquote,pre,code):not([data-preserve-colors],[data-preserve-colors] *) { color:#172033!important; background-color:#fff!important; text-shadow:none!important; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(a,a span):not([data-preserve-colors],[data-preserve-colors] *) { color:#0047ab!important; background-color:#fff!important; text-decoration:underline!important; text-underline-offset:.2em; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(button,input,textarea,select):not([data-preserve-colors],[data-preserve-colors] *) { color:#172033!important; background:#fff!important; border:1px solid #667085!important; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(button[aria-pressed="true"],[aria-selected="true"],a[aria-current="page"]):not([data-preserve-colors],[data-preserve-colors] *) { color:#fff!important; background:#0047ab!important; text-decoration:underline!important; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :focus-visible { outline:3px solid #9c3f00!important; outline-offset:3px!important; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) ::selection { color:#fff; background:#0047ab; }
-/* Filter only the outer media surface. Custom HTML receives these rules inside
-   its sandbox; filtering that frame as well would apply the effect twice. */
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(img,video,canvas,svg,iframe:not(.custom-html-frame),object,embed,.partitioned-pdf,[data-website-media]):not([data-preserve-colors],[data-preserve-colors] *):not(svg *,object *,video *,.partitioned-pdf *,[data-website-media] *) { filter:var(--website-a11y-media-filter,contrast(1.25))!important; }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) .partitioned-pdf:not([data-preserve-colors],[data-preserve-colors] *,[data-website-media] *) { --website-a11y-pdf-filter:var(--website-a11y-media-filter,contrast(1.25)); }
-html[data-website-color-mode]:not([data-website-color-mode="default"]) :where(video,iframe:not(.custom-html-frame),object,embed):not([data-preserve-colors],[data-preserve-colors] *):not([data-website-media] *,.partitioned-pdf *) { filter:var(--website-a11y-embedded-filter,var(--website-a11y-media-filter))!important; }
-`;
+// Colour assistance must not repaint authored charts as interface surfaces.
+// High contrast is a separate text treatment; the other presets preserve design.
+const activeColor =
+  'html[data-website-color-mode]:not([data-website-color-mode="default"])';
+const highContrast = 'html[data-website-color-mode="high-contrast"]';
+const charts =
+  ':is([data-website-chart],[role="img"],.recharts-wrapper,.js-plotly-plot,.highcharts-container,.vega-embed)';
+const preserve = ':not([data-preserve-colors],[data-preserve-colors] *)';
+const textScope = `${preserve}:not(${charts},${charts} *,svg *,[data-website-media],[data-website-media] *,[data-website-auto-media],[data-website-auto-media] *)`;
+const media =
+  ':where(img,video,canvas,svg,iframe:not(.custom-html-frame),object,embed,.partitioned-pdf,[data-website-media],[data-website-auto-media],' +
+  charts +
+  ')';
+const mediaScope = `${preserve}:not(svg *,object *,video *,.partitioned-pdf *,[data-website-media] *,[data-website-auto-media] *,${charts} *)`;
+// Important declarations in a named layer outrank unlayered widget CSS without
+// modifying inline styles, so switching off restores the exact authored result.
+export const accessibilityStyles = `@layer website-accessibility {
+${highContrast} { color-scheme:light; --website-a11y-background:#fff; --website-a11y-text:#172033; --website-a11y-link:#0047ab; --website-a11y-focus:#9c3f00; }
+${highContrast} :where(body,main,header,footer,nav,article,section,aside,p,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,form,details,summary,dialog,blockquote,pre,code,[data-website-readable])${textScope} { color:#172033!important; background-color:#fff!important; text-shadow:none!important; }
+${highContrast} :where(a)${textScope} { color:#0047ab!important; background-color:#fff!important; text-decoration:underline!important; text-underline-offset:.2em; }
+${highContrast} :where(button,input,textarea,select)${textScope} { color:#172033!important; background:#fff!important; border:1px solid #667085!important; }
+${highContrast} :where(button[aria-pressed="true"],[aria-selected="true"],a[aria-current="page"])${textScope} { color:#fff!important; background:#0047ab!important; text-decoration:underline!important; }
+${highContrast} :where(button,a,[data-website-readable])${textScope} :where(span,strong,em,b,i)${textScope} { color:inherit!important; background-color:transparent!important; }
+${activeColor} :focus-visible { outline:3px solid #9c3f00!important; outline-offset:3px!important; }
+${activeColor} ::selection { color:#fff; background:#0047ab; }
+${activeColor} ${media}${mediaScope} { filter:var(--website-a11y-media-filter,contrast(1.25))!important; }
+${activeColor} .partitioned-pdf${mediaScope} { --website-a11y-pdf-filter:var(--website-a11y-media-filter,contrast(1.25)); }
+${activeColor} :where(video,iframe:not(.custom-html-frame),object,embed)${mediaScope} { filter:var(--website-a11y-embedded-filter,var(--website-a11y-media-filter))!important; }
+/* Charts that redraw using the supplied palette must not be filtered again. */
+${activeColor} [data-website-chart="palette"]${preserve} { filter:none!important; }
+}`;
+
+export const accessibleChartPalette = [
+  { color: '#0067a5', dash: '', marker: 'circle' },
+  { color: '#a84b00', dash: '8 4', marker: 'square' },
+  { color: '#007a5e', dash: '2 3', marker: 'triangle' },
+  { color: '#8a4c91', dash: '10 3 2 3', marker: 'diamond' },
+  { color: '#9c5724', dash: '4 3', marker: 'cross' },
+  { color: '#006b75', dash: '12 4', marker: 'star' },
+];
 
 type Settings = { mode: WebsiteColorMode; strength: number };
 const remembered = new Map<string, Settings>();
@@ -63,6 +87,7 @@ export function startWebsiteAccessibility(key: string) {
     matrix: preserve ? null : assistanceMatrix(mode, strength),
     palette: accessiblePalette,
     modes: colorModes,
+    chartPalette: accessibleChartPalette,
   });
   const announce = (frame: HTMLIFrameElement) =>
     frame.contentWindow?.postMessage(
@@ -78,7 +103,12 @@ export function startWebsiteAccessibility(key: string) {
     frames().forEach(announce);
     window.dispatchEvent(
       new CustomEvent('website:colormodechange', {
-        detail: { mode, strength, palette: accessiblePalette },
+        detail: {
+          mode,
+          strength,
+          palette: accessiblePalette,
+          chartPalette: accessibleChartPalette,
+        },
       }),
     );
   };
@@ -102,6 +132,7 @@ export function startWebsiteAccessibility(key: string) {
     getColorMode: () => mode,
     getColorStrength: () => strength,
     getColorModes: () => colorModes.map((item) => ({ ...item })),
+    getChartPalette: () => accessibleChartPalette.map((item) => ({ ...item })),
     setColorMode(next: WebsiteColorMode) {
       if (!isColorMode(next))
         throw Error(
@@ -212,6 +243,7 @@ export function htmlAccessibilityBridge(
     'grayscale',
   ];
   let modes = allowed.map((value) => ({ value, label: value }));
+  let chartPalette: { color: string; dash: string; marker: string }[] = [];
   const presentation = createPresentation();
   const post = (type: string, extra: Record<string, unknown> = {}) =>
     parent.postMessage({ type, ...extra }, '*');
@@ -219,6 +251,7 @@ export function htmlAccessibilityBridge(
     getColorMode: () => mode,
     getColorStrength: () => strength,
     getColorModes: () => modes.map((item) => ({ ...item })),
+    getChartPalette: () => chartPalette.map((item) => ({ ...item })),
     setColorMode(next: string) {
       if (!allowed.includes(next)) throw Error('Unknown colour mode.');
       post('website-color-set', { mode: next });
@@ -248,10 +281,11 @@ export function htmlAccessibilityBridge(
     mode = event.data.mode;
     strength = event.data.strength ?? 1;
     modes = event.data.modes || modes;
+    chartPalette = event.data.chartPalette || chartPalette;
     presentation.apply({ ...event.data, strength });
     dispatchEvent(
       new CustomEvent('website:colormodechange', {
-        detail: { mode, strength, palette: event.data.palette },
+        detail: { mode, strength, palette: event.data.palette, chartPalette },
       }),
     );
   });
