@@ -166,14 +166,20 @@ const frameSource = (await Promise.all(sharedParts.map(async (part) => typeof pa
 assert.match(frameSource, /Animation works/);
 assert.ok(!frameSource.includes('/api/media/aacc.jpg'));
 const js = await readFile(path.join(dir, 'render/public/assets/wiki.js'), 'utf8');
-assert.match(js, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);
+const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
+const allJs = (await Promise.all(publishedFiles.filter(name => /\.m?js$/.test(name)).map(name => readFile(path.join(dir, 'render/public/assets', name), 'utf8')))).join('\n');
+assert.match(allJs, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);
+assert.match(allJs, /\/example\/assets\/pdf-worker-remote.mjs/);
 await assert.rejects(readFile(path.join(dir, 'render/public/assets/pdf.worker.min.mjs')), { code: 'ENOENT' });
 for (const asset of publicationRuntime) {
-  if (asset.module) assert.ok(js.includes(map[asset.source]), asset.name);
+  if (asset.module) assert.ok(allJs.includes(map[asset.source]), asset.name);
+  if (asset.binary) {
+    await assert.rejects(readFile(path.join(dir, 'render/public', asset.binary)), { code: 'ENOENT' });
+    assert.ok(allJs.includes(map[asset.source]), asset.name);
+  }
   if (asset.forward) assert.equal(await readFile(path.join(dir, 'render/public', asset.forward), 'utf8'), `export { default } from ${JSON.stringify(map[asset.source])};\n`);
 }
-const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
-assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)-.*\.js$/.test(name)), publishedFiles.join(', '));
+assert.ok(!publishedFiles.some((name) => /^(model-viewer|pdf|es)-[A-Za-z0-9_-]+\.js$/.test(name) && !name.startsWith('pdf-parts-viewer-')), publishedFiles.join(', '));
 assert.ok(!html.includes('/api/media/aacc.jpg'));
 assert.ok(!html.includes('<button id="animate">'));
 assert.ok(!html.includes('src="/api/media/aabb.pdf"'));

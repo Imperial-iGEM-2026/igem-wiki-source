@@ -37,7 +37,38 @@ export const publicationRuntime = [
     file: 'pdfjs-dist/wasm/jbig2_nowasm_fallback.js',
     forward: 'assets/pdfjs/wasm/jbig2_nowasm_fallback.js',
   },
+  ...['openjpeg', 'jbig2', 'qcms_bg'].map((name) => ({
+    name: `PDF ${name} WebAssembly`,
+    source: `/templates/runtime/pdfjs-6.4.299-${name}.wasm`,
+    file: `pdfjs-dist/wasm/${name}.wasm`,
+    binary: `assets/pdfjs/wasm/${name}.wasm`,
+  })),
 ];
+
+// PDF.js constructs decoder URLs internally, including synchronous XHR for
+// colour profiles. Redirect only known binary paths inside its dedicated worker.
+// Keep the upstream worker unchanged so existing verified uploads remain usable.
+export function pdfWorkerModule(workerURL, binaries, base) {
+  const redirects = Object.fromEntries(binaries.map((asset) => [base + asset.binary, asset.url]));
+  return `if (typeof document === 'undefined') {
+const urls = ${JSON.stringify(redirects)};
+const redirect = value => {
+  const url = new URL(String(value), self.location.href);
+  return url.origin === self.location.origin && Object.hasOwn(urls, url.pathname) ? urls[url.pathname] : value;
+};
+const originalFetch = self.fetch.bind(self);
+self.fetch = (input, init) => {
+  const url = redirect(input instanceof Request ? input.url : input);
+  return originalFetch(input instanceof Request ? (url === input.url ? input : new Request(url, input)) : url, init);
+};
+const originalOpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function(method, url, ...args) {
+  return originalOpen.call(this, method, redirect(url), ...args);
+};
+}
+export const WorkerMessageHandler = (await import(${JSON.stringify(workerURL)})).WorkerMessageHandler;
+`;
+}
 
 export function mappedRuntime(map) {
   return publicationRuntime.flatMap((asset) => {

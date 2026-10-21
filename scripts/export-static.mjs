@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { mappedRuntime, runtimeImports } from './publication-runtime.mjs';
+import { mappedRuntime, runtimeImports, pdfWorkerModule } from './publication-runtime.mjs';
 import { resolveSource, readSource } from './source-parts.mjs';
+import { publicationValues } from './publication-pages.mjs';
 import {
   defaultLoading,
   validLoading,
@@ -175,11 +176,13 @@ const templateId = snapshot.values['site:template'];
 if (templateId && !Object.hasOwn(templates, templateId))
   throw Error('Unknown template');
 const template = templateId ? templates[templateId] : null;
+const publication = publicationValues(snapshot.values, template?.pages || corePages);
+snapshot.values = publication.values;
 const extraDefaults = customDefaults(snapshot.values[CUSTOM_PAGES]);
-const allowed = {
+const allowed = publicationValues({
   ...(template ? templateDefaults(templateId) : initial),
   ...extraDefaults,
-};
+}, template?.pages || corePages).values;
 const wikiPages = [
   ...(template
     ? template.pages
@@ -620,6 +623,9 @@ const loadingScript = loading.enabled
   : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
+const hostedWasm = uploadedRuntime.filter((asset) => asset.binary);
+if (hostedWasm.length && !hostedPdfWorker)
+  throw Error('Upload and map the PDF worker together with its WebAssembly files.');
 if (hostedPdfWorker) {
   if (
     typeof hostedPdfWorker !== 'string' ||
@@ -631,13 +637,16 @@ if (hostedPdfWorker) {
     );
   // The worker is a self-contained ES module. PDF.js wraps a cross-origin worker
   // in a blob module; no relative module dependencies need URL rewriting.
+  const workerTarget = hostedWasm.length ? base + 'assets/pdf-worker-remote.mjs' : hostedPdfWorker;
+  if (hostedWasm.length)
+    await writeFile(path.join(output, 'public/assets/pdf-worker-remote.mjs'), pdfWorkerModule(hostedPdfWorker, hostedWasm, base));
   let rewritten = false;
   for (const file of assetFiles.filter((name) => name.endsWith('.js'))) {
     const target = path.join(output, 'public/assets', file);
     const original = await readFile(target, 'utf8');
     const from = base + 'assets/pdf.worker.min.mjs';
     if (original.includes(from)) {
-      await writeFile(target, original.replaceAll(from, hostedPdfWorker));
+      await writeFile(target, original.replaceAll(from, workerTarget));
       rewritten = true;
     }
   }
@@ -653,6 +662,8 @@ if (hostedPdfWorker) {
   });
 }
 for (const asset of uploadedRuntime) {
+  if (asset.binary)
+    await unlink(path.join(output, 'public', asset.binary));
   if (asset.forward) {
     // PDF.js constructs decoder filenames at runtime. Keep a tiny forwarding
     // module at that path; the decoder implementation loads from iGEM instead.
@@ -872,6 +883,7 @@ const report = {
   compiledAt: new Date().toISOString(),
   base,
   pageCount: wikiPages.length + 1,
+  excludedPages: publication.excludedPages,
   routes: [base, ...wikiPages.map((page) => base + routeSlug(page.slug))],
   standardPages,
   aliases: Object.fromEntries(
@@ -927,6 +939,8 @@ await writeFile(
 console.log(
   `Exported ${report.pageCount} pages to ${output}. ${issues.length} publication issues listed in publication-report.json.`,
 );
+if (report.excludedPages.length)
+  console.log(`Excluded ${report.excludedPages.length} backup/test/scratch pages from publication (kept in Studio): ${report.excludedPages.join(', ')}`);
 if (recordingTodos.length)
   console.warn(
     `${recordingTodos.length} recording TODOs: add Video Universe embeds in the editor, then export again. See publication-report.json.`,

@@ -104,6 +104,7 @@ for (const name of [
 await packageImageRuntime(root, path.join(out, 'server/image-runtime'));
 await cp(path.join(root, 'scripts/publication-runtime.mjs'), path.join(out, 'server/publication-runtime.mjs'));
 await cp(path.join(root, 'scripts/source-parts.mjs'), path.join(out, 'server/source-parts.mjs'));
+await cp(path.join(root, 'scripts/publication-pages.mjs'), path.join(out, 'server/publication-pages.mjs'));
 await cp(
   path.join(root, 'scripts/export-media.mjs'),
   path.join(out, 'server/export-media.mjs'),

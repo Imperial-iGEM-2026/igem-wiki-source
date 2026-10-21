@@ -147,27 +147,29 @@ export async function digest(file) {
 
 export async function verifyRuntimeAsset(row, fetcher = fetch) {
   if (row.kind !== 'runtime') return;
+  const wasm = /\.wasm$/i.test(row.localFile || row.file || row.source || '');
+  const type = wasm ? 'WebAssembly' : 'JavaScript';
   if (!hostedURL(row.url, row.kind) || !row.localFile)
-    throw Error('The runtime JavaScript needs its bundled original and an uploaded iGEM URL.');
+    throw Error(`The runtime ${type} needs its bundled original and an uploaded iGEM URL.`);
   const response = await fetcher(row.url, {
     headers: { Origin: 'https://2026.igem.wiki' },
     credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(30000),
   });
-  if (!response.ok) throw Error('The uploaded runtime JavaScript is not accessible; check its processing card.');
+  if (!response.ok) throw Error(`The uploaded runtime ${type} is not accessible; check its processing card.`);
   const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (!['application/javascript', 'text/javascript', 'application/ecmascript', 'text/ecmascript'].includes(mime))
-    throw Error('iGEM is not serving the runtime upload as JavaScript. Do not publish this URL; check file-type support with iGEM.');
+  if (!(wasm ? ['application/wasm', 'application/octet-stream'] : ['application/javascript', 'text/javascript', 'application/ecmascript', 'text/ecmascript']).includes(mime))
+    throw Error(`iGEM is not serving the runtime upload as ${type}. Do not publish this URL; check file-type support with iGEM.`);
   if (!['*', 'https://2026.igem.wiki'].includes(response.headers.get('access-control-allow-origin')))
-    throw Error('The runtime JavaScript upload does not allow the wiki to load modules (CORS). Check hosting with iGEM before publishing.');
+    throw Error(`The runtime ${type} upload does not allow the wiki to load modules (CORS). Check hosting with iGEM before publishing.`);
   const hash = createHash('sha256');
   let size = 0;
   for await (const chunk of response.body) {
     size += chunk.length;
-    if (size >= 10_000_000) throw Error('Unexpectedly large runtime JavaScript upload.');
+    if (size >= 10_000_000) throw Error(`Unexpectedly large runtime ${type} upload.`);
     hash.update(chunk);
   }
   if (hash.digest('hex') !== await digest(row.localFile))
-    throw Error('The uploaded runtime JavaScript does not match this export. Upload the bundled runtime file unchanged.');
+    throw Error(`The uploaded runtime ${type} does not match this export. Upload the bundled runtime file unchanged.`);
 }
 export const jsonFile = async (file) =>
   JSON.parse(await readFile(file, 'utf8'));
@@ -190,7 +192,7 @@ export function repositoryFile(name) {
     ].includes(name) ||
     (/^(app|components|hooks|lib)\/.*\.(ts|tsx|js|css|json)$/.test(name) &&
       !name.startsWith('app/api/')) ||
-    /^scripts\/(build-igem|source-parts|publication-runtime|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
+    /^scripts\/(build-igem|source-parts|publication-runtime|publication-pages|artifact-size|share-publication-assets|export-static|export-media|export-recordings|google-fonts|pdf-parts|image-export|igem-resources|build-options|static-renderer|static-runtime|preview-static)\.(mjs|ts|tsx)$/.test(
       name,
     ) ||
     name === 'ops/igem.gitlab-ci.yml' ||

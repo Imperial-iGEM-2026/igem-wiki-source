@@ -17,6 +17,10 @@ Google Fonts in exports: Prepare now downloads referenced Google Fonts and their
 
 # Publish the wiki from source on iGEM
 
+Publication excludes pages with whole `backup`, `test` or `scratch` slug segments, including their copied fields and unused media. Studio retains the original pages. Scientific pages such as `testing-methods` and `contest` remain published. The build log and `publication-report.json` list the excluded slugs.
+
+PDF WebAssembly decoders (`openjpeg`, `jbig2`, and `qcms_bg`) now join JavaScript in `assets/runtime`. Upload them through the current helper, which checks the MIME type, CORS access and exact bytes. Fresh exports map each file to its uploaded iGEM URL; the compiler removes mapped WASM binaries from the Pages artifact. A small dedicated PDF worker adapter resolves both asynchronous decoder requests and synchronous colour-profile requests. Unmapped older exports retain the local binaries. The unused PDF scripting engine remains excluded. Download the updated helper and prepare fresh ZIPs after installing this update.
+
 **Image integrity before upload:** Export preparation now decodes local JPEG and PNG files even when they are below 10 MB. Truncated JPEG scans/end markers and invalid PNG data/checksums stop preparation with the affected file and page/layer in the existing media-error panel. Re-export the original in an image editor and upload a fresh copy, then prepare again. Valid images below the limit keep their original bytes. This checks locally packaged files; existing remote iGEM URLs and other image formats do not receive this decoding check.
 
 Corrected 5 October 2026 using the Wiki requirements supplied by the team. This replaces the earlier instructions to commit a compiled `public/` folder: **do not do that**. Compiled HTML, CSS and JavaScript are CI artifacts, not files to hand-upload or commit. GitLab must build from source on every push to `main`.

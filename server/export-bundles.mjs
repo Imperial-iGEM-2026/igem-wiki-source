@@ -1,4 +1,5 @@
 import { publicationRuntime } from './publication-runtime.mjs';
+import { publicationValues } from './publication-pages.mjs';
 import { partitionSource, GIT_FILE_BYTES } from './source-parts.mjs';
 import { createImageValidationCache } from './export-validation-cache.mjs';
 import { downloadExternalAsset } from './export-remote-assets.mjs';
@@ -184,10 +185,11 @@ export function createBundleExports({
         completed: 0,
         total: 0,
       });
-      const removed = parseRemovedPages(values['pages:removed']);
+      const publication = publicationValues(values, template?.pages || wikiPages);
+      const removed = parseRemovedPages(publication.values['pages:removed']);
       const slugs = [
         ...(template?.pages || wikiPages),
-        ...parseCustomPages(values['pages:custom']),
+        ...parseCustomPages(publication.values['pages:custom']),
       ]
         .map((page) => page.slug)
         .filter((slug) => !removed.includes(slug));
@@ -215,7 +217,7 @@ export function createBundleExports({
         if (plans.size >= 12)
           throw fail(429, 'Export is busy. Try again shortly.');
         const cleanValues = Object.fromEntries(
-          Object.entries(values).filter(([key]) => !key.startsWith('ai:')),
+          Object.entries(publication.values).filter(([key]) => !key.startsWith('ai:')),
         );
         const content = json({
           format: 'prion-wiki-source',
@@ -272,7 +274,7 @@ export function createBundleExports({
         // like images so their bytes do not count against the Pages archive.
         for (const asset of publicationRuntime) {
           media.set(asset.source, 'runtime');
-          locations.set(asset.source, [{ pageTitle: 'Website runtime', layerName: asset.name, field: 'JavaScript runtime' }]);
+          locations.set(asset.source, [{ pageTitle: 'Website runtime', layerName: asset.name, field: asset.binary ? 'WebAssembly runtime' : 'JavaScript runtime' }]);
         }
         const googleFonts = await prepareGoogleFonts(
           googleFontReferences(

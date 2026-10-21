@@ -24,8 +24,8 @@ for (const root of document.querySelectorAll<HTMLElement>(
 import { startReferenceNavigation } from '../app/reference-navigation';
 startReferenceNavigation();
 
-import { startPdfParts } from '../app/pdf-parts-viewer';
-startPdfParts();
+if (document.querySelector('[data-pdf-parts]'))
+  void import('../app/pdf-parts-viewer').then(({ startPdfParts }) => startPdfParts());
 
 import { loadHtmlFrame } from '../app/html-document';
 import { followHtmlLink } from '../app/html-navigation';

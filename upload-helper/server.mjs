@@ -405,7 +405,7 @@ async function action(name, data) {
         `${missing.length} files still need uploaded iGEM URLs. Complete uploads or attach their local originals.`,
       );
     for (const row of job.rows.filter((item) => item.kind === 'runtime')) {
-      log('Checking uploaded JavaScript type, CORS and exact file contents…');
+      log('Checking uploaded runtime type, CORS and exact file contents…');
       await verifyRuntimeAsset(row);
     }
     proposal = await sites.plan(
