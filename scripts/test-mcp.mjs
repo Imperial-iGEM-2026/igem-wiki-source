@@ -500,6 +500,7 @@ try {
     'cancel_media_upload',
     'get_media_upload_url',
     'list_pages',
+    'search_project',
     'get_page',
     'update_text',
     'add_section',

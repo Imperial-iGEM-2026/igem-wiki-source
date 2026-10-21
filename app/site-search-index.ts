@@ -22,7 +22,7 @@ export function searchText(source = '') {
     }).replace(/\s+/g, ' ').trim();
 }
 
-export function buildSearchIndex(values: Record<string, string>): SearchIndex {
+export function buildSearchIndex(values: Record<string, string>, options: { pages?: string[] } = {}): SearchIndex {
   const id = values['site:template'];
   const defaults = id && templates[id] ? templateDefaults(id) : initial;
   const all = { ...defaults, ...customDefaults(values['pages:custom']), ...values };
@@ -39,6 +39,7 @@ export function buildSearchIndex(values: Record<string, string>): SearchIndex {
     return ast.c.map(astText).join(' ');
   };
   for (const page of pages) {
+    if (options.pages && !options.pages.includes(page.slug)) continue;
     // Development copies remain saved, but are never part of public search.
     if (/(?:^|-)(?:backup|test|scratch)(?:-|$)/i.test(page.slug)) continue;
     const slug = page.slug === 'home' ? '' : publicationSlug(page.slug, slugs);

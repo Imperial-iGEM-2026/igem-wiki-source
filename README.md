@@ -1,5 +1,7 @@
 # Website Studio
 
+- **MCP search:** Standard and Developer connections can call `search_project({query: "hydrogel", limit: 10})`, optionally with a `page` slug. Search uses the latest saved visible text and the website's ranking/typo correction, returning one best match per page with an excerpt and section ID/link when available. Page-restricted links search only their page. Hidden/deleted content, backup/test/scratch pages, scripts and styles are excluded; PDF file contents and developer source are not indexed. Call `get_page` before editing a match. Reconnect the MCP client after updating the server to refresh its tool list.
+
 ## Latest update — 19 October 2026
 
 This release includes Luca templates, editor selection/resizing and layout fixes, stronger scoped MCP editing, low-memory image validation, and smaller static exports. Upload helper **1.0.23** shares one folder allowlist across import and browser upload, including `assets/runtime/`. PDF partitions omit export-time timestamps so unchanged PDFs produce stable hashes and reuse uploaded parts. Install the updated server for repeatable PDF exports; replace the local helper while preserving its `jobs` folder.
