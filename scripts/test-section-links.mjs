@@ -25,13 +25,13 @@ import{templateDefaults}from'/app/templates';import{customDefaults}from'/app/cus
 import'/app/globals.css';import'/app/studio-polish.css';
 const pages=JSON.stringify([{slug:'education',title:'Education'},{slug:'results',title:'Results'}]);
 const values={...templateDefaults('blank'),...customDefaults(pages),'pages:custom':pages};
-for(const slug of ['education','results']){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=slug; const node=slug==='education'?{...newNode('source','text'),parentId:CUSTOM_CONTENT,body:'Read the result'}:{...newNode('durable','accordion'),parentId:CUSTOM_CONTENT,title:'Findings',items:[{id:'measurement',title:'Measurement',body:'Destination data'}]}; l.nodes.push(node);l.order.push(node.id);values['layout:'+slug]=JSON.stringify(l);}
+for(const slug of ['education','results']){const l=JSON.parse(values['layout:'+slug]);l.nodes.find(n=>n.id==='custom-intro').title=slug; const node=slug==='education'?{...newNode('source','text'),parentId:CUSTOM_CONTENT,body:'Read the result'}:{...newNode('durable','accordion'),parentId:CUSTOM_CONTENT,title:'Findings',items:[{id:'measurement',title:'Measurement',body:'Destination data'}]}; l.nodes.push(node);l.order.push(node.id); if(slug==='results'){const refs={...newNode('refs','references'),parentId:CUSTOM_CONTENT,title:'References',references:[{id:'archer',text:'Archer et al. (2010). Example paper.',url:''}]};l.nodes.push(refs);l.order.push(refs.id);} if(slug==='education'){const link={...newNode('reference-link','text'),parentId:CUSTOM_CONTENT,body:'[(Archer et al., 2010)](/results#citation-refs%252Farcher)'};l.nodes.push(link);l.order.push(link.id);} values['layout:'+slug]=JSON.stringify(l);}
 const initial=Object.fromEntries(Object.entries(values).map(([k,value])=>[k,{value,version:1,author:''}]));
 window.testLink=insertTextLink;window.testStart=startSectionLinks;
 function App(){const[data,setData]=useState(initial),[text,setText]=useState('Read the result'),[open,setOpen]=useState(true);return <><TextEditDialog open={open} value={text} onChange={setText} pages={[["/education","Education"],["/results","Results"]]} sections={href=>sectionLinkTargets(data,href.slice(1))} onCancel={()=>setOpen(false)} onSave={()=>{const l=JSON.parse(data['layout:education'].value);l.nodes.find(n=>n.id==='source').body=text;setData({...data,'layout:education':{value:JSON.stringify(l),version:2,author:''}});setOpen(false)}}/><StudioPreview data={data} active page="education" projectId="fixture" onClose={()=>{}}/><div id="unsafe"><LinkedText text={'[bad](javascript:alert(1))'}/></div><div id="escaped"><LinkedText text={insertTextLink('Read [more]',0,11,'/results#section-durable')}/></div></>};createRoot(document.getElementById('root')).render(<App/>);
 `);
 await build({...common,build:{outDir:path.join(dir,'dist'),rolldownOptions:{input:[path.join(dir,'index.html'),path.resolve('server/preview.html')]}}});
-const server=createServer(async(req,res)=>{try{const u=new URL(req.url,'http://localhost');const file=path.join(dir,'dist',u.pathname==='/studio-preview'?'server/preview.html':u.pathname);res.setHeader('Content-Type',/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
+const server=createServer(async(req,res)=>{try{const u=new URL(req.url,'http://localhost');if(u.pathname==='/api/source-preview'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({modifiedFiles:[]}));}const file=path.join(dir,'dist',u.pathname==='/studio-preview'?'server/preview.html':u.pathname);res.setHeader('Content-Type',/\.m?js$/.test(file)?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const browser=await chromium.launch({channel:'msedge',headless:true});
 try{
@@ -42,6 +42,7 @@ try{
  await page.getByRole('button',{name:'Link selected text',exact:true}).click();
  await page.getByRole('combobox',{name:'Choose a website page'}).click();
  await page.getByRole('option',{name:'Results',exact:true}).click();
+ assert.ok(await page.getByLabel('Choose a page section').locator('option[value="citation-refs%252Farcher"]').count());
  await page.getByLabel('Choose a page section').selectOption('section-durable--item-measurement');
  await page.screenshot({path:path.join(dir,'link-picker.png')});
  await page.setViewportSize({width:390,height:844});
@@ -62,6 +63,18 @@ try{
  assert.equal(await dest.evaluate(el=>el.open),true);
  assert.equal(await dest.evaluate(el=>el===document.activeElement),true);
  assert.ok((await dest.boundingBox()).y<700);
+ await frame.locator('body').evaluate(body=>{const a=document.createElement('a');a.href='#citation-refs%252Farcher';a.textContent='Archer entry';a.id='entry-link';body.prepend(a);});
+ await frame.locator('#entry-link').click();
+ const reference=frame.locator('[id="citation-refs%2Farcher"]');
+ await page.waitForTimeout(100);
+ assert.equal(await reference.evaluate(el=>el===document.activeElement),true);
+ await frame.locator('body').evaluate(body=>{const a=document.createElement('a');a.href='/education';a.textContent='Back to education';a.id='back-education';body.prepend(a);});
+ await frame.locator('#back-education').click();
+ await frame.getByRole('link',{name:'(Archer et al., 2010)',exact:true}).click();
+ await frame.locator('[id="citation-refs%2Farcher"]').waitFor();
+ await page.waitForTimeout(150);
+ assert.equal(await frame.locator('[id="citation-refs%2Farcher"]').evaluate(el=>el===document.activeElement),true);
+
  assert.equal(await page.locator('#unsafe a').count(),0);
  assert.equal(await page.locator('#escaped a').innerText(),'Read [more]');
  await page.evaluate(()=>{const details=document.createElement('details');details.id='section-load';details.innerHTML='<summary>Direct link</summary><p>Expanded contents</p>';document.body.appendChild(details);history.replaceState(null,'','#section-load');window.stopTestLinks=window.testStart();});

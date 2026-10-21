@@ -20,6 +20,7 @@ export function ReferencesEditor({
   onEnd: () => void;
 }) {
   const [message, setMessage] = useState('');
+  const [labels, setLabels] = useState<Record<string, string>>({});
   const update = (id: string, change: Partial<ReferenceEntry>, key: string) =>
     onChange(
       entries.map((entry) =>
@@ -38,7 +39,7 @@ export function ReferencesEditor({
     <div className="references-editor">
       <p>
         Add your sources, then copy a citation and paste it into any text on
-        this page. It appears as a numbered link.
+        this page. Leave the citation label empty for a numbered link, or enter author–year text.
       </p>
       {entries.map((entry, i) => (
         <fieldset key={entry.id}>
@@ -74,6 +75,12 @@ export function ReferencesEditor({
               Use a complete http:// or https:// URL.
             </p>
           )}
+          <label className="studio-field" htmlFor={'ref-label-' + entry.id}>
+            <span>Citation label (optional, used when copying)</span>
+            <Input id={'ref-label-' + entry.id} value={labels[entry.id] || ''}
+              placeholder="(Archer et al., 2010)" maxLength={500}
+              onChange={e => setLabels(current => ({ ...current, [entry.id]: e.target.value }))} />
+          </label>
           <div className="reference-editor-actions">
             <button
               type="button"
@@ -83,7 +90,7 @@ export function ReferencesEditor({
                   return;
                 }
                 void navigator.clipboard
-                  .writeText(citationToken(nodeId, entry.id))
+                  .writeText(citationToken(nodeId, entry.id, labels[entry.id]))
                   .then(() =>
                     setMessage('Citation copied. Paste it into your text.'),
                   )
@@ -121,7 +128,7 @@ export function ReferencesEditor({
           <details>
             <summary>Citation marker</summary>
             <code className="reference-token">
-              {citationToken(nodeId, entry.id)}
+              {citationToken(nodeId, entry.id, labels[entry.id])}
             </code>
           </details>
         </fieldset>

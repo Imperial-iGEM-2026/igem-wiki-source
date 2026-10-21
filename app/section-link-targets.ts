@@ -4,6 +4,7 @@ import { materialize } from './studio-engine';
 import { emptyLayout, type CanvasLayout } from './canvas-schema';
 import { isSiteHeader } from './site-header-layer';
 import { sectionAnchor } from './section-links';
+import { referenceAnchor } from './reference-anchor';
 export type SectionLinkTarget = { anchor: string; label: string };
 export function sectionLinkTargets(data: Record<string, {value:string}>, page: string, draft?: CanvasLayout): SectionLinkTarget[] {
   if (parseRemovedPages(data['pages:removed']?.value).includes(page)) return [];
@@ -24,6 +25,8 @@ export function sectionLinkTargets(data: Record<string, {value:string}>, page: s
     if (!visible) continue;
     const label = (node.indexLabel || node.title || builtins.get(id)?.label || (['section','html','accordion'].includes(node.kind) ? node.name : '') || '').replace(/<[^>]*>/g,' ').trim();
     if (label) targets.push({anchor:sectionAnchor(id),label});
+    if (node.kind === 'references') for (const entry of node.references || [])
+      targets.push({anchor:encodeURIComponent(referenceAnchor(id, entry.id)),label:(label || 'References')+' › '+(entry.text || 'Untitled reference').slice(0,160)});
     for (const item of node.items || []) if (item.title) targets.push({anchor:sectionAnchor(id,item.id),label:(label ? label+' › ' : '')+item.title});
   }
   return targets;

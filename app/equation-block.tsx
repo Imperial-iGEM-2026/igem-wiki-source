@@ -1,4 +1,4 @@
-import { CitationText } from './references';
+import { CitationText, citationMarkerSource } from './references';
 import { useMemo } from 'react';
 import katex from 'katex';
 
@@ -71,6 +71,7 @@ export function EquationBlock({ source }: { source: string }) {
 
 /** Parse explicit math delimiters; leave prose, escaped dollars and code intact. */
 export function splitMathText(text: string) {
+  const citation = new RegExp('^' + citationMarkerSource);
   const parts: { text: string; source?: string; display?: boolean }[] = [];
   const escaped = (at: number) => {
     let slashes = 0;
@@ -80,6 +81,12 @@ export function splitMathText(text: string) {
   let start = 0,
     i = 0;
   while (i < text.length) {
+    // Citation labels are plain text, including escaped brackets and dollars.
+    const citationAt = text.startsWith('\\[@', i) ? i + 1 : i;
+    if (text.startsWith('[@', citationAt)) {
+      const marker = text.slice(citationAt).match(citation);
+      if (marker) { i = citationAt + marker[0].length; continue; }
+    }
     if (text[i] === '`' && !escaped(i)) {
       const run = text.slice(i).match(/^`+/)![0];
       const end = text.indexOf(run, i + run.length);

@@ -11,11 +11,15 @@ export function safeLink(value: unknown): value is string {
   for (const char of value)
     if (char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) return false;
   if (
-    /^(?:\/(?:[a-z][a-z0-9-]{0,59})?)?(?:#[A-Za-z][A-Za-z0-9_.:-]*)?$/.test(
+    /^(?:\/(?:[a-z][a-z0-9-]{0,59})?)?(?:#[A-Za-z](?:[A-Za-z0-9_.:-]|%[0-9A-Fa-f]{2})*)?$/.test(
       value,
     )
   )
-    return true;
+    {
+      try {
+        return !/[\u0000-\u001f\u007f]/.test(decodeURIComponent(value));
+      } catch { return false; }
+    }
   try {
     const url = new URL(value);
     return ['http:', 'https:'].includes(url.protocol)

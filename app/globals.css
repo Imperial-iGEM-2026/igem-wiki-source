@@ -2573,6 +2573,12 @@ footer
   text-decoration: none;
   padding: 0 2px;
 }
+.inline-citation.inline-citation-label {
+  font-size: inherit;
+  vertical-align: baseline;
+  line-height: inherit;
+  padding: 0;
+}
 .inline-citation:hover {
   text-decoration: underline;
 }

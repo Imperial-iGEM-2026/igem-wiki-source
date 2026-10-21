@@ -1,3 +1,4 @@
+import { referenceAnchor } from './reference-anchor';
 import { LinkedText } from './text-links';
 import { createContext, useContext } from 'react';
 import type { CanvasLayout, ReferenceEntry } from './canvas-schema';
@@ -5,8 +6,9 @@ export type ReferenceTarget = { number: number; text: string; anchor: string };
 export const ReferenceContext = createContext<Record<string, ReferenceTarget>>(
   {},
 );
-export const citationToken = (nodeId: string, id: string) =>
-  `[@${nodeId}/${id}]`;
+export const citationToken = (nodeId: string, id: string, label = '') =>
+  `[@${nodeId}/${id}${label.trim() ? '|' + label.trim().replace(/([\\\[\]])/g, '\\$1').replace(/[\r\n]+/g, ' ') : ''}]`;
+export const citationMarkerSource = String.raw`\[@([a-zA-Z0-9-]{1,90}\/[a-zA-Z0-9-]{1,90})(?:\|((?:\\.|[^\]\\\r\n])+))?\]`;
 export function referenceIndex(layout: CanvasLayout) {
   const map = new Map(layout.nodes.map((n) => [n.id, n]));
   const result: Record<string, ReferenceTarget> = {};
@@ -19,7 +21,7 @@ export function referenceIndex(layout: CanvasLayout) {
     const visited = new Set<string>();
     while (ancestor && !visited.has(ancestor.id)) {
       visited.add(ancestor.id);
-      if (ancestor.hidden) hidden = true;
+      if (ancestor.hidden || ancestor.deleted) hidden = true;
       ancestor = map.get(ancestor.parentId || '')!;
     }
     if (hidden) continue;
@@ -28,7 +30,7 @@ export function referenceIndex(layout: CanvasLayout) {
       result[key] = {
         number: ++number,
         text: ref.text,
-        anchor: 'citation-' + encodeURIComponent(key),
+        anchor: referenceAnchor(id, ref.id),
       };
     }
   }
@@ -81,25 +83,25 @@ export function ReferenceList({
 export function CitationText({ text }: { text: string }) {
   const index = useContext(ReferenceContext);
   // Backtick code and escaped markers remain literal, as do ordinary [1] labels.
-  const pattern =
-    /(`+)[\s\S]*?\1|\\\[@[^\]]*\]|\[@([a-zA-Z0-9-]{1,90}\/[a-zA-Z0-9-]{1,90})\]/g;
+  const pattern = new RegExp(String.raw`(` + '`' + String.raw`+)[\s\S]*?\1|\\\[@(?:\\.|[^\]\\])*\]|` + citationMarkerSource, 'g');
   const children = [];
   let start = 0;
   for (const match of text.matchAll(pattern)) {
     if (!match[2]) continue;
     children.push(<LinkedText key={"text-" + match.index} text={text.slice(start, match.index)} />);
     const target = index[match[2]];
+    const label = match[3]?.replace(/\\([\[\]\\])/g, '$1').trim();
     children.push(
       target ? (
         <a
           key={match.index}
-          className="inline-citation"
+          className={'inline-citation' + (label ? ' inline-citation-label' : '')}
           data-citation-link
           href={'#' + encodeURIComponent(target.anchor)}
           title={target.text}
-          aria-label={'Reference ' + target.number + ': ' + target.text}
+          aria-label={(label || 'Reference ' + target.number) + ': ' + target.text}
         >
-          [{target.number}]
+          {label || `[${target.number}]`}
         </a>
       ) : (
         <span

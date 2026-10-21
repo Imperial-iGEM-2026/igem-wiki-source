@@ -11,7 +11,7 @@ export function revealSection(hash: string) {
     if (el instanceof HTMLDetailsElement) el.open = true;
   target.style.scrollMarginTop = '110px';
   target.scrollIntoView({ block: 'start', behavior: 'instant' });
-  if (id.startsWith('section-')) {
+  if (id.startsWith('section-') || id.startsWith('citation-')) {
     target.setAttribute('tabindex', '-1');
     target.focus({ preventScroll: true });
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -20,13 +20,13 @@ export function revealSection(hash: string) {
   return true;
 }
 export function startSectionLinks() {
-  const visit = () => { if (location.hash.startsWith('#section-')) revealSection(location.hash); };
+  const visit = () => { if (/^#(?:section|citation)-/.test(location.hash)) revealSection(location.hash); };
   const click = (event: MouseEvent) => {
     if (event.defaultPrevented || event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     const link = (event.target as Element)?.closest?.('a');
     if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
     const url = new URL(link.href, location.href);
-    if (url.origin !== location.origin || url.pathname !== location.pathname || url.search !== location.search || !url.hash.startsWith('#section-')) return;
+    if (url.origin !== location.origin || url.pathname !== location.pathname || url.search !== location.search || !/^#(?:section|citation)-/.test(url.hash)) return;
     if (revealSection(url.hash)) { event.preventDefault(); history.pushState(history.state, '', url.hash); }
   };
   document.addEventListener('click', click);
