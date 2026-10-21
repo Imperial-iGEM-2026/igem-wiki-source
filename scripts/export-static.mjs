@@ -786,20 +786,8 @@ for (const page of [undefined, ...wikiPages]) {
       );
     return match;
   });
-  if (repository && !template)
-    html = html.replace(
-      esc(data['footer:repository'].value),
-      `<a href="${esc(repository)}">Website source on iGEM GitLab</a>`,
-    );
-  if (template && (repository || args.includes('--license-confirmed')))
-    html += `<footer class="publication-source">${repository ? `<a href="${esc(repository)}">Website source on iGEM GitLab</a>` : ''}${args.includes('--license-confirmed') ? ' · Content licensed under <a rel="license" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>' : ''}</footer>`;
   if (template && attribution && page?.slug === 'attributions')
     html += `<iframe title="Official team attributions" src="${esc(attribution)}" loading="lazy"></iframe>`;
-  if (args.includes('--license-confirmed'))
-    html = html.replace(
-      'Publication license to confirm: CC BY 4.0',
-      'Content licensed under CC BY 4.0',
-    );
   if (attribution && page?.slug === 'attributions')
     html = html.replace(
       /<div class="form-pending">[\s\S]*?<\/div><\/div>/,

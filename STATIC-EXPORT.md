@@ -17,6 +17,8 @@ Google Fonts in exports: Prepare now downloads referenced Google Fonts and their
 
 # Publish the wiki from source on iGEM
 
+The exporter does not add a repository/licence footer or rewrite your footer text. Add any visible source and licence links yourself in the wiki editor. Exported licence files and publication checks remain included.
+
 Publication excludes pages with whole `backup`, `test` or `scratch` slug segments, including their copied fields and unused media. Studio retains the original pages. Scientific pages such as `testing-methods` and `contest` remain published. The build log and `publication-report.json` list the excluded slugs.
 
 PDF WebAssembly decoders (`openjpeg`, `jbig2`, and `qcms_bg`) now join JavaScript in `assets/runtime`. Upload them through the current helper, which checks the MIME type, CORS access and exact bytes. Fresh exports map each file to its uploaded iGEM URL; the compiler removes mapped WASM binaries from the Pages artifact. A small dedicated PDF worker adapter resolves both asynchronous decoder requests and synchronous colour-profile requests. Unmapped older exports retain the local binaries. The unused PDF scripting engine remains excluded. Download the updated helper and prepare fresh ZIPs after installing this update.
