@@ -56,6 +56,7 @@ export function SourcePreview({
   active,
   editor,
   initialResume,
+  onReady,
 }: {
   data: Blocks;
   page: string;
@@ -64,8 +65,11 @@ export function SourcePreview({
   active: boolean;
   editor?: { id: string; name: string };
   initialResume?: unknown;
+  onReady?: () => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const readyCallback = useRef(onReady);
+  readyCallback.current = onReady;
   const latest = useRef({ data, page, projectId, editor });
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -80,6 +84,7 @@ export function SourcePreview({
   }, []);
   const [aiPage, setAiPage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [previousAttempt, setPreviousAttempt] = useState<number | null>(null);
   const [status, setStatus] = useState('Preparing developer source…');
   const [error, setError] = useState('');
   const [revision, setRevision] = useState('');
@@ -288,6 +293,7 @@ export function SourcePreview({
         prepared.current = null;
         applying.current = true;
         setBackgroundStatus('Applying source update…');
+        setPreviousAttempt(attempt);
         setAttempt((v) => v + 1);
       }
       if (message.type === 'source-preview-ready')
@@ -320,6 +326,8 @@ export function SourcePreview({
         applying.current = false;
         resume.current = null;
         setRevision(bundle.revision);
+        setPreviousAttempt(null);
+        readyCallback.current?.();
       }
       if (message.type === 'source-preview-error')
         setStatus('Developer source runtime error');
@@ -611,8 +619,14 @@ export function SourcePreview({
     return () => clearInterval(timer);
   }, [active]);
   return (
-    <div className={editor ? 'studio-source-editor' : 'studio-source-preview'}>
-      {status && !error && (
+    <div
+      className={editor ? 'studio-source-editor' : 'studio-source-preview'}
+      style={{
+        position: 'relative',
+        background: initialResume && !revision ? 'transparent' : undefined,
+      }}
+    >
+      {status && !error && !revision && !initialResume && (
         <EditorLoading title="Building source…" detail={status} />
       )}
       {(backgroundStatus || backgroundError || error) && (
@@ -683,13 +697,43 @@ export function SourcePreview({
           pageTitle={aiPage || page}
         />
       )}
-      <iframe
-        ref={frame}
-        title={editor ? 'Website editor' : 'Developer source preview'}
-        sandbox="allow-scripts allow-same-origin allow-presentation allow-downloads"
-        allow="fullscreen *"
-        style={{ width }}
-      />
+      {(previousAttempt === null ? [attempt] : [previousAttempt, attempt]).map(
+        (version) => {
+          const previous = version !== attempt;
+          const staging = !previous && previousAttempt !== null;
+          const concealed = staging || (Boolean(initialResume) && !revision);
+          return (
+            <iframe
+              key={version}
+              ref={previous ? undefined : frame}
+              title={
+                previous
+                  ? 'Previous website view'
+                  : editor
+                    ? 'Website editor'
+                    : 'Developer source preview'
+              }
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-downloads"
+              allow="fullscreen *"
+              inert={previous || concealed}
+              aria-hidden={previous || concealed || undefined}
+              tabIndex={previous || concealed ? -1 : undefined}
+              style={{
+                width,
+                visibility: concealed ? 'hidden' : undefined,
+                ...(staging
+                  ? ({
+                      position: 'absolute',
+                      top: 0,
+                      height: '100%',
+                      visibility: 'hidden',
+                    } as const)
+                  : {}),
+              }}
+            />
+          );
+        },
+      )}
     </div>
   );
 }

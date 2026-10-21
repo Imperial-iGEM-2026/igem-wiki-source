@@ -176,7 +176,7 @@ try {
     ['second', 'Second page', true],
     ['workshop', 'Updated draft', true],
   ]) {
-    await preview.getByRole('button', { name: 'Search this website', exact: true }).click();
+    await preview.locator('body').evaluate(() => window.websiteSearch.open());
     await preview.getByRole('searchbox', { name: 'Search pages' }).fill(query);
     const result = preview.locator('.website-search ol a').first();
     await result.waitFor();

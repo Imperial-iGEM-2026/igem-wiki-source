@@ -1,5 +1,6 @@
 /* eslint-disable next/no-img-element -- The standalone Node/static renderer has no Next image optimizer. */
 'use client';
+import { startWebsiteAccessibility } from './site-accessibility';
 import { sectionLinkTargets, sectionLinkPages } from './section-link-targets';
 import { editorImageURL } from './editor-image';
 import { LoadingControls } from './loading-controls';
@@ -464,6 +465,10 @@ export function StudioEditor({
   }
   const artboard = useRef<HTMLDivElement>(null),
     ownSave = useRef<{ layout: CanvasLayout; version: number } | null>(null);
+  useEffect(() => {
+    if (!preview && artboard.current)
+      return startWebsiteAccessibility('preview:' + (ctx.projectId || 'default'), artboard.current);
+  }, [preview, ctx.projectId]);
   const [target, setTarget] = useState<DesignTarget | null>(null);
   // Elements picked with Shift/Ctrl/Cmd-click; styled together by the dock.
   const [multiTargets, setMultiTargets] = useState<DesignTarget[]>([]);

@@ -29,15 +29,13 @@ await build({
   },
 });
 const pdf = await PDFDocument.create();
-pdf
-  .addPage([200, 200])
-  .drawRectangle({
-    x: 0,
-    y: 0,
-    width: 200,
-    height: 200,
-    color: rgb(0.7, 0.4, 0.8),
-  });
+pdf.addPage([200, 200]).drawRectangle({
+  x: 0,
+  y: 0,
+  width: 200,
+  height: 200,
+  color: rgb(0.7, 0.4, 0.8),
+});
 const pdfBytes = Buffer.from(await pdf.save());
 const server = createServer(async (req, res) => {
   try {
@@ -142,66 +140,25 @@ try {
     'rgb(190, 20, 90)',
   );
   assert.equal(
-    await page.locator('#photo').evaluate((el) => getComputedStyle(el).filter),
-    'contrast(1.25)',
-  );
-  for (const selector of [
-    '#logo',
-    '#video',
-    '#embedded-video',
-    '#pdf-object',
-    '#background-logo',
-    '.partitioned-pdf',
-  ])
-    assert.equal(
-      await page
-        .locator(selector)
-        .first()
-        .evaluate((el) => getComputedStyle(el).filter),
-      'contrast(1.25)',
-      selector,
-    );
-  for (const selector of ['#preserved-logo', '#logo svg', '.custom-html-frame'])
-    assert.ok(
-      (
-        await page
-          .locator(selector)
-          .evaluateAll((els) => els.map((el) => getComputedStyle(el).filter))
-      ).every((value) => value === 'none'),
-      selector + ' must not be filtered twice or when exempt',
-    );
-  for (const selector of ['svg:not([aria-hidden])', 'video', 'canvas'])
-    assert.equal(
-      await widget
-        .locator(selector)
-        .evaluate((el) => getComputedStyle(el).filter),
-      'contrast(1.25)',
-    );
-  const preserved = page.frameLocator(
-    '[data-preserve-colors] .custom-html-frame',
-  );
-  await preserved.locator('html[data-website-color-mode="default"]').waitFor();
-  assert.equal(
-    await preserved
-      .locator('img')
-      .evaluate((el) => getComputedStyle(el).filter),
+    await page.locator('html').evaluate((el) => getComputedStyle(el).filter),
     'none',
+    'High contrast is a theme, not a page filter',
   );
-  for (let i = 0; i < samples.length; i++)
-    assert.notDeepEqual(
-      await pixel(samples[i]),
-      originals[i],
-      'Rendered pixels change for media ' + i,
+  for (const sample of samples)
+    assert.equal(
+      await sample.evaluate((el) => getComputedStyle(el).filter),
+      'none',
+      'No per-element filter',
     );
-  await page.evaluate(() =>
-    window.websiteAccessibility.setColorMode('default'),
-  );
   for (let i = 0; i < samples.length; i++)
     assert.deepEqual(
       await pixel(samples[i]),
       originals[i],
-      'Original media pixels restored ' + i,
+      'High contrast preserves media pixels ' + i,
     );
+  await page.evaluate(() =>
+    window.websiteAccessibility.setColorMode('default'),
+  );
   const modePixels = [];
   for (const mode of [
     'protanopia',
@@ -222,6 +179,26 @@ try {
         originals[i],
         mode + ' visibly affects media ' + i,
       );
+    assert.equal(
+      await widget
+        .locator('html')
+        .evaluate((el) => getComputedStyle(el).filter),
+      'none',
+      'Widget is not filtered twice',
+    );
+    for (const sample of samples)
+      assert.equal(
+        await sample.evaluate((el) => getComputedStyle(el).filter),
+        'none',
+      );
+    if (mode === 'grayscale')
+      for (const sample of samples) {
+        const values = await pixel(sample);
+        assert.ok(
+          Math.max(...values) - Math.min(...values) <= 1,
+          'Entire media output is grayscale',
+        );
+      }
     modePixels.push(await pixel(page.locator('#photo')));
     await page.evaluate(() => window.websiteAccessibility.setColorStrength(0));
     for (let i = 0; i < samples.length; i++)
@@ -237,7 +214,8 @@ try {
     4,
     'Assistance presets produce distinct outputs',
   );
-  await page.getByRole('button', { name: '◐ Colours', exact: true }).click();
+  assert.equal(await page.locator('.website-color-launcher').isVisible(), false, 'No default floating launcher');
+  await page.evaluate(() => window.websiteAccessibility.openSettings());
   await page
     .getByLabel('Colour assistance', { exact: true })
     .selectOption('deuteranopia');
@@ -355,7 +333,7 @@ try {
   for (const color of ['172033', '0047ab', '9c3f00'])
     assert.ok(1.05 / (luminance(color) + 0.05) >= 4.5);
   console.log(
-    'PASS: API/toggle, persistence, media filters and pixel restoration for images, SVG, playing video, opaque embedded player and rendered PDF; Custom HTML once-only propagation, preserved subtrees, rejected foreign messages and palette contrast.',
+    'PASS: API/toggle, persistence, whole-page filtering and pixel restoration for images, SVG, playing video, opaque embedded player and rendered PDF; Custom HTML once-only propagation, separate high-contrast preservation, rejected foreign messages and palette contrast.',
   );
 } finally {
   await browser.close();

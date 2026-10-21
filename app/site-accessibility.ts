@@ -2,7 +2,6 @@ import {
   colorModes,
   isColorMode,
   validStrength,
-  assistanceMatrix,
   createColorPresentation,
   type WebsiteColorMode,
 } from './site-color-filters';
@@ -18,21 +17,17 @@ export const accessiblePalette = {
 // Colour assistance must not repaint authored charts as interface surfaces.
 // High contrast is a separate text treatment; the other presets preserve design.
 const activeColor =
-  'html[data-website-color-mode]:not([data-website-color-mode="default"])';
-const highContrast = 'html[data-website-color-mode="high-contrast"]';
+  '[data-website-color-root][data-website-color-mode]:not([data-website-color-mode="default"])';
+const highContrast =
+  '[data-website-color-root][data-website-color-mode="high-contrast"]';
 const charts =
   ':is([data-website-chart],[role="img"],.recharts-wrapper,.js-plotly-plot,.highcharts-container,.vega-embed)';
 const preserve = ':not([data-preserve-colors],[data-preserve-colors] *)';
 const textScope = `${preserve}:not(${charts},${charts} *,svg *,[data-website-media],[data-website-media] *,[data-website-auto-media],[data-website-auto-media] *)`;
-const media =
-  ':where(img,video,canvas,svg,iframe:not(.custom-html-frame),object,embed,.partitioned-pdf,[data-website-media],[data-website-auto-media],' +
-  charts +
-  ')';
-const mediaScope = `${preserve}:not(svg *,object *,video *,.partitioned-pdf *,[data-website-media] *,[data-website-auto-media] *,${charts} *)`;
 // Important declarations in a named layer outrank unlayered widget CSS without
 // modifying inline styles, so switching off restores the exact authored result.
 // Never use the background shorthand on controls: it erases image-backed logos
-// before the background-media detector can discover and preserve them.
+// even though high contrast is separate from whole-page filtering.
 export const accessibilityStyles = `@layer website-accessibility {
 ${highContrast} { color-scheme:light; --website-a11y-background:#fff; --website-a11y-text:#172033; --website-a11y-link:#0047ab; --website-a11y-focus:#9c3f00; }
 ${highContrast} :where(body,main,header,footer,nav,article,section,aside,p,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,form,details,summary,dialog,blockquote,pre,code,[data-website-readable])${textScope} { color:#172033!important; background-color:#fff!important; text-shadow:none!important; }
@@ -42,11 +37,7 @@ ${highContrast} :where(button[aria-pressed="true"],[aria-selected="true"],a[aria
 ${highContrast} :where(button,a,[data-website-readable])${textScope} :where(span,strong,em,b,i)${textScope} { color:inherit!important; background-color:transparent!important; }
 ${activeColor} :focus-visible { outline:3px solid #9c3f00!important; outline-offset:3px!important; }
 ${activeColor} ::selection { color:#fff; background:#0047ab; }
-${activeColor} ${media}${mediaScope} { filter:var(--website-a11y-media-filter,contrast(1.25))!important; }
-${activeColor} .partitioned-pdf${mediaScope} { --website-a11y-pdf-filter:var(--website-a11y-media-filter,contrast(1.25)); }
-${activeColor} :where(video,iframe:not(.custom-html-frame),object,embed)${mediaScope} { filter:var(--website-a11y-embedded-filter,var(--website-a11y-media-filter))!important; }
-/* Charts that redraw using the supplied palette must not be filtered again. */
-${activeColor} [data-website-chart="palette"]${preserve} { filter:none!important; }
+
 }`;
 
 export const accessibleChartPalette = [
@@ -60,7 +51,10 @@ export const accessibleChartPalette = [
 
 type Settings = { mode: WebsiteColorMode; strength: number };
 const remembered = new Map<string, Settings>();
-export function startWebsiteAccessibility(key: string) {
+export function startWebsiteAccessibility(
+  key: string,
+  root: HTMLElement = document.documentElement,
+) {
   let { mode, strength } = remembered.get(key) || {
     mode: 'default' as WebsiteColorMode,
     strength: 1,
@@ -78,18 +72,18 @@ export function startWebsiteAccessibility(key: string) {
     /* Opaque preview or disabled storage. */
   }
   if (mode !== 'default') lastActive = mode;
-  const presentation = createColorPresentation();
+  const presentation = createColorPresentation({ root });
   const frames = () => [
-    ...document.querySelectorAll<HTMLIFrameElement>('.custom-html-frame'),
+    ...root.querySelectorAll<HTMLIFrameElement>('.custom-html-frame'),
   ];
   const state = (preserve = false) => ({
-    mode: preserve ? 'default' : mode,
+    mode: preserve && mode === 'high-contrast' ? 'default' : mode,
     strength,
     styles: accessibilityStyles,
-    matrix: preserve ? null : assistanceMatrix(mode, strength),
     palette: accessiblePalette,
     modes: colorModes,
     chartPalette: accessibleChartPalette,
+    pageFiltered: mode !== 'default' && mode !== 'high-contrast',
   });
   const announce = (frame: HTMLIFrameElement) =>
     frame.contentWindow?.postMessage(
@@ -110,6 +104,7 @@ export function startWebsiteAccessibility(key: string) {
           strength,
           palette: accessiblePalette,
           chartPalette: accessibleChartPalette,
+          pageFiltered: mode !== 'default' && mode !== 'high-contrast',
         },
       }),
     );
@@ -129,7 +124,7 @@ export function startWebsiteAccessibility(key: string) {
     strength = 1;
     lastActive = 'high-contrast';
     persist();
-  });
+  }, root);
   const api = {
     getColorMode: () => mode,
     getColorStrength: () => strength,
@@ -246,7 +241,7 @@ export function htmlAccessibilityBridge(
   ];
   let modes = allowed.map((value) => ({ value, label: value }));
   let chartPalette: { color: string; dash: string; marker: string }[] = [];
-  const presentation = createPresentation();
+  const presentation = createPresentation({ filteredByParent: true });
   const post = (type: string, extra: Record<string, unknown> = {}) =>
     parent.postMessage({ type, ...extra }, '*');
   const api = {
@@ -287,7 +282,13 @@ export function htmlAccessibilityBridge(
     presentation.apply({ ...event.data, strength });
     dispatchEvent(
       new CustomEvent('website:colormodechange', {
-        detail: { mode, strength, palette: event.data.palette, chartPalette },
+        detail: {
+          mode,
+          strength,
+          palette: event.data.palette,
+          chartPalette,
+          pageFiltered: event.data.pageFiltered,
+        },
       }),
     );
   });

@@ -1,6 +1,7 @@
 import { exportSource } from './export-source.mjs';
 import { PDFDocument } from 'pdf-lib';
 import assert from 'node:assert/strict';
+import { PNG } from 'pngjs';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -90,6 +91,7 @@ const compiler = JSON.parse(
 );
 const savedRows = new Map();
 let hasOverrides = true;
+let runtimeDelay = 0;
 let revision = 'first',
   sourceReads = 0;
 const server = createServer(async (req, res) => {
@@ -158,6 +160,7 @@ const server = createServer(async (req, res) => {
       );
       return;
     }
+    if (url.pathname.endsWith('/pdf.worker.mjs') && runtimeDelay) await new Promise(r => setTimeout(r, runtimeDelay));
     const file = url.pathname.startsWith('/assets/source-preview/')
       ? path.join('selfhost-dist/client', url.pathname)
       : path.join(
@@ -273,9 +276,14 @@ try {
     true,
     'Preview cannot mutate server',
   );
+  await f.evaluate(() => window.websiteAccessibility.setColorMode('grayscale'));
+  assert.equal(await preview.locator('html').evaluate(e=>getComputedStyle(e).filter), 'grayscale(1)', 'Source preview filters its website document');
+  assert.equal(await page.locator('html').evaluate(e=>getComputedStyle(e).filter), 'none', 'Studio chrome remains unchanged');
   await f.evaluate(() => window.websiteAccessibility.setColorMode('high-contrast'));
   await preview.locator('html[data-website-color-mode="high-contrast"]').waitFor();
   await f.evaluate(() => window.websiteAccessibility.setColorMode('default'));
+  assert.equal(await preview.locator('.website-search-open').isVisible(),false,'No default Search launcher');
+  assert.equal(await preview.locator('.website-color-launcher').isVisible(),false,'No default Colours launcher');
   await f.evaluate(() => window.websiteSearch.open());
   await preview
     .getByRole('searchbox', { name: 'Search pages' })
@@ -293,9 +301,24 @@ try {
     390,
   );
   sourceFiles['app/project-components/PreviewProbe.tsx'] = sourceFiles['app/project-components/PreviewProbe.tsx'].replace('className="source-probe"', 'className="source-probe" data-auto-build="newer"');
+  await page.evaluate(() => {
+    window.startupFlashes = 0;
+    new MutationObserver(records => {
+      for (const record of records) for (const node of record.addedNodes)
+        if (node instanceof Element && (node.matches('.editor-loading-screen') || node.querySelector('.editor-loading-screen'))) window.startupFlashes++;
+    }).observe(document.body, {subtree:true,childList:true});
+  });
+  runtimeDelay = 1200;
   revision = 'newer';
   await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await page.locator('iframe[title="Previous website view"]').waitFor({timeout:90000});
+  assert.equal(await page.locator('iframe[title="Developer source preview"]').isVisible(),false,'Candidate stays concealed while runtime loads');
+  await page.frameLocator('iframe[title="Previous website view"]').getByRole('heading',{name:'Second page',exact:true}).waitFor();
+  assert.equal(await page.locator('.editor-loading-screen').count(),0,'Background swap has no startup overlay');
   await preview.locator('[data-auto-build="newer"]').waitFor({timeout:90000});
+  assert.equal(await page.locator('iframe[title="Previous website view"]').count(),0,'Old iframe released after ready');
+  assert.equal(await page.evaluate(()=>window.startupFlashes),0);
+  runtimeDelay = 0;
   await preview.getByRole('heading', {name:'Second page',exact:true}).waitFor();
   assert.equal(await page.locator('iframe[title="Developer source preview"]').evaluate(e=>e.clientWidth),390);
   console.log('PASS automatic background rebuild preserves preview route and viewport');
@@ -306,11 +329,32 @@ try {
   assert.equal(await editor.locator('.studio-source-status').count(),0);
   await editor.locator('.regel-header-search').waitFor();
   console.log('PASS header SVG visible inside Design');
+  await editor.locator('.studio-artboard').evaluate(root=>{
+    const swatch=document.createElement('div');swatch.id='colour-artboard-probe';swatch.style.cssText='width:30px;height:30px;background:rgb(180,100,200);position:absolute;top:2px;left:2px;z-index:999';root.append(swatch);
+  });
+  await editor.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('grayscale'));
+  assert.equal(await editor.locator('html').evaluate(e=>getComputedStyle(e).filter),'none','Editor controls are outside the page filter');
+  assert.equal(await editor.locator('.studio-artboard').evaluate(e=>getComputedStyle(e).filter),'grayscale(1)');
+  const swatchPng=PNG.sync.read(await editor.locator('#colour-artboard-probe').screenshot());
+  const swatchAt=(Math.floor(swatchPng.height/2)*swatchPng.width+Math.floor(swatchPng.width/2))*4;
+  const swatchRgb=[...swatchPng.data.subarray(swatchAt,swatchAt+3)];
+  assert.ok(Math.max(...swatchRgb)-Math.min(...swatchRgb)<=1,'Design canvas pixels are grayscale');
+  await editor.locator('body').evaluate(()=>window.websiteAccessibility.openSettings());
+  assert.equal(await editor.locator('dialog:modal').count(),0,'Colour chooser stays inside Design');
+  const colourBounds=await editor.locator('.website-color-controls dialog').boundingBox();
+  const colourStage=await editor.locator('.studio-stage').boundingBox();
+  assert.ok(colourBounds.x>=colourStage.x && colourBounds.x+colourBounds.width<=colourStage.x+colourStage.width+1);
+  await editor.getByRole('button',{name:'Close colour preferences',exact:true}).click();
+  await editor.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('default'));
+  await editor.locator('#colour-artboard-probe').evaluate(e=>e.remove());
+  console.log('PASS source Design whole-artboard filter, unchanged Studio chrome and contained colour chooser');
   assert.equal(await editor.locator('.website-search-open').isVisible(),false,'Default floating trigger stays hidden in Design');
+  await editor.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('grayscale'));
   await editor.locator('.regel-header-search').click();
   await page.screenshot({path:path.join(dir,'search-click.png')});
   await editor.getByRole('dialog',{name:'Search this website',exact:true}).waitFor({timeout:5000});
   assert.equal(await editor.locator('dialog:modal').count(),0,'Design search must not enter the browser top layer');
+  assert.equal(await editor.locator('.website-search dialog').evaluate(e=>getComputedStyle(e).filter),'grayscale(1)','Design search portal follows page filter');
   const searchBounds=await editor.locator('.website-search dialog').boundingBox();
   const canvasBounds=await editor.locator('.studio-artboard').boundingBox();
   const stageBounds=await editor.locator('.studio-stage').boundingBox();
@@ -318,6 +362,7 @@ try {
   assert.ok(searchBounds.x+searchBounds.width<=Math.min(canvasBounds.x+canvasBounds.width,stageBounds.x+stageBounds.width)+1);
   assert.ok(searchBounds.y>=stageBounds.y && searchBounds.y+searchBounds.height<=stageBounds.y+stageBounds.height+1,'Search stays in the visible canvas');
   await editor.getByRole('searchbox',{name:'Search pages'}).press('Escape');
+  await editor.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('default'));
   assert.equal(await editor.locator('.source-probe').evaluate(e=>getComputedStyle(e).color),'rgb(111, 22, 155)');
   await editor.getByText('Overview',{exact:true}).click();
   await editor.getByLabel('Heading',{exact:true}).fill('Saved in source editor');
@@ -337,6 +382,10 @@ try {
   await nested.getByRole('heading',{name:'Saved in source editor',exact:true}).waitFor();
   await nested.getByText('Source override works',{exact:true}).waitFor();
   assert.equal(await editor.locator('.studio-preview-version').count(),0);
+  await nested.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('grayscale'));
+  assert.equal(await nested.locator('html').evaluate(e=>getComputedStyle(e).filter),'grayscale(1)');
+  assert.equal(await editor.locator('html').evaluate(e=>getComputedStyle(e).filter),'none');
+  await nested.locator('body').evaluate(()=>window.websiteAccessibility.setColorMode('default'));
   const ef = await (await page.locator('iframe[title="Website editor"]').elementHandle()).contentFrame();
   assert.equal(await ef.evaluate(async()=>{try{await fetch('/api/mcp-links',{method:'POST',body:'{}'});return false}catch{return true}}),true);
   assert.equal(await ef.evaluate(async()=>{try{await fetch('/api/projects',{method:'POST',body:'{}'});return false}catch{return true}}),true);
@@ -391,8 +440,15 @@ try {
   await beforeFailedBuild.evaluate(()=>{document.activeElement?.blur();dispatchEvent(new PointerEvent('pointerdown'));dispatchEvent(new CustomEvent('studio-dirty',{detail:false}))});
   await new Promise(r=>setTimeout(r,1800));
   assert.equal(await editor.locator('[data-auto-build="recovered"]').count(),0,'Update waits until pointer drag ends');
+  await page.evaluate(()=>window.startupFlashes=0);
+  runtimeDelay = 1200;
   await beforeFailedBuild.evaluate(()=>dispatchEvent(new PointerEvent('pointerup')));
+  await page.locator('iframe[title="Previous website view"]').waitFor({timeout:90000});
+  assert.equal(await beforeFailedBuild.evaluate(()=>window.keptEditor),true,'Old editor stays mounted until candidate ready');
+  assert.equal(await page.locator('.editor-loading-screen').count(),0);
   await editor.locator('[data-auto-build="recovered"]').waitFor({timeout:90000});
+  assert.equal(await page.evaluate(()=>window.startupFlashes),0,'Editor rebuild never adds startup animation');
+  runtimeDelay = 0;
   const updatedFrame=await (await page.locator('iframe[title="Website editor"]').elementHandle()).contentFrame();
   const restoredState=await updatedFrame.evaluate(()=>window.__studioCaptureState());
   for(const key of ['selected','zoom','viewport','preview']) assert.deepEqual(restoredState[key],stateBeforeUpdate[key],key+' survives source update');
@@ -404,12 +460,25 @@ try {
   await page.locator('#edit-source').click();
   await page.getByText('Website Studio',{exact:true}).waitFor();
   assert.equal(await page.locator('iframe[title="Website editor"]').count(),0);
-  await page.evaluate(()=>window.outerPageStayed=true);
+  await page.evaluate(()=>{
+    window.outerPageStayed=true;window.startupFlashes=0;
+    new MutationObserver(records => {
+      for(const record of records) for(const node of record.addedNodes)
+        if(node instanceof Element && (node.matches('.editor-loading-screen') || node.querySelector('.editor-loading-screen'))) window.startupFlashes++;
+    }).observe(document.body,{subtree:true,childList:true});
+  });
   hasOverrides=true;
+  runtimeDelay=1200;
   revision='first-override';
   await page.evaluate(()=>dispatchEvent(new Event('focus')));
+  await page.locator('iframe[title="Website editor"]').waitFor({state:'attached',timeout:90000});
+  assert.equal(await page.locator('iframe[title="Website editor"]').isVisible(),false);
+  assert.equal(await page.locator('.studio-source-editor').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)','Staged source does not paint over installed editor');
+  await page.getByText('Website Studio',{exact:true}).waitFor();
   await editor.locator('[data-auto-build="recovered"]').waitFor({timeout:90000});
   assert.equal(await page.evaluate(()=>window.outerPageStayed),true,'First source override does not reload the outer page');
+  assert.equal(await page.evaluate(()=>window.startupFlashes),0,'First override keeps installed view instead of startup animation');
+  runtimeDelay=0;
   console.log('PASS first override builds in background and switches installed editor without page reload');
 
   assert.equal(await page.locator('.studio-preview-version').count(), 0);

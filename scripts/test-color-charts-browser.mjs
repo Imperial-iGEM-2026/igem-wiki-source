@@ -85,7 +85,6 @@ try {
       mode,
     );
     await frame.locator(`html[data-website-color-mode="${mode}"]`).waitFor();
-    await frame.locator('#background[data-website-auto-media]').waitFor();
     for (const selector of ['#logo-button', '#selected-logo']) {
       assert.notEqual(
         await frame
@@ -94,7 +93,6 @@ try {
         'none',
         'High contrast must not erase image-button logos',
       );
-      await frame.locator(selector + '[data-website-auto-media]').waitFor();
     }
     assert.equal(
       await frame
@@ -130,12 +128,15 @@ try {
       );
     }
     for (let i = 0; i < samples.length; i++)
-      assert.notDeepEqual(
+      assert[mode === 'high-contrast' ? 'deepEqual' : 'notDeepEqual'](
         await pixel(samples[i]),
         originals[i],
         `${mode} visibly affects widget media/chart ${i}`,
       );
-    assert.deepEqual(await pixel(frame.locator('#preserved')), preserved);
+    assert[mode === 'high-contrast' ? 'deepEqual' : 'notDeepEqual'](
+      await pixel(frame.locator('#preserved')),
+      preserved,
+    );
     assert.equal(
       await frame
         .locator('#palette-chart')
@@ -146,7 +147,7 @@ try {
       await frame
         .locator('#palette-bar')
         .evaluate((e) => getComputedStyle(e).fill),
-      'rgb(0, 103, 165)',
+      mode === 'high-contrast' ? 'rgb(0, 103, 165)' : 'rgb(180, 100, 200)',
     );
     await page.evaluate(() => window.websiteAccessibility.setColorStrength(0));
     for (let i = 0; i < samples.length; i++)
@@ -163,7 +164,7 @@ try {
     child.id = 'late-photo';
     e.appendChild(child);
   });
-  await frame.locator('#late-photo[data-website-auto-media]').waitFor();
+  await frame.locator('#late-photo').waitFor();
   assert.notDeepEqual(await pixel(frame.locator('#late-photo')), originals[1]);
   await page.evaluate(() =>
     window.websiteAccessibility.setColorMode('high-contrast'),
@@ -222,7 +223,7 @@ try {
   );
   await page.screenshot({ path: path.join(dir, 'restored.png') });
   console.log(
-    'PASS: authored HTML charts and dark backgrounds, images overriding widget CSS, CSS/lazy background images and normal/selected logo buttons, single filtering, palette redraw API, selected controls, opt-outs, zero strength and exact restoration.',
+    'PASS: authored HTML charts and dark backgrounds, whole-page images despite widget CSS, CSS/lazy background images and normal/selected logo buttons, single filtering, palette redraw API, selected controls, high-contrast opt-outs, zero strength and exact restoration.',
   );
 } finally {
   await browser.close();

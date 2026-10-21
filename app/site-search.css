@@ -17,3 +17,5 @@
    Preserve project dialog styling; constrain only its viewport geometry. */
 .website-search.website-search-editor-open{position:fixed;z-index:1100;box-sizing:border-box;overflow:hidden;contain:layout paint;background:#17122670;backdrop-filter:blur(3px);isolation:isolate}
 .website-search.website-search-editor dialog[open]{position:absolute!important;inset:0!important;width:min(640px,calc(100% - 24px))!important;min-width:0!important;max-width:calc(100% - 24px)!important;height:fit-content!important;max-height:calc(100% - 24px)!important;margin:12px auto!important;transform:none!important;overflow:auto!important}
+
+.website-search-open[hidden]{display:none!important}

@@ -65,7 +65,7 @@ export function createWebsiteSearch(load: () => Promise<SearchIndex>, base = '/'
   };
 }
 
-export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/', host: HTMLElement = document.body, route: (url: string) => string = (url) => url, showInterface = true) {
+export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/', host: HTMLElement = document.body, route: (url: string) => string = (url) => url, showInterface = true, showLauncher = false) {
   const api = createWebsiteSearch(load, base, route);
   const stopBridge = serveHtmlSearch(api.search);
   const container = document.createElement('div');
@@ -74,7 +74,7 @@ export function startWebsiteSearch(load: () => Promise<SearchIndex>, base = '/',
   // Keep the API/dialog mounted in Design so project header enhancements can
   // attach their own search button. Only the default floating trigger is hidden.
   host.appendChild(container);
-  (container.querySelector('.website-search-open') as HTMLButtonElement).hidden = !showInterface;
+  (container.querySelector('.website-search-open') as HTMLButtonElement).hidden = !showInterface || !showLauncher;
   const dialog = container.querySelector('dialog')!;
   const input = container.querySelector('input')!;
   const status = container.querySelector('[role=status]')!;

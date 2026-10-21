@@ -1,3 +1,17 @@
+## Quiet background source updates and optional launchers
+
+Background builds keep the current view visible while the replacement iframe loads. Studio swaps only after the new editor/article mounts and saved scroll positions are restored, without repeating its startup loading animation. The first developer override also keeps the installed view until ready. Editing pauses briefly during the final swap; page, tabs, selection, zoom and viewport are retained. This is a runtime remount, so widget transient state and undo history can still reset. Compile errors retain the usable editor; a replacement runtime error retains the previous visual with a retry action.
+
+The default floating Colours and Search buttons are hidden in Design, Preview and export. Existing header controls, keyboard shortcuts and programmatic APIs continue working. Add designed controls through `window.websiteAccessibility.openSettings()` / `data-website-color-settings` and `window.websiteSearch.open()`.
+
+## Whole-page colour filters in Design, Preview and export
+
+Colour filters now compose the complete website once. Photos, logo buttons, CSS backgrounds, text, unmarked HTML charts, SVG, Custom HTML frames, video and PDF surfaces are included without image detection or element marking. Design filters only its artboard and contains the Colours panel within the visible canvas; Studio controls stay unchanged. Normal/developer Preview and static export filter their website document, preserving viewport-fixed headers. Embedded widgets do not filter themselves again.
+
+High contrast remains a separate text/controls theme and does not filter images. Grayscale uses native CSS desaturation. Protan/Deutan/Tritan use adjustable native CSS hue/saturation shifts consistently across the whole page; SVG reference matrices were removed because Chromium could skip embedded surfaces. These presets are visual preferences, not medically calibrated corrections. Whole-page filters include previously marked `data-preserve-colors` content; that marker now only exempts High contrast styling. Chart palette redraw is reserved for High contrast (`pageFiltered` in the change event identifies filter modes).
+
+Install the full package, refresh Studio once and prepare a fresh export for the deployed website. Existing mode API names and stored preferences remain compatible. Browser validation covers actual source Design and nested Preview, media/PDF pixels, image buttons, charts, generated export, fixed positioning, modal dialogs and restoration. API details are in STATIC-EXPORT.md. These notes supersede the selective-filter descriptions in earlier release entries below.
+
 ## Preserve logo buttons in High contrast
 
 Fixed another case behind blank logo circles: High contrast used the `background` shorthand on buttons and selected controls, clearing CSS background images before media detection. It now changes only `background-color`, leaving the image, crop, position and repeat settings intact. Image-backed buttons are then detected and filtered like other media.

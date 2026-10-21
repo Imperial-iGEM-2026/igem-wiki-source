@@ -355,24 +355,38 @@ export function sourcePreviewBootstrap(token: string) {
         payload.projectId,
         payload.editor,
       );
-      if (payload.resume) {
-        const saved = payload.resume;
-        // React commits asynchronously; restore once its editor/article has mounted.
-        let remaining = 120;
-        const restore = () => {
+      // React and nested previews mount asynchronously. Keep the previous frame
+      // visible until the replacement has content and its scroll is restored.
+      await new Promise<void>((resolve, reject) => {
+        const deadline = performance.now() + 15000;
+        const ready = () => {
           if (
-            !document.querySelector(editing ? '.studio-stage' : 'main') &&
-            --remaining > 0
-          )
-            return requestAnimationFrame(restore);
-          scrollTo(saved.left || 0, saved.top || 0);
-          for (const item of saved.scrolls || []) {
-            const element = document.querySelector(item.selector);
-            element?.scrollTo(item.left, item.top);
+            !document.querySelector(editing ? '.studio-stage' : 'main') ||
+            document.querySelector('.editor-loading-screen')
+          ) {
+            if (performance.now() > deadline) {
+              reject(
+                Error(
+                  'Source view did not become ready. The previous view is retained.',
+                ),
+              );
+              return;
+            }
+            requestAnimationFrame(ready);
+            return;
           }
+          const saved = payload.resume;
+          if (saved) {
+            scrollTo(saved.left || 0, saved.top || 0);
+            for (const item of saved.scrolls || [])
+              document
+                .querySelector(item.selector)
+                ?.scrollTo(item.left, item.top);
+          }
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         };
-        requestAnimationFrame(restore);
-      }
+        requestAnimationFrame(ready);
+      });
       send('source-preview-loaded');
     }
     if (payload.type === 'source-preview-data' && loaded)

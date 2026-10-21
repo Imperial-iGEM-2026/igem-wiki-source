@@ -11,7 +11,7 @@ await writeFile(
   entry,
   `
 import { mountColorSettings } from '../../app/site-color-settings';
-const controls = mountColorSettings(() => {});
+const controls = mountColorSettings(() => {}, document.documentElement, true);
 document.querySelector('[data-website-color-settings]').addEventListener('click', () => controls.open());
 `,
 );

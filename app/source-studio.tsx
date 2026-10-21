@@ -12,6 +12,7 @@ export function SourceStudio(props: React.ComponentProps<typeof Home>) {
   >('checking');
   const [attempt, setAttempt] = useState(0);
   const [updateStatus, setUpdateStatus] = useState('');
+  const [sourceReady, setSourceReady] = useState(false);
   const [updateRetry, setUpdateRetry] = useState(0);
   const resume = useRef<unknown>(null);
   const snapshot = useRef({
@@ -164,6 +165,8 @@ export function SourceStudio(props: React.ComponentProps<typeof Home>) {
   useEffect(() => {
     const abort = new AbortController();
     setState('checking');
+    setSourceReady(false);
+    resume.current = null;
     fetch(
       '/api/source-preview?project=' +
         encodeURIComponent(props.projectId || ''),
@@ -200,31 +203,43 @@ export function SourceStudio(props: React.ComponentProps<typeof Home>) {
         <button onClick={() => setAttempt((v) => v + 1)}>Retry</button>
       </div>
     );
-  if (state === 'installed')
-    return (
-      <>
-        {updateStatus && (
-          <output className="studio-source-status" role="status">
-            {updateStatus}
-            {updateStatus.startsWith('Source update failed') && (
-              <button onClick={() => setUpdateRetry((v) => v + 1)}>
-                Retry source build
-              </button>
-            )}
-          </output>
-        )}
-        <Home {...props} />
-      </>
-    );
+  const keepInstalled =
+    state === 'installed' || (Boolean(resume.current) && !sourceReady);
+  const staging = state === 'source' && keepInstalled;
   return (
-    <SourcePreview
-      data={snapshot.current.data}
-      page={snapshot.current.page}
-      projectId={props.projectId}
-      width="100%"
-      active
-      initialResume={resume.current}
-      editor={props.user || undefined}
-    />
+    <div style={{ position: 'relative', height: '100dvh' }}>
+      {state === 'installed' && updateStatus && (
+        <output className="studio-source-status" role="status">
+          {updateStatus}
+          {updateStatus.startsWith('Source update failed') && (
+            <button onClick={() => setUpdateRetry((v) => v + 1)}>
+              Retry source build
+            </button>
+          )}
+        </output>
+      )}
+      {keepInstalled && (
+        <div key="installed" inert={staging} aria-hidden={staging || undefined}>
+          <Home {...props} />
+        </div>
+      )}
+      {state === 'source' && (
+        <div
+          key="source"
+          style={staging ? { position: 'absolute', inset: 0 } : undefined}
+        >
+          <SourcePreview
+            data={snapshot.current.data}
+            page={snapshot.current.page}
+            projectId={props.projectId}
+            width="100%"
+            active
+            initialResume={resume.current}
+            onReady={() => setSourceReady(true)}
+            editor={props.user || undefined}
+          />
+        </div>
+      )}
+    </div>
   );
 }

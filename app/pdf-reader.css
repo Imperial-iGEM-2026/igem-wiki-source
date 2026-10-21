@@ -1,8 +1,7 @@
 /* Component styles live in a shadow root so page CSS cannot reposition controls. */
 :host {
   all: initial !important;
-  /* The reader isolates template styles, but follows the visitor's media mode. */
-  filter: var(--website-a11y-pdf-filter, none) !important;
+  /* Whole-page colour filters compose outside this shadow root. */
   /* Keep hidden editor canvases and collapsed sections hidden across the reset. */
   visibility: inherit !important;
   display: flex !important;
