@@ -17,11 +17,11 @@ const { dir } = JSON.parse(
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/stall') return;
-  if (url.pathname.startsWith('/test-team/')) {
+  if (url.pathname.startsWith('/test-team/') || url.pathname.startsWith('/vector-team/')) {
     const file = path.join(
       dir,
-      'export/public',
-      url.pathname.slice('/test-team/'.length) || 'index.html',
+      url.pathname.startsWith('/vector-team/') ? 'vector/public' : 'export/public',
+      url.pathname.slice(url.pathname.startsWith('/vector-team/') ? '/vector-team/'.length : '/test-team/'.length) || 'index.html',
     );
     try {
       res.setHeader(
@@ -184,6 +184,21 @@ try {
     0,
     'Exported loader respects session storage',
   );
+  await page.goto(origin + '/vector-team/', {waitUntil:'domcontentloaded'});
+  await overlay.waitFor();
+  const vectorFrame=page.frameLocator('[data-site-loading] iframe');
+  const circle=vectorFrame.locator('circle');
+  await circle.waitFor();
+  await page.waitForFunction(()=>document.querySelector('[data-site-loading]'));
+  await circle.evaluate(el=>new Promise(resolve=>{const check=()=>Number(el.dataset.ticks)>2 && el.dataset.network==='blocked' ? resolve(true) : requestAnimationFrame(check);check()}));
+  assert.equal(await circle.getAttribute('data-isolated'),'yes');
+  assert.equal(await page.locator('[data-site-loading] iframe').getAttribute('sandbox'),'allow-scripts');
+  assert.equal(await vectorFrame.locator('#breakout').count(),0,'Closing script text cannot escape its JS string');
+  assert.equal(await page.locator('body').getAttribute('data-escaped'),null);
+  assert.equal(await page.getByRole('button',{name:'Skip animation'}).count(),0);
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({state:'detached'});
+  console.log('PASS: exported vector JavaScript animates SVG, blocks parent/network access, handles closing-script text and dismisses cleanly.');
   console.log(
     'PASS: session/first-visit/always policies, preview replay, project isolation, skip/Escape, slow-load timeout, blocked storage, reduced motion and exported logo.',
   );

@@ -210,7 +210,7 @@ export function exportMedia(
     }
   }
   const header = JSON.parse(values['site:header'] || '{}');
-  if (header.loading?.enabled && header.loading.image)
+  if (header.loading?.enabled && header.loading.animation !== 'vector' && header.loading.image)
     add(header.loading.image, 'image', {
       pageTitle: 'Site settings',
       layerName: 'Loading animation',

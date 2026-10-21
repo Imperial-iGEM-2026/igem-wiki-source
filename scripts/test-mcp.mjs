@@ -403,8 +403,10 @@ try {
   const loadingFresh = await call(key, 'get_loading_animation', {});
   const loadingPatched = await call(key, 'update_loading_animation', {
     ifVersion: loadingFresh.version,
-    settings: { message: 'Hello' },
+    settings: { message: 'Hello', animation:'vector', customCss:'.loader-mark{filter:url(#goo)}', customHtml:'<svg viewBox="0 0 100 100"><circle r="25" /></svg>', customJs: "document.querySelector('circle').animate([{opacity:0},{opacity:1}],{duration:900});" },
   });
+  assert.equal(loadingPatched.settings.animation,'vector');
+  assert.ok(loadingPatched.settings.customJs.includes('.animate('));
   assert.equal(loadingPatched.settings.image, loadingSaved.settings.image);
   assert.equal(loadingPatched.settings.duration, 3400);
   const finalHeader = (

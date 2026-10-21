@@ -26,7 +26,7 @@ export function LoadingControls({
     const next = { ...d, ...patch };
     if (!validLoading(next)) {
       setError(
-        'Use valid settings. Custom CSS can animate the supplied elements; use the image field for assets, without CSS URLs or imports.',
+        'Use valid settings. Custom CSS can animate the supplied elements; use the image field for assets. Vector mode supports local SVG filter references, but no external resources or imports.',
       );
       return;
     }
@@ -112,6 +112,7 @@ export function LoadingControls({
             <option value="spin">Spin</option>
             <option value="dots">Loading dots</option>
             <option value="custom">Custom CSS animation</option>
+            <option value="vector">HTML / SVG / JavaScript animation</option>
           </select>
         </label>
         <label className="studio-field" htmlFor="loading-message">
@@ -196,7 +197,24 @@ export function LoadingControls({
             onChange={(e) => update({ timeout: Number(e.target.value) })}
           />
         </label>
-        {d.animation === 'custom' && (
+        {d.animation === 'vector' && (
+          <>
+            <label className="studio-field">
+              <span>Animation HTML / SVG</span>
+              <textarea rows={10} maxLength={64000} value={d.customHtml}
+                onChange={(e) => update({ customHtml: e.target.value })}
+                placeholder={'<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="30" fill="currentColor" /></svg>'} />
+            </label>
+            <label className="studio-field">
+              <span>Animation JavaScript</span>
+              <textarea rows={10} maxLength={64000} value={d.customJs}
+                onChange={(e) => update({ customJs: e.target.value })}
+                placeholder={"document.querySelector('circle').animate([{opacity:0.3},{opacity:1}],{duration:900,iterations:Infinity,direction:'alternate'});"} />
+            </label>
+            <p className="studio-help">Use inline SVG, canvas, CSS or JavaScript. Code runs after the markup inside an isolated frame. External libraries, network requests and access to Studio are blocked. Use the image animation style for uploaded files. Preview before saving.</p>
+          </>
+        )}
+        {(d.animation === 'custom' || d.animation === 'vector') && (
           <>
             <label className="studio-field">
               <span>Custom animation CSS</span>
@@ -213,7 +231,7 @@ export function LoadingControls({
             <p className="studio-help">
               Style .loader-content, .loader-mark, .loader-symbol and
               .loader-label. Add your own @keyframes. CSS is isolated from the
-              website; the Skip button remains available.
+              website; Escape and the timeout remain available.
             </p>
           </>
         )}

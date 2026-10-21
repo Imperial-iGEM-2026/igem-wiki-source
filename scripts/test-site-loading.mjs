@@ -18,6 +18,10 @@ assert.ok(validLoading({...defaultLoading, showSkip:false, showSymbol:false}));
 assert.ok(validLoading(defaultLoading));
 assert.ok(validHeader({ loading: defaultLoading }));
 for (const patch of [
+  { customHtml: '<script>alert(1)</script>' },
+  { customHtml: '<iframe src="/"></iframe>' },
+  { customJs: 'x'.repeat(64001) },
+  { customHtml: 'x'.repeat(64001) },
   { duration: -1 },
   { showSkip: 'false' },
   { showSymbol: 0 },
@@ -100,6 +104,20 @@ assert.ok(
 );
 assert.ok(boot.includes('publication:/test-team/'));
 assert.ok(boot.includes('"frequency":"session"'));
+const vector = {...loading, animation:'vector', image:'', showSymbol:false, showSkip:false, duration:5000, timeout:6000,
+  customHtml:'<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="30" fill="purple" /></svg>',
+  customCss:'.loader-mark{width:240px;height:240px}',
+  customJs:"const circle=document.querySelector('circle');let n=0;function tick(){circle.dataset.ticks=String(++n);circle.setAttribute('r',String(25+5*Math.sin(n/15)));requestAnimationFrame(tick)}tick();try{parent.document.body.dataset.escaped='yes'}catch{circle.dataset.isolated='yes'}fetch('/should-not-load').catch(()=>circle.dataset.network='blocked');const text='</script><div id=breakout></div>';"};
+assert.ok(validLoading(vector));
+assert.ok(validLoading({...vector,customCss:'.loader-mark{filter:url(#goo)}'}));
+assert.ok(!validLoading({...vector,customCss:'.loader-mark{filter:url(https://example.com/filter.svg#goo)}'}));
+assert.ok(!exportMedia({'site:header':JSON.stringify({loading:{...vector,image:'/api/media/unused.png'}})}, {pages:[]}).has('/api/media/unused.png'));
+await writeFile(path.join(dir,'vector-snapshot.json'),JSON.stringify({format:'prion-wiki-snapshot',version:1,values:{...values,'site:header':JSON.stringify({loading:vector})}}));
+const vectorResult=spawnSync(process.execPath,['scripts/export-static.mjs','--snapshot',path.join(dir,'vector-snapshot.json'),'--base','/vector-team/','--out',path.join(dir,'vector')],{encoding:'utf8'});
+assert.equal(vectorResult.status,0,vectorResult.stdout+vectorResult.stderr);
+const vectorBoot=await readFile(path.join(dir,'vector/public/assets/site-loading.js'),'utf8');
+assert.ok(vectorBoot.includes('"animation":"vector"'));
+assert.ok(vectorBoot.includes('requestAnimationFrame'));
 await writeFile('work/loading-export-latest.json', JSON.stringify({ dir }));
 console.log(
   'PASS: loading settings validation, server header validation, asset collection and complete static export.',

@@ -1334,7 +1334,7 @@ export function createMcp({
       },
       update_loading_animation: {
         description:
-          'Save a partial patch to the project-wide visitor loading animation, preserving other header settings. Available to standard whole-project MCP links; page-limited links cannot edit global settings. First read get_loading_animation and pass its version as ifVersion. For an uploaded animated image on the first visit use enabled:true, frequency:"first", animation:"custom", image:the uploaded media URL, duration:3400 and timeout:5000. Empty customCss with custom animation displays the image without an extra preset effect. To hide the built-in spinner and Skip button while keeping the image/custom animation, set showSymbol:false and showSkip:false; do not disable the loader. firstVisitExpiryMinutes defaults to 30. These controls do not require source editing. Use upload_media/list_media for an actual image URL, never invent one. Prepare a fresh export after saving.',
+          'Save a partial patch to the project-wide visitor loading animation, preserving other header settings. Available to standard whole-project MCP links; page-limited links cannot edit global settings. First read get_loading_animation and pass its version as ifVersion. For an uploaded animated image on the first visit use enabled:true, frequency:"first", animation:"custom", image:the uploaded media URL, duration:3400 and timeout:5000. Empty customCss with custom animation displays the image without an extra preset effect. To hide the built-in spinner and Skip button while keeping the image/custom animation, set showSymbol:false and showSkip:false; do not disable the loader. firstVisitExpiryMinutes defaults to 30. For a smooth SVG/canvas/JavaScript animation use animation:"vector", customHtml (inline markup), customJs (code executed after markup) and customCss. The code runs in an opaque sandbox with no parent DOM access, network requests or external libraries; use self-contained SVG/canvas and browser animation APIs. Each markup/JS field allows 64000 characters. These controls do not require source editing; app/site-loading.js stays read-only. Use upload_media/list_media for an actual image URL, never invent one. Prepare a fresh export after saving.',
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -1364,7 +1364,7 @@ export function createMcp({
                 },
                 animation: {
                   type: 'string',
-                  enum: ['pulse', 'spin', 'dots', 'custom'],
+                  enum: ['pulse', 'spin', 'dots', 'custom', 'vector'],
                 },
                 image: {
                   type: 'string',
@@ -1388,11 +1388,13 @@ export function createMcp({
                   description:
                     'Maximum wait in milliseconds, at least duration.',
                 },
+                customHtml: { type: 'string', maxLength: 64000, description: 'Vector mode: self-contained HTML/SVG/canvas markup inside .loader-mark; no script, iframe, object, embed, base, link or meta tags. Put JavaScript in customJs.' },
+                customJs: { type: 'string', maxLength: 64000, description: 'Vector mode: inline JavaScript runs after markup in an opaque sandbox. DOM/SVG/canvas and requestAnimationFrame/Web Animations available; network and parent access blocked.' },
                 customCss: {
                   type: 'string',
                   maxLength: 8000,
                   description:
-                    'Animation CSS; no url(), @import or closing style tags.',
+                    'Animation CSS; no external url(), @import or closing style tags. Vector mode permits local SVG references such as url(#goo).',
                 },
               },
             },
