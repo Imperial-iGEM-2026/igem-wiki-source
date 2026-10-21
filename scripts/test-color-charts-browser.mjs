@@ -13,7 +13,7 @@ const image =
     '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="#b464c8"/></svg>',
   );
 const widget = {
-  html: `<div id="card"><span>Authored card</span></div><div role="img" aria-label="Experiment results" id="chart"><div id="bar" style="height:40px;width:80px;background:#b464c8"></div><span id="legend">Treatment A: 80</span><svg width="40" height="40"><rect width="40" height="40" fill="#b464c8"/></svg></div><img id="photo" src="${image}"/><div class="photo-bg" id="background"></div><div data-preserve-colors><img id="preserved" src="${image}"/></div><div id="late"></div><div data-website-chart="palette" id="palette-chart"><svg width="40" height="40"><rect id="palette-bar" width="40" height="40" style="fill:var(--website-chart-series-1,#b464c8)"/></svg></div>`,
+  html: `<div id="card"><span>Authored card</span></div><div role="img" aria-label="Experiment results" id="chart"><div id="bar" style="height:40px;width:80px;background:#b464c8"></div><span id="legend">Treatment A: 80</span><svg width="40" height="40"><rect width="40" height="40" fill="#b464c8"/></svg></div><img id="photo" src="${image}"/><div class="photo-bg" id="background"></div><button type="button" class="photo-bg" id="logo-button" aria-label="Team logo"></button><button type="button" class="photo-bg" id="selected-logo" aria-pressed="true" aria-label="Selected team logo"></button><div data-preserve-colors><img id="preserved" src="${image}"/></div><div id="late"></div><div data-website-chart="palette" id="palette-chart"><svg width="40" height="40"><rect id="palette-bar" width="40" height="40" style="fill:var(--website-chart-series-1,#b464c8)"/></svg></div>`,
   css: `body{background:#241242;color:#fff;font:16px sans-serif}#card{background:#4c2a85;color:#fff}#chart{background:#241242;color:#fff;width:180px}#photo{width:40px;height:40px;filter:none!important}.photo-bg{width:40px;height:40px;background-image:url("${image}")}`,
   javascript: `window.chartEvents=[];addEventListener('website:colormodechange',event=>chartEvents.push(event.detail));`,
 };
@@ -62,9 +62,14 @@ try {
       (Math.floor(png.height / 2) * png.width + Math.floor(png.width / 2)) * 4;
     return [...png.data.subarray(at, at + 3)];
   };
-  const samples = ['#photo', '#background', '#bar', '#chart svg'].map((s) =>
-    frame.locator(s),
-  );
+  const samples = [
+    '#photo',
+    '#background',
+    '#bar',
+    '#chart svg',
+    '#logo-button',
+    '#selected-logo',
+  ].map((s) => frame.locator(s));
   const originals = [];
   for (const sample of samples) originals.push(await pixel(sample));
   const preserved = await pixel(frame.locator('#preserved'));
@@ -81,6 +86,16 @@ try {
     );
     await frame.locator(`html[data-website-color-mode="${mode}"]`).waitFor();
     await frame.locator('#background[data-website-auto-media]').waitFor();
+    for (const selector of ['#logo-button', '#selected-logo']) {
+      assert.notEqual(
+        await frame
+          .locator(selector)
+          .evaluate((e) => getComputedStyle(e).backgroundImage),
+        'none',
+        'High contrast must not erase image-button logos',
+      );
+      await frame.locator(selector + '[data-website-auto-media]').waitFor();
+    }
     assert.equal(
       await frame
         .locator('#bar')
@@ -207,7 +222,7 @@ try {
   );
   await page.screenshot({ path: path.join(dir, 'restored.png') });
   console.log(
-    'PASS: authored HTML charts and dark backgrounds, images overriding widget CSS, CSS/lazy background images, single filtering, palette redraw API, selected controls, opt-outs, zero strength and exact restoration.',
+    'PASS: authored HTML charts and dark backgrounds, images overriding widget CSS, CSS/lazy background images and normal/selected logo buttons, single filtering, palette redraw API, selected controls, opt-outs, zero strength and exact restoration.',
   );
 } finally {
   await browser.close();

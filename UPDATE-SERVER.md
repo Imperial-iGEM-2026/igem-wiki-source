@@ -1,3 +1,9 @@
+## Preserve logo buttons in High contrast
+
+Fixed another case behind blank logo circles: High contrast used the `background` shorthand on buttons and selected controls, clearing CSS background images before media detection. It now changes only `background-color`, leaving the image, crop, position and repeat settings intact. Image-backed buttons are then detected and filtered like other media.
+
+The browser regression reproduces the disappearing image before the fix and checks normal/selected logo buttons across every preset, zero strength and restoration. Install this package and refresh Studio, then prepare a fresh export for the published site.
+
 ## Custom HTML colour assistance and panel dismissal
 
 The Colours panel now closes explicitly with its × button, Escape or an outside click, including Studio's sandboxed source preview. It no longer depends on form submission permission. Focus returns to the opener; dragging a slider outside the panel does not dismiss it.

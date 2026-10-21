@@ -31,12 +31,14 @@ const media =
 const mediaScope = `${preserve}:not(svg *,object *,video *,.partitioned-pdf *,[data-website-media] *,[data-website-auto-media] *,${charts} *)`;
 // Important declarations in a named layer outrank unlayered widget CSS without
 // modifying inline styles, so switching off restores the exact authored result.
+// Never use the background shorthand on controls: it erases image-backed logos
+// before the background-media detector can discover and preserve them.
 export const accessibilityStyles = `@layer website-accessibility {
 ${highContrast} { color-scheme:light; --website-a11y-background:#fff; --website-a11y-text:#172033; --website-a11y-link:#0047ab; --website-a11y-focus:#9c3f00; }
 ${highContrast} :where(body,main,header,footer,nav,article,section,aside,p,h1,h2,h3,h4,h5,h6,table,thead,tbody,tr,td,th,form,details,summary,dialog,blockquote,pre,code,[data-website-readable])${textScope} { color:#172033!important; background-color:#fff!important; text-shadow:none!important; }
 ${highContrast} :where(a)${textScope} { color:#0047ab!important; background-color:#fff!important; text-decoration:underline!important; text-underline-offset:.2em; }
-${highContrast} :where(button,input,textarea,select)${textScope} { color:#172033!important; background:#fff!important; border:1px solid #667085!important; }
-${highContrast} :where(button[aria-pressed="true"],[aria-selected="true"],a[aria-current="page"])${textScope} { color:#fff!important; background:#0047ab!important; text-decoration:underline!important; }
+${highContrast} :where(button,input,textarea,select)${textScope} { color:#172033!important; background-color:#fff!important; border:1px solid #667085!important; }
+${highContrast} :where(button[aria-pressed="true"],[aria-selected="true"],a[aria-current="page"])${textScope} { color:#fff!important; background-color:#0047ab!important; text-decoration:underline!important; }
 ${highContrast} :where(button,a,[data-website-readable])${textScope} :where(span,strong,em,b,i)${textScope} { color:inherit!important; background-color:transparent!important; }
 ${activeColor} :focus-visible { outline:3px solid #9c3f00!important; outline-offset:3px!important; }
 ${activeColor} ::selection { color:#fff; background:#0047ab; }
