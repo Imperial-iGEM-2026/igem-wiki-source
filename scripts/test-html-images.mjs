@@ -100,7 +100,7 @@ console.log(
 assert.match(html, /data-custom-html-routes=/);
 assert.ok(html.includes('&quot;/&quot;:&quot;/test-team/&quot;'));
 const runtime = await readFile(
-  path.join(dir, 'export/public/assets/wiki.js'),
+  path.join(dir, 'export/public', html.match(/<script type="module" src="([^"]+)"/)[1].slice('/test-team/'.length)),
   'utf8',
 );
 assert.ok(runtime.includes('custom-html-link'));

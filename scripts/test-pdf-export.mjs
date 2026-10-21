@@ -165,7 +165,9 @@ const sharedParts = JSON.parse(await readFile(path.join(dir, 'render/public', sh
 const frameSource = (await Promise.all(sharedParts.map(async (part) => typeof part === 'string' ? part : JSON.parse(await readFile(path.join(dir, 'render/public', part.url.slice('/example/'.length)), 'utf8'))))).join('');
 assert.match(frameSource, /Animation works/);
 assert.ok(!frameSource.includes('/api/media/aacc.jpg'));
-const js = await readFile(path.join(dir, 'render/public/assets/wiki.js'), 'utf8');
+const runtimePath = html.match(/<script type="module" src="([^"]+)"/)[1];
+assert.match(runtimePath, /\/assets\/wiki-[\w-]+\.js$/);
+const js = await readFile(path.join(dir, 'render/public', runtimePath.slice('/example/'.length)), 'utf8');
 const publishedFiles = await (await import('node:fs/promises')).readdir(path.join(dir, 'render/public/assets'));
 const allJs = (await Promise.all(publishedFiles.filter(name => /\.m?js$/.test(name)).map(name => readFile(path.join(dir, 'render/public/assets', name), 'utf8')))).join('\n');
 assert.match(allJs, /https:\/\/static\.igem\.wiki\/teams\/1\/runtime\/pdf-worker.js/);

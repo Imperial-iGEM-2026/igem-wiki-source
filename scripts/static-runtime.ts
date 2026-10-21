@@ -75,7 +75,10 @@ for (const frame of document.querySelectorAll<HTMLIFrameElement>(
               return text;
             }),
           );
-          loadHtmlFrame(frame, parts.join(''), document.baseURI, htmlImages);
+          // Project extensions inspect saved HTML, such as Appendix document
+          // links. Restore inline-frame metadata before the widget can message them.
+          frame.dataset.htmlDocument = parts.join('');
+          loadHtmlFrame(frame, frame.dataset.htmlDocument, document.baseURI, htmlImages);
         })
         .catch(() => {
           const error = document.createElement('output');

@@ -584,6 +584,9 @@ for (const name of ['@google/model-viewer', 'three', 'lit', 'lit-html', 'lit-ele
 }
 await writeFile(path.join(output, 'public/model-viewer-LICENSES.txt'), modelLicenses.join('\n\n'));
 const uploadedRuntime = mappedRuntime(map);
+// iGEM caches assets across deployments. Include the bundle hash and media-map
+// version: worker URLs and font/media URLs are rewritten after Vite's build.
+const assetMapVersion = createHash('sha256').update(JSON.stringify(map)).digest('hex').slice(0, 12);
 await build({
   ...common,
   plugins: [...(common.plugins || []), runtimeImports(uploadedRuntime)],
@@ -595,9 +598,9 @@ await build({
     rolldownOptions: {
       input: path.join(root, 'scripts/static-runtime.ts'),
       output: {
-        entryFileNames: 'assets/wiki.js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name][extname]',
+        entryFileNames: `assets/wiki-[hash]-${assetMapVersion}.js`,
+        chunkFileNames: `assets/[name]-[hash]-${assetMapVersion}.js`,
+        assetFileNames: `assets/[name]-[hash]-${assetMapVersion}[extname]`,
       },
     },
   },
@@ -622,8 +625,12 @@ const loadingScript = loading.enabled
   ? `<script src="${base}assets/site-loading.js"></script>`
   : '';
 const assetFiles = await readdir(path.join(output, 'public/assets'));
+const runtimeFile = assetFiles.find((name) => /^wiki-[\w-]+\.js$/.test(name));
+if (!runtimeFile) throw Error('The exported website runtime was not generated.');
 const hostedPdfWorker = map[PDF_WORKER_SOURCE];
 if (hostedPdfWorker) {
+  const workerFile = assetFiles.find((name) => /^pdf\.worker\.min(?:-[\w-]+)?\.mjs$/.test(name));
+  if (!workerFile) throw Error('The exported PDF worker was not generated.');
   if (
     typeof hostedPdfWorker !== 'string' ||
     !/^https:\/\/static\.igem\.wiki\/[^\s"'`<>\\]+$/.test(hostedPdfWorker) ||
@@ -638,7 +645,7 @@ if (hostedPdfWorker) {
   for (const file of assetFiles.filter((name) => name.endsWith('.js'))) {
     const target = path.join(output, 'public/assets', file);
     const original = await readFile(target, 'utf8');
-    const from = base + 'assets/pdf.worker.min.mjs';
+    const from = base + 'assets/' + workerFile;
     if (original.includes(from)) {
       await writeFile(target, original.replaceAll(from, hostedPdfWorker));
       rewritten = true;
@@ -648,7 +655,7 @@ if (hostedPdfWorker) {
     throw Error(
       'Could not locate the PDF worker reference; refusing to remove its local copy.',
     );
-  await unlink(path.join(output, 'public/assets/pdf.worker.min.mjs'));
+  await unlink(path.join(output, 'public/assets', workerFile));
   assets.push({
     source: PDF_WORKER_SOURCE,
     kind: 'runtime',
@@ -688,7 +695,7 @@ for (const [original, parts] of Object.entries(pdfViewers)) {
   htmlPdfCatalog[destination] = parts;
   const directory = path.join(output, 'public', slug);
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF document</title><style>html,body{margin:0;height:100%}.partitioned-pdf{height:100dvh}</style><script type="module" src="${esc(base)}assets/wiki.js"></script></head><body><div class="partitioned-pdf" data-pdf-assets="${esc(base)}assets/pdfjs/" data-pdf-parts="${esc(JSON.stringify(parts))}"><iframe title="PDF document"></iframe></div></body></html>`);
+  await writeFile(path.join(directory, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PDF document</title><style>html,body{margin:0;height:100%}.partitioned-pdf{height:100dvh}</style><script type="module" src="${esc(base)}assets/${runtimeFile}"></script></head><body><div class="partitioned-pdf" data-pdf-assets="${esc(base)}assets/pdfjs/" data-pdf-parts="${esc(JSON.stringify(parts))}"><iframe title="PDF document"></iframe></div></body></html>`);
 }
 const htmlLinkRoutes = Object.fromEntries([
   ['/', base],
@@ -818,7 +825,7 @@ for (const page of [undefined, ...wikiPages]) {
     css
       .map((file) => `<link rel="stylesheet" href="${base}assets/${file}">`)
       .join('') +
-    `<script type="module" src="${base}assets/wiki.js"></script></head><body class="publication" data-site-search="${esc(searchURL)}" data-site-base="${esc(base)}" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}" data-custom-html-pdfs="${esc(JSON.stringify(pagePdfCatalog))}">` +
+    `<script type="module" src="${base}assets/${runtimeFile}"></script></head><body class="publication" data-site-search="${esc(searchURL)}" data-site-base="${esc(base)}" data-custom-html-routes="${esc(JSON.stringify(htmlLinkRoutes))}" data-custom-html-media="${htmlImageData}" data-custom-html-pdfs="${esc(JSON.stringify(pagePdfCatalog))}">` +
     loadingScript +
     html +
     '</body></html>';

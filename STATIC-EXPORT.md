@@ -344,3 +344,7 @@ window.addEventListener('website:colormodechange', ({ detail }) => {
 ```
 
 Do not recolour chart series for Protan/Deutan/Tritan/Grayscale: `pageFiltered` is true and the browser already filters the complete chart. Custom HTML receives its first state asynchronously; listen for that event (`getChartPalette()` is empty until then). Labels and non-colour cues remain necessary: [W3C colour and pattern guidance](https://www.w3.org/WAI/WCAG21/Techniques/general/G111). Whole-page composition follows the [CSS filter model](https://www.w3.org/TR/filter-effects-1/#FilterProperty).
+
+Exported runtime JavaScript and bundled CSS use versioned filenames derived from the bundle and media mapping. New deployments request matching assets instead of reusing cached scripts or styles from an older export. No duplicate unversioned copies are included in the Pages artifact.
+
+Shared Custom HTML restores its original `data-html-document` metadata after loading, before widget scripts run. Developer-source extensions such as the Appendix PDF dialog can inspect their document links in export just as they do in Studio; frames keep their opaque sandbox origin.

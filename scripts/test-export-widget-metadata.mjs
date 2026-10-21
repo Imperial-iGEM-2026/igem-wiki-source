@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,writeFile} from 'node:fs/promises';
+import {createServer} from 'node:http';
+import path from 'node:path';
+import {build} from 'vite';
+import {common} from './build-options.mjs';
+import {sharedPublicationAssets} from './share-publication-assets.mjs';
+import {chromium} from '../upload-helper/node_modules/playwright/index.mjs';
+const dir=await mkdtemp(path.resolve('work/export-widget-metadata-'));
+const links=Array.from({length:15},(_,i)=>`<a data-appendix-document href="https://static.igem.wiki/team/doc-${i}.pdf">Document ${i+1}</a>`).join('');
+const source='<html><body><button id="open">Appendix</button><div hidden data-regel-appendix>'+links+'</div><script>'+('/* fixture */'.repeat(100))+'document.getElementById("open").onclick=()=>parent.postMessage({type:"test-appendix-open"},"*");</script></body></html>';
+const escape=s=>s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const shared=sharedPublicationAssets(dir,'/');
+const html=shared.rewrite(`<iframe title="Appendix" class="custom-html-frame" sandbox="allow-scripts allow-same-origin" style="width:500px;height:200px" data-html-document="${escape(source)}"></iframe>`);
+assert.ok(!html.includes('data-html-document'));
+await shared.write();
+await build({...common,build:{outDir:path.join(dir,'public'),emptyOutDir:false,rolldownOptions:{input:path.resolve('scripts/static-runtime.ts'),output:{entryFileNames:'runtime.js'}}}});
+await writeFile(path.join(dir,'public/index.html'),'<html><body>'+html+'<script type="module" src="/runtime.js"></script></body></html>');
+const server=createServer(async(req,res)=>{try{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(dir,'public',pathname==='/'?'index.html':pathname);res.setHeader('content-type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.css')?'text/css':'text/html');res.end(await readFile(file));}catch{res.writeHead(404).end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(()=>window.addEventListener('message',event=>{if(event.data?.type!=='test-appendix-open')return;const frame=[...document.querySelectorAll('iframe')].find(f=>f.contentWindow===event.source);const source=frame?.dataset.htmlDocument;if(!source)return;const doc=new DOMParser().parseFromString(source,'text/html');const links=doc.querySelectorAll('[data-appendix-document]');if(links.length!==15)return;const dialog=document.createElement('dialog');dialog.textContent=[...links].map(l=>l.textContent).join(', ');document.body.append(dialog);dialog.showModal();}));
+ await page.goto('http://127.0.0.1:'+server.address().port);
+ await page.frameLocator('iframe').getByRole('button',{name:'Appendix',exact:true}).click();
+ await page.locator('dialog[open]').waitFor();
+ assert.equal(await page.locator('iframe').getAttribute('data-html-document'),source);
+ assert.ok((await page.locator('dialog[open]').innerText()).includes('Document 15'));
+ assert.equal(await page.locator('iframe').evaluate(f=>f.contentDocument),null,'Keep opaque sandbox isolation');
+ assert.deepEqual(errors,[]);
+ console.log('PASS: shared HTML restores exact source metadata before widget clicks; a 15-document Appendix extension opens while sandbox isolation remains intact.');
+}finally{await browser.close();await new Promise(r=>server.close(r));}

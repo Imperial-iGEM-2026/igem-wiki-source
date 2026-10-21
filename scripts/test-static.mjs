@@ -38,6 +38,6 @@ for(const file of pages){
   }
 }
 const report=JSON.parse(await readFile(path.join(output,'publication-report.json'),'utf8'));assert.equal(report.submissionReady,false);assert.ok(report.issues.length);
-const runtime=await readFile(path.join(pub,'assets/wiki.js'),'utf8');assert.ok(!runtime.includes('/api/content'));assert.ok(!runtime.includes('Cloudflare Access'));
+const runtime=await readFile(path.join(pub,home.match(/<script type="module" src="([^"]+)"/)[1].slice('/test-team/'.length)),'utf8');assert.ok(!runtime.includes('/api/content'));assert.ok(!runtime.includes('Cloudflare Access'));
 const second=spawnSync(process.execPath,['scripts/export-static.mjs','--snapshot',snapshot,'--out',output],{encoding:'utf8'});assert.notEqual(second.status,0);assert.ok(second.stderr.includes('not empty'));
 console.log('PASS: 30 static routes, base paths and local assets, saved layout/order, hidden content excluded, media tags, no editor/auth API dependencies, iGEM preflight failure and overwrite protection.');
