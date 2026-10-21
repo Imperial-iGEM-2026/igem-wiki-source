@@ -1,6 +1,6 @@
 import parse from 'postcss/lib/parse';
 import selectorParser from 'postcss-selector-parser';
-import { AtRule, type ChildNode } from 'postcss';
+import { AtRule, Rule, type ChildNode } from 'postcss';
 
 // One parser and policy are used by the inspector, API, renderer and static export.
 // Rules can address page descendants only. Resource loading and global at-rules
@@ -47,6 +47,26 @@ export function compileCustomCss(
     throw Error(
       'External resources and executable CSS are not allowed. Add media through the media controls.',
     );
+  // A manually sized/shifted image can fit the desktop artboard but overflow
+  // its narrower published column before the tablet breakpoint is reached.
+  // Preserve the saved pose wherever it fits, and constrain only these generated
+  // positive horizontal placements to the image frame's actual inline size.
+  for (const control of controls) {
+    if (control.type !== 'rule' ||
+      !/^\[data-layer-id="[\w-]+"\](?: > [a-z][\w-]*:nth-of-type\(\d+\))+ > img:nth-of-type\(\d+\)$/.test(control.selector)) continue;
+    const width = control.nodes.findLast((n) => n.type === 'decl' && n.prop === 'width');
+    const translate = control.nodes.findLast((n) => n.type === 'decl' && n.prop === 'translate');
+    if (width?.type !== 'decl' || translate?.type !== 'decl' ||
+      !/^\d+(?:\.\d+)?px$/.test(width.value)) continue;
+    const offset = /^(\d+(?:\.\d+)?px)(?:\s+(-?\d+(?:\.\d+)?px))?$/.exec(translate.value);
+    if (!offset) continue;
+    const savedWidth = width.value;
+    width.value = `min(${savedWidth}, 100%)`;
+    translate.value = `clamp(0px, calc(100cqw - ${savedWidth}), ${offset[1]}) ${offset[2] || '0px'}`;
+    const frame = new Rule({ selector: control.selector.replace(/ > img:nth-of-type\(\d+\)$/, '') });
+    frame.append({ prop: 'container-type', value: 'inline-size', important: true });
+    root.append(frame);
+  }
   root.walk((node) => {
     if (node.type === 'atrule') {
       if (node.name.toLowerCase() !== 'media' || !node.nodes)
@@ -71,6 +91,36 @@ export function compileCustomCss(
           'Write selectors in full; nested CSS rules are not supported.',
         );
       const selectors = selectorParser().astSync(node.selector);
+      // React's static HTML writes `padding-inline:4px`; the browser's
+      // CSSOM writes `padding-inline: 4px`. Legacy page styles use these
+      // declaration substrings to identify frames, including inside :not().
+      // Match both serializations without changing specificity or saved CSS.
+      // Only normalize single declarations, never strings or arbitrary style
+      // fragments whose whitespace could be meaningful.
+      const styleAttributes: import('postcss-selector-parser').Attribute[] = [];
+      selectors.walkAttributes((attribute) => {
+        if (attribute.attribute === 'style' && attribute.operator === '*=')
+          styleAttributes.push(attribute);
+      });
+      for (const attribute of styleAttributes) {
+        const match = /^([\w-]+)\s*:\s*([^:;'"]+?)(;?)$/.exec(attribute.value || '');
+        if (!match) continue;
+        const values = new Set([
+          attribute.value!,
+          `${match[1]}:${match[2].trim()}${match[3]}`,
+          `${match[1]}: ${match[2].trim()}${match[3]}`,
+        ]);
+        if (values.size < 2) continue;
+        const alternatives = selectorParser.pseudo({ value: ':is' });
+        for (const value of values) {
+          const selector = selectorParser.selector({ value: '' });
+          const variant = attribute.clone();
+          variant.setValue(value, { quoteMark: '"' });
+          selector.append(variant);
+          alternatives.append(selector);
+        }
+        attribute.replaceWith(alternatives);
+      }
       selectors.walk((n) => {
         if (
           n.type === 'nesting' ||
