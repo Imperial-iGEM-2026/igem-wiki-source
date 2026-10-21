@@ -313,6 +313,9 @@ try {
     settings: {
       enabled: true,
       frequency: 'first',
+      showSymbol: false,
+      showSkip: false,
+      firstVisitExpiryMinutes: 30,
       animation: 'custom',
       customCss: '',
       image: '/templates/notebook-purple/favicon.svg',
@@ -320,6 +323,10 @@ try {
       timeout: 5000,
     },
   });
+  assert.equal(loadingSaved.settings.showSymbol, false);
+  assert.equal(loadingSaved.settings.showSkip, false);
+  assert.equal(loadingSaved.settings.firstVisitExpiryMinutes, 30);
+  assert.equal(loadingSaved.settings.enabled, true);
   assert.equal(loadingSaved.settings.duration, 3400);
   assert.equal(loadingSaved.settings.frequency, 'first');
   assert.ok(loadingSaved.version > loadingBefore.version);

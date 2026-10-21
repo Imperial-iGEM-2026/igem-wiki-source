@@ -2,6 +2,9 @@
 export const defaultLoading = {
   enabled: false,
   frequency: 'session',
+  firstVisitExpiryMinutes: 30,
+  showSymbol: true,
+  showSkip: true,
   animation: 'pulse',
   image: '',
   message: 'Welcome',
@@ -18,6 +21,11 @@ export function validLoading(value) {
   return (
     Object.keys(value).every((key) => Object.hasOwn(defaultLoading, key)) &&
     typeof d.enabled === 'boolean' &&
+    typeof d.showSymbol === 'boolean' &&
+    typeof d.showSkip === 'boolean' &&
+    Number.isInteger(d.firstVisitExpiryMinutes) &&
+    d.firstVisitExpiryMinutes >= 1 &&
+    d.firstVisitExpiryMinutes <= 10080 &&
     ['session', 'first', 'always'].includes(d.frequency) &&
     ['pulse', 'spin', 'dots', 'custom'].includes(d.animation) &&
     typeof d.image === 'string' &&
@@ -49,8 +57,13 @@ export function startSiteLoading(d, project = 'default', preview = false) {
   let storage;
   try {
     storage = d.frequency === 'first' ? localStorage : sessionStorage;
-    if (!preview && d.frequency !== 'always' && storage.getItem(key))
-      return () => {};
+    const stored = storage.getItem(key);
+    const expiry = (d.firstVisitExpiryMinutes ?? 30) * 60000;
+    const elapsed = Date.now() - Number(stored);
+    const seen = d.frequency === 'first'
+      ? stored !== null && Number(stored) > 1 && elapsed >= 0 && elapsed < expiry
+      : !!stored;
+    if (!preview && d.frequency !== 'always' && seen) return () => {};
   } catch {
     /* Storage may be disabled; the animation must still dismiss. */
   }
@@ -91,11 +104,14 @@ export function startSiteLoading(d, project = 'default', preview = false) {
     *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:grid;place-items:center;background:${d.background};color:${d.color};font:16px system-ui}.loader-content{text-align:center;padding:32px}.loader-mark{width:88px;height:88px;margin:auto;display:flex;align-items:center;justify-content:center}.loader-mark img{width:100%;height:100%;object-fit:contain}.loader-symbol{width:56px;height:56px;border:4px solid currentColor;border-radius:50%;border-top-color:transparent}.loader-label{margin-top:24px}.pulse .loader-mark{animation:pulse 1.2s ease-in-out infinite}.spin .loader-mark{animation:spin 1.4s linear infinite}.dots .loader-symbol{width:12px;height:12px;border:0;background:currentColor;box-shadow:-22px 0 currentColor,22px 0 currentColor;animation:pulse 1s ease-in-out infinite}@keyframes pulse{50%{opacity:.35;transform:scale(.85)}}@keyframes spin{to{transform:rotate(360deg)}}
     ${d.animation === 'custom' ? d.customCss : ''}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-    </style></head><body class="${escape(d.animation)}"><div class="loader-content"><div class="loader-mark">${image ? `<img src="${escape(image)}" alt="">` : '<span class="loader-symbol"></span>'}</div><div class="loader-label">${escape(d.message)}</div></div></body></html>`;
+    </style></head><body class="${escape(d.animation)}"><div class="loader-content"><div class="loader-mark">${image ? `<img src="${escape(image)}" alt="">` : d.showSymbol === false ? '' : '<span class="loader-symbol"></span>'}</div><div class="loader-label">${escape(d.message)}</div></div></body></html>`;
   const skip = document.createElement('button');
   skip.textContent = preview ? 'Close preview' : 'Skip animation';
   skip.setAttribute('aria-label', skip.textContent);
-  root.append(style, frame, skip);
+  const showSkip = preview || d.showSkip !== false;
+  root.append(style, frame);
+  if (showSkip) root.append(skip);
+  host.tabIndex = -1;
   document.documentElement.append(host);
   const previousFocus = document.activeElement;
   const previousOverflow = document.documentElement.style.overflow;
@@ -108,7 +124,7 @@ export function startSiteLoading(d, project = 'default', preview = false) {
     closed = true;
     if (seen && !preview && d.frequency !== 'always') {
       try {
-        storage?.setItem(key, '1');
+        storage?.setItem(key, d.frequency === 'first' ? String(Date.now()) : '1');
       } catch {}
     }
     clearTimeout(minimumTimer);
@@ -134,13 +150,13 @@ export function startSiteLoading(d, project = 'default', preview = false) {
     }
     if (event.key === 'Tab') {
       event.preventDefault();
-      skip.focus();
+      (showSkip ? skip : host).focus();
     }
   };
   const maximumTimer = setTimeout(finish, d.timeout);
   skip.onclick = () => finish();
   window.addEventListener('keydown', keydown, true);
-  skip.focus({ preventScroll: true });
+  (showSkip ? skip : host).focus({ preventScroll: true });
   if (document.readyState === 'complete' || preview) ready();
   else window.addEventListener('load', ready, { once: true });
   return () => finish(false);

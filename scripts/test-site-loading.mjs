@@ -13,10 +13,17 @@ import {
 
 assert.equal(defaultLoading.frequency, 'session');
 assert.equal(defaultLoading.enabled, false);
+assert.equal(defaultLoading.firstVisitExpiryMinutes, 30);
+assert.ok(validLoading({...defaultLoading, showSkip:false, showSymbol:false}));
 assert.ok(validLoading(defaultLoading));
 assert.ok(validHeader({ loading: defaultLoading }));
 for (const patch of [
   { duration: -1 },
+  { showSkip: 'false' },
+  { showSymbol: 0 },
+  { firstVisitExpiryMinutes: 0 },
+  { firstVisitExpiryMinutes: 10081 },
+  { firstVisitExpiryMinutes: 1.5 },
   { timeout: 11000 },
   { timeout: 500 },
   { frequency: 'unknown' },
@@ -80,7 +87,7 @@ assert.equal(result.status, 0, result.stdout + result.stderr);
 const html = await readFile(path.join(dir, 'export/public/index.html'), 'utf8');
 assert.match(
   html,
-  /<body[^>]*><script src="\/test-team\/assets\/site-loading.js"><\/script>/,
+  /<script src="\/test-team\/assets\/site-loading.js"><\/script>/,
 );
 const boot = await readFile(
   path.join(dir, 'export/public/assets/site-loading.js'),

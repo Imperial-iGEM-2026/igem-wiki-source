@@ -948,7 +948,7 @@ export function createMcp({
         canEdit: !link.page,
         scope: 'project',
         instructions:
-          'Use update_loading_animation with this version. Standard whole-project links can save these settings; Developer access is not required. Saved settings apply to the live website and future exports. Prepare a fresh export to update an already exported website. session means once per browser tab/session; first remembers this browser using localStorage; always replays each page visit. Studio Pages → Loading animation → Preview animation replays without consuming the visitor flag. Reduced-motion preferences skip the animation.',
+          'Use update_loading_animation with this version. Standard whole-project links can save these settings; Developer access is not required. Saved settings apply to the live website and future exports. Prepare a fresh export to update an already exported website. session means once per browser tab/session; first remembers completion in localStorage until firstVisitExpiryMinutes (default 30) elapses; always replays each page visit. Studio Pages → Loading animation → Preview animation replays without consuming the visitor flag. Reduced-motion preferences skip the animation.',
       };
     }
     function saveMenu(next, ifVersion) {
@@ -1334,7 +1334,7 @@ export function createMcp({
       },
       update_loading_animation: {
         description:
-          'Save a partial patch to the project-wide visitor loading animation, preserving other header settings. Available to standard whole-project MCP links; page-limited links cannot edit global settings. First read get_loading_animation and pass its version as ifVersion. For an uploaded animated image on the first visit use enabled:true, frequency:"first", animation:"custom", image:the uploaded media URL, duration:3400 and timeout:5000. Empty customCss with custom animation displays the image without an extra preset effect. Use upload_media/list_media for an actual image URL, never invent one. Prepare a fresh export after saving.',
+          'Save a partial patch to the project-wide visitor loading animation, preserving other header settings. Available to standard whole-project MCP links; page-limited links cannot edit global settings. First read get_loading_animation and pass its version as ifVersion. For an uploaded animated image on the first visit use enabled:true, frequency:"first", animation:"custom", image:the uploaded media URL, duration:3400 and timeout:5000. Empty customCss with custom animation displays the image without an extra preset effect. To hide the built-in spinner and Skip button while keeping the image/custom animation, set showSymbol:false and showSkip:false; do not disable the loader. firstVisitExpiryMinutes defaults to 30. These controls do not require source editing. Use upload_media/list_media for an actual image URL, never invent one. Prepare a fresh export after saving.',
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -1355,6 +1355,9 @@ export function createMcp({
               minProperties: 1,
               properties: {
                 enabled: { type: 'boolean' },
+                showSymbol: { type: 'boolean', description: 'Show the built-in fallback spinner/dots; false preserves the custom image and CSS.' },
+                showSkip: { type: 'boolean', description: 'Show Skip animation. Escape and timeout remain available; preview always has Close.' },
+                firstVisitExpiryMinutes: { type: 'integer', minimum: 1, maximum: 10080, description: 'For first frequency, replay after this many minutes since completion/dismissal. Default 30; shared across tabs.' },
                 frequency: {
                   type: 'string',
                   enum: ['session', 'first', 'always'],

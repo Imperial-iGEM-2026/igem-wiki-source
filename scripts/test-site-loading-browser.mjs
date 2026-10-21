@@ -46,6 +46,9 @@ const server = createServer(async (req, res) => {
     duration: url.searchParams.has('slow') ? 0 : 2000,
     timeout: url.searchParams.has('slow') ? 1000 : 3000,
     frequency: url.searchParams.get('frequency') || 'session',
+    showSymbol: !url.searchParams.has('hide'),
+    showSkip: !url.searchParams.has('hide'),
+    image: url.searchParams.has('image') ? origin + '/test-team/templates/notebook-purple/favicon.svg' : '',
     animation: 'custom',
     customCss:
       '.loader-mark {animation: move 1s infinite alternate} @keyframes move {to {transform:translateY(-10px)}}',
@@ -111,6 +114,34 @@ try {
     'First visit persists across tabs',
   );
   await secondTab.close();
+  // Expiry is measured from completion, not extended by later navigation.
+  const seenAt = await page.evaluate(() => Number(localStorage.getItem('studio:site-loading:v1:first')));
+  await page.evaluate(() => localStorage.setItem('studio:site-loading:v1:first', String(Date.now()-29*60000)));
+  await page.reload();
+  assert.equal(await overlay.count(),0,'Still suppressed before 30 minutes');
+  await page.evaluate(() => localStorage.setItem('studio:site-loading:v1:first', String(Date.now()-30*60000-1)));
+  await page.reload({waitUntil:'domcontentloaded'});
+  await overlay.waitFor();
+  await page.keyboard.press('Escape');
+  assert.ok(await page.evaluate(() => Number(localStorage.getItem('studio:site-loading:v1:first'))) >= seenAt);
+  await page.evaluate(() => localStorage.setItem('studio:site-loading:v1:first','1'));
+  await page.reload({waitUntil:'domcontentloaded'});
+  await overlay.waitFor();
+  await page.keyboard.press('Escape');
+  await page.goto(origin+'/?hide&frequency=always');
+  await overlay.waitFor();
+  assert.equal(await page.getByRole('button',{name:'Skip animation'}).count(),0);
+  const hiddenFrame=page.frameLocator('[data-site-loading] iframe');
+  assert.equal(await hiddenFrame.locator('.loader-symbol').count(),0);
+  assert.equal(await hiddenFrame.locator('.loader-mark').count(),1,'Keep custom CSS animation target');
+  await page.keyboard.press('Escape');
+  await overlay.waitFor({state:'detached'});
+  await page.goto(origin+'/?hide&image&frequency=always');
+  await overlay.waitFor();
+  assert.equal(await page.frameLocator('[data-site-loading] iframe').locator('img').count(),1,'Hiding symbol preserves uploaded animation');
+  await page.keyboard.press('Escape');
+  await page.goto(origin+'/?hide&preview');
+  await page.getByRole('button',{name:'Close preview'}).click();
   await page.goto(origin + '/?slow&project=slow', {
     waitUntil: 'domcontentloaded',
   });

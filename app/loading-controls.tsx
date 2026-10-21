@@ -77,10 +77,31 @@ export function LoadingControls({
             onChange={(e) => update({ frequency: e.target.value })}
           >
             <option value="session">Once per session (default)</option>
-            <option value="first">First visit only</option>
+            <option value="first">First visit, then after expiry</option>
             <option value="always">Every page visit</option>
           </select>
         </label>
+        {d.frequency === 'first' && (
+          <label className="studio-field" htmlFor="loading-expiry">
+            <span>Replay after (minutes)</span>
+            <Input id="loading-expiry" type="number" min={1} max={10080}
+              value={d.firstVisitExpiryMinutes}
+              onChange={(e) => update({ firstVisitExpiryMinutes: Number(e.target.value) })} />
+            <span className="studio-help">Measured from finishing or dismissing the animation, across tabs in this browser. Default: 30 minutes.</span>
+          </label>
+        )}
+        <label className="studio-toggle" htmlFor="loading-symbol">
+          <span>Show built-in loading symbol</span>
+          <Switch id="loading-symbol" checked={d.showSymbol}
+            onCheckedChange={(showSymbol) => update({ showSymbol })} />
+        </label>
+        <p className="studio-help">Hides the preset spinner or dots only. Your uploaded image and custom animation remain.</p>
+        <label className="studio-toggle" htmlFor="loading-skip">
+          <span>Show Skip animation button</span>
+          <Switch id="loading-skip" checked={d.showSkip}
+            onCheckedChange={(showSkip) => update({ showSkip })} />
+        </label>
+        <p className="studio-help">Escape and the automatic timeout still dismiss the animation. Preview always has a Close button.</p>
         <label className="studio-field">
           <span>Animation style</span>
           <select
